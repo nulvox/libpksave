@@ -1,0 +1,79 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 gbsdk contributors
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  # ── Dockerfile lint ────────────────────────────────────────────────────────
+  lint-docker:
+    name: Lint Dockerfiles
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hadolint/hadolint-action@v3.1.0
+        with:
+          recursive: true
+          config: .hadolint.yaml
+
+  # ── C static analysis ──────────────────────────────────────────────────────
+  lint-c:
+    name: Lint C sources (cppcheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cppcheck
+        run: sudo apt-get install -y --no-install-recommends cppcheck
+      - name: cppcheck libpksave/src
+        run: |
+          cppcheck \
+            --error-exitcode=1 \
+            --std=c99 \
+            --enable=warning,performance,portability \
+            --suppress=missingIncludeSystem \
+            -DPKSAVE_GEN1 -DPKSAVE_GEN2 -DPKSAVE_GEN3 \
+            -DPKSAVE_GEN4 -DPKSAVE_GEN5 \
+            -Ilibpksave/include \
+            -Ilibpksave/src \
+            libpksave/src/
+
+  # ── Python lint ────────────────────────────────────────────────────────────
+  lint-python:
+    name: Lint Python (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install ruff
+        run: pip install ruff
+      - name: ruff check
+        run: ruff check libpksave/tests/fixtures/
+
+  # ── libpksave Unity tests ──────────────────────────────────────────────────
+  test-libpksave:
+    name: Test libpksave (all generations)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build test image (cached)
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/test
+          tags: pksave-test
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Run Unity tests
+        run: docker run --rm -v "${{ github.workspace }}:/src" pksave-test

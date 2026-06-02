@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 gbsdk contributors
+#
+# Hadolint configuration for the gbsdk Docker toolchain images.
+ignore:
+  # DL3007: devkitpro/devkitarm and ghcr.io/blocksds/sdk only publish :latest;
+  #         there are no stable versioned tags for these SDK images.
+  - DL3007
+  # DL3008: toolchain OS packages (gcc, make, wget) are intentionally unpinned;
+  #         reproducibility is provided by pinning the SDK releases themselves.
+  - DL3008
