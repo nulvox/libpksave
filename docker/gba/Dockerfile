@@ -5,9 +5,11 @@
 # Builds frontend-gba → /src/bin/pksave-gba.gba
 # Compile-time flags: -DPKSAVE_GEN3
 
+# hadolint ignore=DL3007
 FROM devkitpro/devkitarm:latest
 
 # Install build utilities not present in the base image.
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
         wget \
         ca-certificates \

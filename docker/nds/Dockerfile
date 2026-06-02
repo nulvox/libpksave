@@ -7,6 +7,7 @@
 #
 # BlocksDS Docker image: https://github.com/blocksds/sdk
 
+# hadolint ignore=DL3007
 FROM ghcr.io/blocksds/sdk:latest
 
 WORKDIR /src
