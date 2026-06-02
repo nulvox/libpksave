@@ -1,0 +1,50 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 gbsdk contributors
+#
+# Build libpksave tests.
+# Invoked by the docker/test container as:
+#   make -C /src/libpksave test UNITY_DIR=/opt/unity/src
+
+CC      = gcc
+CFLAGS  = -std=c99 -Wall -Wextra -pedantic \
+          -DPKSAVE_GEN1 -DPKSAVE_GEN2 -DPKSAVE_GEN3 -DPKSAVE_GEN4 -DPKSAVE_GEN5
+INCLUDE = -Iinclude -Isrc -I$(UNITY_DIR)
+
+SRC = src/detect.c \
+      src/checksum.c \
+      src/session.c \
+      src/names.c \
+      src/gen1.c \
+      src/gen2.c \
+      src/gen3.c \
+      src/gen4.c \
+      src/gen5.c
+
+UNITY_SRC = $(UNITY_DIR)/unity.c
+
+TEST_BINS = \
+    tests/test_detect \
+    tests/test_gen1 \
+    tests/test_gen2 \
+    tests/test_gen3 \
+    tests/test_gen4 \
+    tests/test_gen5
+
+.PHONY: test clean
+
+test: $(TEST_BINS)
+	@echo "=== running libpksave unit tests ==="
+	@failed=0; \
+	for t in $(TEST_BINS); do \
+		printf -- '--- %s ---\n' "$$t"; \
+		./$$t; \
+		[ $$? -ne 0 ] && failed=1; \
+	done; \
+	[ $$failed -ne 0 ] && { echo "=== TESTS FAILED ==="; exit 1; }; \
+	echo "=== ALL TESTS PASSED ==="
+
+$(TEST_BINS): %: %.c $(SRC) $(UNITY_SRC)
+	$(CC) $(CFLAGS) $(INCLUDE) -o $@ $^
+
+clean:
+	rm -f $(TEST_BINS)

@@ -1,4 +1,4 @@
-# Agent Prompt: Build Emulator-run Pokemon Save Editors
+# Agent Prompt: Build gbsdk Pokemon Save Editor
 
 ## What You Are Building
 

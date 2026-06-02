@@ -1,9 +1,9 @@
-# Technical Specification: libpksave Pokemon Save Editor
+# Technical Specification: gbsdk Pokemon Save Editor
 
 ## Repository Layout
 
 ```
-libpksave/
+gbsdk/
 ├── libpksave/
 │   ├── include/
 │   │   └── pksave.h

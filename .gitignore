@@ -1,0 +1,38 @@
+# Build outputs
+bin/*.gba
+bin/*.gbc
+bin/*.nds
+bin/*.elf
+bin/*.map
+
+# C build artifacts
+*.o
+*.a
+*.so
+*.d
+
+# Frontend build outputs
+frontend-gba/*.gba
+frontend-gba/*.elf
+frontend-gba/*.map
+frontend-gbc/*.gbc
+frontend-gbc/*.elf
+frontend-gbc/*.map
+frontend-nds/*.nds
+frontend-nds/*.elf
+frontend-nds/*.map
+
+# Test runner binaries and output
+libpksave/tests/*.out
+libpksave/tests/test_runner
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
