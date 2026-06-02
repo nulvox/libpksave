@@ -75,6 +75,22 @@ int  gen4_flush(pksave_save_t *s);
 int  gen4_validate_checksum(const uint8_t *sram, size_t len, pksave_game_t game);
 #endif
 
+/* CRC-16-CCITT shared by Gen IV and Gen V validate/flush */
+#if defined(PKSAVE_GEN4) || defined(PKSAVE_GEN5)
+static inline uint16_t pksave_crc16_ccitt(const uint8_t *data, size_t len)
+{
+    uint16_t crc = 0xFFFF;
+    for (size_t i = 0; i < len; i++) {
+        crc ^= (uint16_t)data[i] << 8;
+        for (int b = 0; b < 8; b++) {
+            if (crc & 0x8000) crc = (uint16_t)((crc << 1) ^ 0x1021);
+            else              crc = (uint16_t)(crc << 1);
+        }
+    }
+    return crc;
+}
+#endif
+
 #ifdef PKSAVE_GEN5
 int  gen5_get_trainer(pksave_save_t *s, pksave_trainer_t *out);
 int  gen5_set_trainer(pksave_save_t *s, const pksave_trainer_t *in);

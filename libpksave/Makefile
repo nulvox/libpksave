@@ -30,9 +30,12 @@ TEST_BINS = \
     tests/test_gen4 \
     tests/test_gen5
 
-.PHONY: test clean
+.PHONY: test fixtures clean
 
-test: $(TEST_BINS)
+fixtures:
+	python3 tests/fixtures/generate_fixtures.py tests/fixtures
+
+test: fixtures $(TEST_BINS)
 	@echo "=== running libpksave unit tests ==="
 	@failed=0; \
 	for t in $(TEST_BINS); do \

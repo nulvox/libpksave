@@ -11,9 +11,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         gcc \
+        libc6-dev \
         make \
         wget \
         ca-certificates \
+        python3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Pin a specific Unity release for reproducibility.
