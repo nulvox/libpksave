@@ -426,6 +426,42 @@ void test_dp_set_item_out_of_range(void)
     pksave_close(s);
 }
 
+/* ── Gen IV name lookups ── */
+
+void test_gen4_species_name_lookup(void)
+{
+    /* National dex (Bulbasaur=1) */
+    TEST_ASSERT_EQUAL_STRING("Bulbasaur",  pksave_species_name(PKSAVE_GAME_DP, 1));
+    TEST_ASSERT_EQUAL_STRING("Pikachu",    pksave_species_name(PKSAVE_GAME_DP, 25));
+    TEST_ASSERT_EQUAL_STRING("Celebi",     pksave_species_name(PKSAVE_GAME_PLATINUM, 251));
+    TEST_ASSERT_EQUAL_STRING("Deoxys",     pksave_species_name(PKSAVE_GAME_HGSS, 386));
+    TEST_ASSERT_EQUAL_STRING("Turtwig",    pksave_species_name(PKSAVE_GAME_DP, 387));
+    TEST_ASSERT_EQUAL_STRING("Empoleon",   pksave_species_name(PKSAVE_GAME_DP, 395));
+    TEST_ASSERT_EQUAL_STRING("Arceus",     pksave_species_name(PKSAVE_GAME_PLATINUM, 493));
+    TEST_ASSERT_EQUAL_STRING("Egg",        pksave_species_name(PKSAVE_GAME_DP, 494));
+    TEST_ASSERT_EQUAL_STRING("Bad Egg",    pksave_species_name(PKSAVE_GAME_DP, 495));
+    TEST_ASSERT_EQUAL_STRING("???",        pksave_species_name(PKSAVE_GAME_DP, 0));
+}
+
+void test_gen4_move_name_lookup(void)
+{
+    TEST_ASSERT_EQUAL_STRING("Pound",        pksave_move_name(PKSAVE_GAME_DP, 1));
+    TEST_ASSERT_EQUAL_STRING("Thunderbolt",  pksave_move_name(PKSAVE_GAME_DP, 85));
+    TEST_ASSERT_EQUAL_STRING("Volt Tackle",  pksave_move_name(PKSAVE_GAME_PLATINUM, 344));
+    TEST_ASSERT_EQUAL_STRING("Shadow Force", pksave_move_name(PKSAVE_GAME_HGSS, 467));
+    TEST_ASSERT_EQUAL_STRING("???",          pksave_move_name(PKSAVE_GAME_DP, 0));
+}
+
+void test_gen4_item_name_lookup(void)
+{
+    TEST_ASSERT_EQUAL_STRING("Master Ball", pksave_item_name(PKSAVE_GAME_DP, 1));
+    TEST_ASSERT_EQUAL_STRING("Rare Candy",  pksave_item_name(PKSAVE_GAME_PLATINUM, 50));
+    /* ITEM_TM01 = 328 per pokeplatinum generated/items.txt */
+    TEST_ASSERT_EQUAL_STRING("TM01",        pksave_item_name(PKSAVE_GAME_DP, 328));
+    TEST_ASSERT_EQUAL_STRING("HM01",        pksave_item_name(PKSAVE_GAME_HGSS, 420));
+    TEST_ASSERT_EQUAL_STRING("???",         pksave_item_name(PKSAVE_GAME_DP, 0));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -457,5 +493,8 @@ int main(void)
     RUN_TEST(test_platinum_set_item_round_trip);
     RUN_TEST(test_hgss_set_item_round_trip);
     RUN_TEST(test_dp_set_item_out_of_range);
+    RUN_TEST(test_gen4_species_name_lookup);
+    RUN_TEST(test_gen4_move_name_lookup);
+    RUN_TEST(test_gen4_item_name_lookup);
     return UNITY_END();
 }

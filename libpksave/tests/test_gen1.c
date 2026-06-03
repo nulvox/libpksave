@@ -289,6 +289,118 @@ void test_rb_set_box_slot_out_of_range(void)
     pksave_close(s);
 }
 
+/* ── Gen I derived fields: is_shiny + stat exp passthrough ── */
+
+void test_gen1_is_shiny_derived(void)
+{
+    /* Gen II shiny formula (applied to Gen I DVs):
+     *   Def DV = 10, Spd DV = 10, Spc DV = 10, Atk DV ∈ {2,3,6,7,10,11,14,15}
+     * Our IVs are stored as DV*2, so DV 10 → IV 20, DV 15 → IV 30. */
+    if (!load_fixture("rb.sav", rb_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_pokemon_t party[6];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party(s, party, &count));
+    TEST_ASSERT_GREATER_THAN(0, (int)count);
+
+    /* Shiny DV set: Atk=15, Def=10, Spd=10, Spc=10 */
+    party[0].ivs[1] = 30;
+    party[0].ivs[2] = 20;
+    party[0].ivs[5] = 20;
+    party[0].ivs[3] = party[0].ivs[4] = 20;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_party_slot(s, 0, &party[0]));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party(s, party, &count));
+    TEST_ASSERT_EQUAL_UINT8(1, party[0].is_shiny);
+
+    /* Non-shiny DV set: Atk=12 not in {2,3,6,7,10,11,14,15} → not shiny */
+    party[0].ivs[1] = 24;   /* DV 12 */
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_party_slot(s, 0, &party[0]));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party(s, party, &count));
+    TEST_ASSERT_EQUAL_UINT8(0, party[0].is_shiny);
+    pksave_close(s);
+}
+
+void test_gen1_stat_exp_passthrough(void)
+{
+    /* Gen I stat exp is 0-65535 per stat — must not be clamped to 255. */
+    if (!load_fixture("rb.sav", rb_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_pokemon_t party[6];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party(s, party, &count));
+    TEST_ASSERT_GREATER_THAN(0, (int)count);
+
+    party[0].evs[0] = 65535;       /* HP stat exp max */
+    party[0].evs[1] = 50000;       /* Atk */
+    party[0].evs[5] = 12345;       /* Speed */
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_party_slot(s, 0, &party[0]));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party(s, party, &count));
+    TEST_ASSERT_EQUAL_UINT16(65535, party[0].evs[0]);
+    TEST_ASSERT_EQUAL_UINT16(50000, party[0].evs[1]);
+    TEST_ASSERT_EQUAL_UINT16(12345, party[0].evs[5]);
+    pksave_close(s);
+}
+
+/* ── Gen I name lookups ── */
+
+void test_gen1_species_name_lookup(void)
+{
+    /* Internal IDs per pret/pokered constants/pokemon_constants.asm */
+    TEST_ASSERT_EQUAL_STRING("Rhydon",     pksave_species_name(PKSAVE_GAME_RB, 0x01));
+    TEST_ASSERT_EQUAL_STRING("Bulbasaur",  pksave_species_name(PKSAVE_GAME_RB, 0x99));
+    TEST_ASSERT_EQUAL_STRING("Charizard",  pksave_species_name(PKSAVE_GAME_RB, 0xB4));
+    TEST_ASSERT_EQUAL_STRING("Pikachu",    pksave_species_name(PKSAVE_GAME_RB, 0x54));
+    TEST_ASSERT_EQUAL_STRING("Mewtwo",     pksave_species_name(PKSAVE_GAME_RB, 0x83));
+    TEST_ASSERT_EQUAL_STRING("Mew",        pksave_species_name(PKSAVE_GAME_RB, 0x15));
+    TEST_ASSERT_EQUAL_STRING("Pidgey",     pksave_species_name(PKSAVE_GAME_RB, 0x24));
+    TEST_ASSERT_EQUAL_STRING("Victreebel", pksave_species_name(PKSAVE_GAME_RB, 0xBE));
+    /* Skipped slots → MissingNo */
+    TEST_ASSERT_EQUAL_STRING("MissingNo.", pksave_species_name(PKSAVE_GAME_RB, 0x1F));
+    /* Out-of-range or zero → "???" */
+    TEST_ASSERT_EQUAL_STRING("???",        pksave_species_name(PKSAVE_GAME_RB, 0x00));
+    TEST_ASSERT_EQUAL_STRING("???",        pksave_species_name(PKSAVE_GAME_RB, 0xFF));
+}
+
+void test_gen1_move_name_lookup(void)
+{
+    /* Move IDs 1-indexed; per pret/pokered data/moves/names.asm */
+    TEST_ASSERT_EQUAL_STRING("Pound",       pksave_move_name(PKSAVE_GAME_RB, 1));
+    TEST_ASSERT_EQUAL_STRING("Tackle",      pksave_move_name(PKSAVE_GAME_RB, 33));
+    TEST_ASSERT_EQUAL_STRING("Thunderbolt", pksave_move_name(PKSAVE_GAME_RB, 85));
+    TEST_ASSERT_EQUAL_STRING("Surf",        pksave_move_name(PKSAVE_GAME_RB, 57));
+    TEST_ASSERT_EQUAL_STRING("Struggle",    pksave_move_name(PKSAVE_GAME_RB, 165));
+    TEST_ASSERT_EQUAL_STRING("???",         pksave_move_name(PKSAVE_GAME_RB, 0));
+    TEST_ASSERT_EQUAL_STRING("???",         pksave_move_name(PKSAVE_GAME_RB, 200));
+}
+
+void test_gen1_item_name_lookup(void)
+{
+    /* Item IDs 1-indexed; per pret/pokered data/items/names.asm */
+    TEST_ASSERT_EQUAL_STRING("Master Ball", pksave_item_name(PKSAVE_GAME_RB, 0x01));
+    TEST_ASSERT_EQUAL_STRING("Potion",      pksave_item_name(PKSAVE_GAME_RB, 0x14));
+    TEST_ASSERT_EQUAL_STRING("Antidote",    pksave_item_name(PKSAVE_GAME_RB, 0x0B));
+    TEST_ASSERT_EQUAL_STRING("Full Heal",   pksave_item_name(PKSAVE_GAME_RB, 0x34));
+    TEST_ASSERT_EQUAL_STRING("Rare Candy",  pksave_item_name(PKSAVE_GAME_RB, 0x28));
+    TEST_ASSERT_EQUAL_STRING("???",         pksave_item_name(PKSAVE_GAME_RB, 0));
+    TEST_ASSERT_EQUAL_STRING("???",         pksave_item_name(PKSAVE_GAME_RB, 0xFF));
+}
+
 /* ── Gen I bag / items pocket ── */
 
 void test_rb_get_items_pocket(void)
@@ -383,5 +495,10 @@ int main(void)
     RUN_TEST(test_rb_other_pockets_empty);
     RUN_TEST(test_rb_set_item_round_trip);
     RUN_TEST(test_rb_set_item_out_of_range);
+    RUN_TEST(test_gen1_species_name_lookup);
+    RUN_TEST(test_gen1_move_name_lookup);
+    RUN_TEST(test_gen1_item_name_lookup);
+    RUN_TEST(test_gen1_is_shiny_derived);
+    RUN_TEST(test_gen1_stat_exp_passthrough);
     return UNITY_END();
 }

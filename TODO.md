@@ -47,33 +47,33 @@ is committed **and** `make test` passes for that item.
 
 ## Name lookup tables (`names/`)
 
-- [ ] `names/gen1_species.h` — 151 entries, Gen I internal ID order
-- [ ] `names/gen1_moves.h`
-- [ ] `names/gen1_items.h`
-- [ ] `names/gen2_species.h` — 251 entries
-- [ ] `names/gen2_moves.h`
-- [ ] `names/gen2_items.h`
-- [ ] `names/gen3_species.h` — 386 entries (national dex order)
-- [ ] `names/gen3_moves.h`
-- [ ] `names/gen3_items.h`
-- [ ] `names/gen4_species.h` — 493 entries
-- [ ] `names/gen4_moves.h`
-- [ ] `names/gen4_items.h`
-- [ ] `names/gen5_species.h` — 649 entries
-- [ ] `names/gen5_moves.h`
-- [ ] `names/gen5_items.h`
-- [ ] Wire `pksave_species_name`, `pksave_move_name`, `pksave_item_name` in `names.c`
+- [x] `names/gen1_species.h` — 191 entries indexed by Gen I internal ID
+- [x] `names/gen1_moves.h` — 165 moves
+- [x] `names/gen1_items.h` — 0x53 items including badges
+- [x] `names/gen2_species.h` — 251 entries + Egg
+- [x] `names/gen2_moves.h` — 251 moves
+- [x] `names/gen2_items.h` — 256 slots including TMs/HMs
+- [x] `names/gen3_species.h` — 412 entries (national dex order)
+- [x] `names/gen3_moves.h` — 354 moves
+- [x] `names/gen3_items.h` — 377 items
+- [x] `names/gen4_species.h` — 495 entries
+- [x] `names/gen4_moves.h` — 467 moves
+- [x] `names/gen4_items.h` — 467 items
+- [x] `names/gen5_species.h` — 649 entries
+- [x] `names/gen5_moves.h` — 559 moves
+- [x] `names/gen5_items.h` — 639 items
+- [x] Wire `pksave_species_name`, `pksave_move_name`, `pksave_item_name` in `names.c`
 
 ## Gen I/II derived fields
 
-- [ ] `is_shiny` in `gen1_get_party` / `gen1_get_box` — Attack/Defense/Speed/Special DVs all 10, Speed DV even
-- [ ] `is_shiny` in `gen2_get_party` / `gen2_get_box` — same DV formula as Gen I
-- [ ] Verify stat experience round-trip (0–65535 passthrough, not clamped to 255)
+- [x] `is_shiny` in `gen1_get_party` / `gen1_get_box` — Gen II DV formula
+- [x] `is_shiny` in `gen2_get_party` / `gen2_get_box` — same DV formula
+- [x] Verify stat experience round-trip (0–65535 passthrough, not clamped to 255)
 
 ## Tests for new functions
 
-- [ ] Unity tests for all `set_party_slot` functions (mutate → flush → reopen → verify species/level)
-- [ ] Unity tests for all `get_box` / `set_box_slot` functions
-- [ ] Unity tests for all `get_pocket` / `set_item` functions
-- [ ] Unity test for `is_shiny` (fixture with shiny DVs and non-shiny DVs)
-- [ ] Unity test for stat experience passthrough (Gen I/II)
+- [x] Unity tests for all `set_party_slot` functions (mutate → flush → reopen → verify species/level)
+- [x] Unity tests for all `get_box` / `set_box_slot` functions
+- [x] Unity tests for all `get_pocket` / `set_item` functions
+- [x] Unity test for `is_shiny` (shiny DV set vs non-shiny DV set)
+- [x] Unity test for stat experience passthrough (Gen I/II)
