@@ -217,6 +217,68 @@ void test_crystal_party_slot_round_trip(void)
     pksave_close(s);
 }
 
+/* ── Gen II PC box read ── */
+
+void test_gs_box_count(void)
+{
+    if (!load_fixture("gs.sav", gs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQUAL_INT(14, pksave_get_box_count(s));
+    pksave_close(s);
+}
+
+void test_gs_get_box_out_of_range(void)
+{
+    if (!load_fixture("gs.sav", gs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE, pksave_get_box(s, 14, box, &count));
+    pksave_close(s);
+}
+
+void test_gs_get_empty_box(void)
+{
+    if (!load_fixture("gs.sav", gs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_pokemon_t box[30];
+    uint8_t count = 99;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 0, box, &count));
+    TEST_ASSERT_EQUAL_UINT8(0, count);
+    pksave_close(s);
+}
+
+void test_gs_get_stored_box_with_mon(void)
+{
+    if (!load_fixture("gs.sav", gs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    /* Fixture populates box 1 with one Bulbasaur */
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    TEST_ASSERT_EQUAL_UINT8(1, count);
+    TEST_ASSERT_EQUAL_UINT16(0x99, box[0].species);
+    TEST_ASSERT_EQUAL_UINT8(33, box[0].move_ids[0]);
+    pksave_close(s);
+}
+
+void test_crystal_get_stored_box_with_mon(void)
+{
+    if (!load_fixture("crystal.sav", crystal_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(crystal_buf, SRAM_SIZE, PKSAVE_GAME_CRYSTAL);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 7, box, &count));
+    TEST_ASSERT_EQUAL_UINT8(1, count);
+    TEST_ASSERT_EQUAL_UINT16(0x9A, box[0].species);
+    pksave_close(s);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -228,5 +290,10 @@ int main(void)
     RUN_TEST(test_crystal_party_slot0);
     RUN_TEST(test_crystal_checksum_valid_after_flush);
     RUN_TEST(test_crystal_party_slot_round_trip);
+    RUN_TEST(test_gs_box_count);
+    RUN_TEST(test_gs_get_box_out_of_range);
+    RUN_TEST(test_gs_get_empty_box);
+    RUN_TEST(test_gs_get_stored_box_with_mon);
+    RUN_TEST(test_crystal_get_stored_box_with_mon);
     return UNITY_END();
 }

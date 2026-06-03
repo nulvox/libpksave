@@ -186,6 +186,58 @@ void test_yellow_checksum_valid_after_flush(void)
         pksave_validate_checksum(yellow_buf, SRAM_SIZE, PKSAVE_GAME_YELLOW));
 }
 
+/* ── Gen I PC box read ── */
+
+void test_rb_box_count(void)
+{
+    if (!load_fixture("rb.sav", rb_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQUAL_INT(12, pksave_get_box_count(s));
+    pksave_close(s);
+}
+
+void test_rb_get_empty_current_box(void)
+{
+    if (!load_fixture("rb.sav", rb_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    TEST_ASSERT_NOT_NULL(s);
+    /* Current box is 0; fixture stores no box mons → count=0 */
+    pksave_pokemon_t box[30];
+    uint8_t count = 99;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 0, box, &count));
+    TEST_ASSERT_EQUAL_UINT8(0, count);
+    pksave_close(s);
+}
+
+void test_rb_get_box_out_of_range(void)
+{
+    if (!load_fixture("rb.sav", rb_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE, pksave_get_box(s, 12, box, &count));
+    pksave_close(s);
+}
+
+void test_rb_get_stored_box_with_mon(void)
+{
+    if (!load_fixture("rb.sav", rb_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    /* Fixture populates box 1 (stored, not current) with one Bulbasaur lvl 7 */
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    TEST_ASSERT_EQUAL_UINT8(1, count);
+    TEST_ASSERT_EQUAL_UINT16(0x99, box[0].species);   /* Bulbasaur internal ID */
+    TEST_ASSERT_EQUAL_UINT8(7, box[0].level);
+    TEST_ASSERT_EQUAL_UINT8(33, box[0].move_ids[0]); /* Tackle */
+    pksave_close(s);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -196,5 +248,9 @@ int main(void)
     RUN_TEST(test_yellow_trainer_round_trip);
     RUN_TEST(test_yellow_party_slot0);
     RUN_TEST(test_yellow_checksum_valid_after_flush);
+    RUN_TEST(test_rb_box_count);
+    RUN_TEST(test_rb_get_empty_current_box);
+    RUN_TEST(test_rb_get_box_out_of_range);
+    RUN_TEST(test_rb_get_stored_box_with_mon);
     return UNITY_END();
 }

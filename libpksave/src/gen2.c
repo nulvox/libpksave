@@ -88,6 +88,24 @@
 #define G2_NUM_BOXES_GS    14U
 #define G2_NUM_BOXES_CRY   14U
 
+/* PC box layout (synthetic-fixture compatible; matches pokegold/pokecrystal
+ * box-bank layout described in ram/sram.asm).
+ *
+ * Each box is 1102 bytes:
+ *   1 byte  count
+ *   21 bytes species list (20 entries + 0xFF terminator)
+ *   20 × 32 box-mon data
+ *   20 × 11 OT names
+ *   20 × 11 nicknames
+ *
+ * Boxes 0-6 live in SRAM bank 2 (.sav 0x4000+).
+ * Boxes 7-13 live in SRAM bank 3 (.sav 0x6000+).
+ * Within a bank, boxes are placed contiguously at +box*1102.
+ */
+#define G2_BOX_SIZE        1102U
+#define G2_BOX_BANK2_BASE  0x4000U
+#define G2_BOX_BANK3_BASE  0x6000U
+
 /* ── character encoding (shared with Gen I) ──────────────────────────────── */
 
 static char gen2_decode_char(uint8_t b)
@@ -367,10 +385,50 @@ int gen2_set_party_slot(pksave_save_t *s, uint8_t slot, const pksave_pokemon_t *
     return PKSAVE_OK;
 }
 
+/* ── box mon decode ──────────────────────────────────────────────────────── */
+
+static uint32_t gen2_box_base(uint8_t box)
+{
+    return box < 7U
+         ? G2_BOX_BANK2_BASE + (uint32_t)box * G2_BOX_SIZE
+         : G2_BOX_BANK3_BASE + (uint32_t)(box - 7U) * G2_BOX_SIZE;
+}
+
+static void gen2_decode_box_mon(const uint8_t *data,
+                                 const uint8_t *ot_name,
+                                 const uint8_t *nick,
+                                 pksave_pokemon_t *out)
+{
+    /* Box mon is the first 32 bytes of the party-mon struct: same fields
+     * through caught_data (0x1F). Level (0x20) and stats (0x24+) are absent
+     * — in Gen II, level is derived from experience by the game at withdraw.
+     * libpksave leaves level=0 for stored mons; frontends should not display
+     * a level for box mons until the user moves them to the party. */
+    uint8_t party[G2_PARTY_MON_SIZE];
+    memset(party, 0, G2_PARTY_MON_SIZE);
+    memcpy(party, data, G2_BOX_MON_SIZE);
+    gen2_decode_party_mon(party, ot_name, nick, out);
+    out->level = 0;
+}
+
 int gen2_get_box(pksave_save_t *s, uint8_t box, pksave_pokemon_t out[30], uint8_t *cnt)
 {
-    (void)s; (void)box; (void)out;
-    *cnt = 0;
+    if (box >= G2_NUM_BOXES_GS) return PKSAVE_ERR_RANGE;
+    const uint8_t *base = s->sram + gen2_box_base(box);
+    uint8_t n = base[0];
+    if (n > G2_BOX_PER_BOX) n = G2_BOX_PER_BOX;
+    *cnt = n;
+    const uint8_t *species = base + 1U;
+    const uint8_t *data    = base + 22U;
+    const uint8_t *ot      = data + (size_t)G2_BOX_PER_BOX * G2_BOX_MON_SIZE;
+    const uint8_t *nicks   = ot   + (size_t)G2_BOX_PER_BOX * G2_NAME_LEN;
+    for (int i = 0; i < n; i++) {
+        gen2_decode_box_mon(data + (size_t)i * G2_BOX_MON_SIZE,
+                            ot   + (size_t)i * G2_NAME_LEN,
+                            nicks+ (size_t)i * G2_NAME_LEN,
+                            &out[i]);
+        out[i].species = species[i];
+    }
     return PKSAVE_OK;
 }
 

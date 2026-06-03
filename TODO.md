@@ -15,11 +15,11 @@ is committed **and** `make test` passes for that item.
 
 ## PC box read
 
-- [ ] `gen1_get_box` — 33-byte box mon; 12 boxes × 20 slots at 0x4000+
-- [ ] `gen2_get_box` — 32-byte box mon; 14 boxes × 20 slots (layout differs GS vs Crystal)
-- [ ] `gen3_get_box` — 80-byte box mon in storage sections 5–13; 30 slots per box
-- [ ] `gen4_get_box` — 136-byte box mon in storage block; 30 slots per box
-- [ ] `gen5_get_box` — same structure as Gen IV, different storage block offset
+- [x] `gen1_get_box` — 33-byte box mon; 12 boxes × 20 slots at 0x4000+
+- [x] `gen2_get_box` — 32-byte box mon; 14 boxes × 20 slots (layout differs GS vs Crystal)
+- [x] `gen3_get_box` — 80-byte box mon in storage sections 5–13; 30 slots per box
+- [x] `gen4_get_box` — 136-byte box mon in storage block; 30 slots per box
+- [x] `gen5_get_box` — same structure as Gen IV, different storage block offset
 
 ## PC box write
 

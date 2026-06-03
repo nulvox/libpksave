@@ -385,6 +385,36 @@ def gen1_make_party_mon(species, level, move1):
     struct.pack_into('>H', mon, 0x2A, 8)    # Spc
     return bytes(mon)
 
+# Gen I/II box mon: first 33 bytes of the party struct (no level/stats).
+# Level is read from data[0x03] (box_level field).
+def gen1_make_box_mon(species, level, move1):
+    return gen1_make_party_mon(species, level, move1)[:33]
+
+GEN1_BOX_SIZE = 1122        # 1 count + 21 species + 20*33 + 20*11 + 20*11
+GEN1_BOX_MON_SIZE = 33
+GEN1_NAME_LEN = 11
+
+def gen1_write_box(buf, base_off, mons):
+    """Populate a Gen I PC box (1122 bytes) with the given list of (species, level, move) tuples."""
+    n = len(mons)
+    buf[base_off] = n
+    # species list: n entries followed by 0xFF terminator, padded with 0xFF
+    for i, (sp, _, _) in enumerate(mons):
+        buf[base_off + 1 + i] = sp
+    buf[base_off + 1 + n] = 0xFF
+    for i in range(n + 1, 21):
+        buf[base_off + 1 + i] = 0xFF
+    data_off  = base_off + 22
+    ot_off    = data_off + 20 * GEN1_BOX_MON_SIZE
+    nick_off  = ot_off  + 20 * GEN1_NAME_LEN
+    for i, (sp, lvl, mv) in enumerate(mons):
+        buf[data_off + i*GEN1_BOX_MON_SIZE : data_off + (i+1)*GEN1_BOX_MON_SIZE] = \
+            gen1_make_box_mon(sp, lvl, mv)
+        buf[ot_off   + i*GEN1_NAME_LEN : ot_off   + (i+1)*GEN1_NAME_LEN] = \
+            gen1_encode("RED", GEN1_NAME_LEN)
+        buf[nick_off + i*GEN1_NAME_LEN : nick_off + (i+1)*GEN1_NAME_LEN] = \
+            gen1_encode("BULBASAUR", GEN1_NAME_LEN)
+
 def make_gen1_rb():
     buf = bytearray(GEN1_SIZE)
 
@@ -430,6 +460,10 @@ def make_gen1_rb():
     # Current box number at 0x284C
     buf[0x284C] = 0   # box 1
 
+    # Populate box 1 (stored in bank 2 at 0x4000 + 1*1122) with one Bulbasaur lvl 7
+    gen1_write_box(buf, 0x4000 + 1 * GEN1_BOX_SIZE,
+                   [(GEN12_SPECIES, 7, TEST_MOVE1)])
+
     # Checksum
     buf[GEN1_CHKSUM_ADDR] = gen1_checksum(buf)
     return bytes(buf)
@@ -454,6 +488,40 @@ def make_gen1_yellow():
 # Crystal primary: sum(0x2009..0x2B82) → 0x2D0D; secondary: sum(0x1209..0x1D82) → 0x1F0D
 
 GEN2_SIZE = 32 * 1024
+
+GEN2_BOX_SIZE = 1102        # 1 + 21 + 20*32 + 20*11 + 20*11
+GEN2_BOX_MON_SIZE = 32
+GEN2_NAME_LEN = 11
+GEN2_BOX_BANK2 = 0x4000     # boxes 0-6
+GEN2_BOX_BANK3 = 0x6000     # boxes 7-13
+
+def gen2_make_box_mon(species, level, move1):
+    """Gen II box mon = first 32 bytes of party mon struct (no level/stats)."""
+    return gen2_make_party_mon(species, level, move1)[:GEN2_BOX_MON_SIZE]
+
+def gen2_box_base(box):
+    return (GEN2_BOX_BANK2 + box * GEN2_BOX_SIZE) if box < 7 \
+        else (GEN2_BOX_BANK3 + (box - 7) * GEN2_BOX_SIZE)
+
+def gen2_write_box(buf, base_off, mons):
+    """Populate a Gen II PC box (1102 bytes) with the given list of (species, level, move) tuples."""
+    n = len(mons)
+    buf[base_off] = n
+    for i, (sp, _, _) in enumerate(mons):
+        buf[base_off + 1 + i] = sp
+    buf[base_off + 1 + n] = 0xFF
+    for i in range(n + 1, 21):
+        buf[base_off + 1 + i] = 0xFF
+    data_off = base_off + 22
+    ot_off   = data_off + 20 * GEN2_BOX_MON_SIZE
+    nick_off = ot_off  + 20 * GEN2_NAME_LEN
+    for i, (sp, lvl, mv) in enumerate(mons):
+        buf[data_off + i*GEN2_BOX_MON_SIZE : data_off + (i+1)*GEN2_BOX_MON_SIZE] = \
+            gen2_make_box_mon(sp, lvl, mv)
+        buf[ot_off   + i*GEN2_NAME_LEN : ot_off   + (i+1)*GEN2_NAME_LEN] = \
+            gen1_encode("RED", GEN2_NAME_LEN)
+        buf[nick_off + i*GEN2_NAME_LEN : nick_off + (i+1)*GEN2_NAME_LEN] = \
+            gen1_encode("BULBASAUR", GEN2_NAME_LEN)
 
 def gen2_make_party_mon(species, level, move1):
     """Build a 48-byte Gen II party mon struct."""
@@ -524,14 +592,12 @@ def make_gen2_gs():
         party_count_off=0x288A, party_species_off=0x288B, party_data_off=0x2892,
         money_off=0x23DB, badges_off=0x23E4
     )
+    # Populate box 1 (stored, bank 2) with one Bulbasaur lvl 8
+    gen2_write_box(buf, gen2_box_base(1),
+                   [(GEN12_SPECIES, 8, TEST_MOVE1)])
     # Primary checksum: sum bytes 0x2009..0x2D68
     chk1 = gen2_checksum_range(buf, 0x2009, 0x2D68)
     struct.pack_into('<H', buf, 0x2D69, chk1)
-    # Secondary checksum region (mirror at end of file)
-    # GS secondary: sum 0x1209..0x1D82 stored at 0x7E6D? Actually from research it's
-    # the same range but stored in a different location. For now just compute and store.
-    # For simplicity, copy main data range to secondary location for GS (real save detail).
-    # We'll leave secondary checksum as 0 for now — detection only uses primary.
     return bytes(buf)
 
 def make_gen2_crystal():
@@ -539,6 +605,10 @@ def make_gen2_crystal():
         party_count_off=0x2865, party_species_off=0x2866, party_data_off=0x286D,
         money_off=0x23DC, badges_off=0x23E5
     )
+    # Populate box 7 (stored, bank 3) with one Ivysaur (0x9A) for cross-bank
+    # coverage of gen2_get_box
+    gen2_write_box(buf, gen2_box_base(7),
+                   [(0x9A, 16, TEST_MOVE1)])
     # Crystal primary checksum: sum bytes 0x2009..0x2B82 → store at 0x2D0D
     chk1 = gen2_checksum_range(buf, 0x2009, 0x2B82)
     struct.pack_into('<H', buf, 0x2D0D, chk1)
@@ -611,6 +681,39 @@ def gen3_make_section1_frlg(money, security_key, party_mon_bytes):
     struct.pack_into('<I', data, 0x290, money_enc)
     return bytes(data)
 
+GEN3_BOX_MON_SIZE = 80
+GEN3_SLOTS_PER_BOX = 30
+GEN3_NUM_BOXES = 14
+GEN3_PC_SEC_FIRST = 5
+GEN3_PC_SEC_LAST  = 13
+GEN3_PC_SEC_DATA  = 3968   # sections 5..12
+GEN3_PC_SEC13_DATA = 2000  # section 13
+
+def gen3_pc_write(sections_data, lin_off, payload):
+    """Write `payload` to the linear PC-storage byte stream that spans
+    sections 5..13. `sections_data` is a list of mutable bytearrays."""
+    p = 0
+    while p < len(payload):
+        if lin_off < 8 * GEN3_PC_SEC_DATA:
+            sec_idx = GEN3_PC_SEC_FIRST + (lin_off // GEN3_PC_SEC_DATA)
+            within  = lin_off %  GEN3_PC_SEC_DATA
+            sec_sz  = GEN3_PC_SEC_DATA
+        else:
+            sec_idx = GEN3_PC_SEC_LAST
+            within  = lin_off - 8 * GEN3_PC_SEC_DATA
+            sec_sz  = GEN3_PC_SEC13_DATA
+        avail = sec_sz - within
+        take  = min(avail, len(payload) - p)
+        buf   = sections_data[sec_idx]
+        buf[within:within+take] = payload[p:p+take]
+        sections_data[sec_idx] = buf
+        p       += take
+        lin_off += take
+
+def gen3_make_box_mon(species, level, move1, ot_tid, ot_sid, pid=0x12345678):
+    """First 80 bytes of a Gen III party mon = the box mon."""
+    return gen3_make_party_mon(species, level, move1, ot_tid, ot_sid, pid)[:GEN3_BOX_MON_SIZE]
+
 def gen3_make_save(game_code, security_key_sec0, security_key_frlg, is_frlg):
     """Build a full 128KB Gen III save file."""
     buf = bytearray(GEN3_SIZE)
@@ -634,9 +737,16 @@ def gen3_make_save(game_code, security_key_sec0, security_key_frlg, is_frlg):
         sec1_data = gen3_make_section1_rse(TEST_MONEY, sk, mon)
 
     # Write sections 0-13 (slot 0) and mirror as slot 1 (same data, count=2)
-    sections_data = [bytes(sec0_list), bytes(sec1_data)]
+    sections_data = [bytearray(sec0_list), bytearray(sec1_data)]
     for i in range(2, GEN3_NUM_SECTIONS):
-        sections_data.append(bytes(GEN3_SECTION_SIZES.get(i, 3968)))
+        sections_data.append(bytearray(GEN3_SECTION_SIZES.get(i, 3968)))
+
+    # Populate box 1 slot 0 with Bulbasaur (national dex 1) for box-read tests.
+    box_mon = gen3_make_box_mon(GEN3P_SPECIES, TEST_LEVEL, TEST_MOVE1,
+                                TEST_TID, TEST_SID, pid=0x12345678)
+    # Linear PC offset: 1 (currentBox byte) + box*30*80 + slot*80
+    lin = 1 + 1 * GEN3_SLOTS_PER_BOX * GEN3_BOX_MON_SIZE + 0 * GEN3_BOX_MON_SIZE
+    gen3_pc_write(sections_data, lin, box_mon)
 
     save_count = 1
     for i in range(GEN3_NUM_SECTIONS):
@@ -741,9 +851,30 @@ def gen4_make_general_block(variant):
 
     return bytes(buf)
 
+GEN4_BOX_MON_SIZE = 136
+GEN4_SLOTS_PER_BOX = 30
+GEN4_NUM_BOXES = 18
+GEN4_PC_BOX_BASE = 0x04
+
+def gen4_make_box_mon(species, level, move1, ot_tid, ot_sid, pid=0):
+    """First 136 bytes of a Gen IV party mon = the box mon.
+
+    Uses pid=0 so the Growth (species/item) substruct lands at the start
+    of the encrypted region — the same workaround the party fixture relies
+    on for its nickname/OT writes that happen to overlap encrypted bytes.
+    """
+    return gen4_make_party_mon(species, level, move1, ot_tid, ot_sid, pid)[:GEN4_BOX_MON_SIZE]
+
 def gen4_make_storage_block(variant):
     size = GEN4_STORAGE_SIZES[variant]
     buf = bytearray(size)
+    # Populate box 1 slot 0 with Bulbasaur (national dex 1) so gen4_get_box
+    # has something concrete to read in tests.
+    box_mon = gen4_make_box_mon(GEN3P_SPECIES, TEST_LEVEL, TEST_MOVE1,
+                                TEST_TID, TEST_SID)
+    off = GEN4_PC_BOX_BASE + (1 * GEN4_SLOTS_PER_BOX + 0) * GEN4_BOX_MON_SIZE
+    buf[off:off+GEN4_BOX_MON_SIZE] = box_mon
+
     footer_off = size - 0x14
     connection_id = 1
     save_num = 1
@@ -784,6 +915,14 @@ GEN5_STORAGE_SIZE = 0x26000   # approximate
 # Gen V trainer offsets (BW/BW2, offsets within general block)
 GEN5_TRAINER_OFF = 0x19D0   # approximate — name(16), TID(2), SID(2), money(4)
 
+GEN5_PC_BOX_BASE = 0x2000
+GEN5_NUM_BOXES = 24
+GEN5_SLOTS_PER_BOX = 30
+GEN5_BOX_MON_SIZE = 136
+
+def gen5_make_box_mon(species, level, move1, ot_tid, ot_sid, pid=0):
+    return gen4_make_party_mon(species, level, move1, ot_tid, ot_sid, pid)[:GEN5_BOX_MON_SIZE]
+
 def gen5_make_general_block(variant):
     size = GEN5_GENERAL_SIZES[variant]
     buf = bytearray(size)
@@ -800,6 +939,11 @@ def gen5_make_general_block(variant):
     buf[party_off:party_off+4] = struct.pack('<I', 1)   # 1 Pokemon in party
     mon = gen4_make_party_mon(GEN3P_SPECIES, TEST_LEVEL, TEST_MOVE1, TEST_TID, TEST_SID)
     buf[party_off+4:party_off+4+236] = mon
+
+    # PC box 1 slot 0 = Bulbasaur, for gen5_get_box tests
+    box_mon = gen5_make_box_mon(GEN3P_SPECIES, TEST_LEVEL, TEST_MOVE1, TEST_TID, TEST_SID)
+    box_off = GEN5_PC_BOX_BASE + (1 * GEN5_SLOTS_PER_BOX + 0) * GEN5_BOX_MON_SIZE
+    buf[box_off:box_off+GEN5_BOX_MON_SIZE] = box_mon
 
     footer_off = size - 0x14
     connection_id = 1
