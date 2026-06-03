@@ -448,11 +448,78 @@ int gen5_set_box_slot(pksave_save_t *s, uint8_t box, uint8_t slot, const pksave_
     return PKSAVE_OK;
 }
 
+/* ── bag / item pockets ──────────────────────────────────────────────────── */
+/* Same shape as Gen IV (u16 id + u16 quantity per slot), but different offsets
+ * within the general block for BW vs BW2.                                    */
+
+struct g5_pocket_layout {
+    uint32_t off;
+    uint16_t max_slots;
+};
+
+static int g5_pocket_layout(pksave_game_t game, pksave_pocket_t p,
+                            struct g5_pocket_layout *out)
+{
+    switch (game) {
+        case PKSAVE_GAME_BW:
+            switch (p) {
+                case PKSAVE_POCKET_ITEMS:   out->off = 0x18400; out->max_slots = 310; return PKSAVE_OK;
+                case PKSAVE_POCKET_KEY:     out->off = 0x188D8; out->max_slots = 83;  return PKSAVE_OK;
+                case PKSAVE_POCKET_TM_HM:   out->off = 0x18A2C; out->max_slots = 109; return PKSAVE_OK;
+                case PKSAVE_POCKET_BERRIES: out->off = 0x18CA0; out->max_slots = 64;  return PKSAVE_OK;
+                case PKSAVE_POCKET_BALLS:   out->off = 0x18DA0; out->max_slots = 25;  return PKSAVE_OK;
+                default: return PKSAVE_ERR_GAME;
+            }
+        case PKSAVE_GAME_BW2:
+            switch (p) {
+                case PKSAVE_POCKET_ITEMS:   out->off = 0x18470; out->max_slots = 310; return PKSAVE_OK;
+                case PKSAVE_POCKET_KEY:     out->off = 0x18948; out->max_slots = 83;  return PKSAVE_OK;
+                case PKSAVE_POCKET_TM_HM:   out->off = 0x18A9C; out->max_slots = 109; return PKSAVE_OK;
+                case PKSAVE_POCKET_BERRIES: out->off = 0x18D10; out->max_slots = 64;  return PKSAVE_OK;
+                case PKSAVE_POCKET_BALLS:   out->off = 0x18E10; out->max_slots = 25;  return PKSAVE_OK;
+                default: return PKSAVE_ERR_GAME;
+            }
+        default: return PKSAVE_ERR_GAME;
+    }
+}
+
 int gen5_get_pocket(pksave_save_t *s, pksave_pocket_t p, pksave_item_t *out, uint8_t *cnt)
-    { (void)s; (void)p; (void)out; *cnt = 0; return PKSAVE_OK; }
+{
+    struct g5_pocket_layout layout;
+    if (g5_pocket_layout(s->game, p, &layout) != PKSAVE_OK) {
+        *cnt = 0;
+        return PKSAVE_OK;
+    }
+    uint32_t bsz  = g5_general_size(s->game);
+    uint32_t base = g5_active_block(s->sram, bsz);
+    const uint8_t *pocket = s->sram + base + layout.off;
+    uint8_t n = 0;
+    for (uint16_t i = 0; i < layout.max_slots; i++) {
+        uint16_t id, qty;
+        memcpy(&id,  pocket + (size_t)i * 4,     2);
+        memcpy(&qty, pocket + (size_t)i * 4 + 2, 2);
+        if (id == 0) break;
+        out[n].item_id  = id;
+        out[n].quantity = qty;
+        n++;
+    }
+    *cnt = n;
+    return PKSAVE_OK;
+}
 
 int gen5_set_item(pksave_save_t *s, pksave_pocket_t p, uint8_t slot, const pksave_item_t *item)
-    { (void)s; (void)p; (void)slot; (void)item; return PKSAVE_ERR_RANGE; }
+{
+    struct g5_pocket_layout layout;
+    if (g5_pocket_layout(s->game, p, &layout) != PKSAVE_OK) return PKSAVE_ERR_GAME;
+    if ((uint16_t)slot >= layout.max_slots) return PKSAVE_ERR_RANGE;
+    uint32_t bsz  = g5_general_size(s->game);
+    uint32_t base = g5_active_block(s->sram, bsz);
+    uint8_t *entry = s->sram + base + layout.off + (size_t)slot * 4;
+    uint16_t id = item->item_id, qty = item->quantity;
+    memcpy(entry,     &id,  2);
+    memcpy(entry + 2, &qty, 2);
+    return PKSAVE_OK;
+}
 
 /* ── checksum ────────────────────────────────────────────────────────────── */
 

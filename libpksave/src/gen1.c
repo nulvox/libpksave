@@ -73,9 +73,11 @@
 #define G1_PARTY_MON_SIZE  44
 #define G1_NAME_LEN        11
 
-/* Bag items: count byte at 0x25C4, then pairs (id, qty), terminated by 0xFF */
-#define G1_BAG_CNT      0x25C4U
-#define G1_BAG_DATA     0x25C5U
+/* Bag items: count byte at 0x25C9, then 20×(id,qty), 0xFF terminator.
+ * Layout (42 bytes): 0x25C9 count, 0x25CA..0x25F1 entries, 0x25F2 0xFF.
+ * (Per pokered save layout; Money/BCD3 starts at 0x25F3.) */
+#define G1_BAG_CNT      0x25C9U
+#define G1_BAG_DATA     0x25CAU
 #define G1_BAG_MAX      20
 
 /* ── character encoding ──────────────────────────────────────────────────── */

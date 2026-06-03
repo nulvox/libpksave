@@ -293,6 +293,71 @@ void test_bw_set_box_slot_out_of_range(void)
     pksave_close(s);
 }
 
+/* ── Gen 5 bag ── */
+
+static void gen5_items_get(uint8_t *buf, pksave_game_t game, const char *name)
+{
+    if (!load_fixture(name, buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(buf, SRAM_SIZE, game);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_item_t items[10];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_get_pocket(s, PKSAVE_POCKET_ITEMS, items, &count));
+    TEST_ASSERT_EQUAL_UINT8(2, count);
+    TEST_ASSERT_EQUAL_UINT16(17,   items[0].item_id);
+    TEST_ASSERT_EQUAL_UINT16(5,    items[0].quantity);
+    TEST_ASSERT_EQUAL_UINT16(0x4A, items[1].item_id);
+    TEST_ASSERT_EQUAL_UINT16(2,    items[1].quantity);
+    pksave_close(s);
+}
+
+void test_bw_get_items_pocket(void)
+    { gen5_items_get(bw_buf, PKSAVE_GAME_BW, "bw.sav"); }
+void test_bw2_get_items_pocket(void)
+    { gen5_items_get(bw2_buf, PKSAVE_GAME_BW2, "bw2.sav"); }
+
+static void gen5_item_round_trip(uint8_t *buf, pksave_game_t game, const char *name)
+{
+    if (!load_fixture(name, buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(buf, SRAM_SIZE, game);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_item_t new_item = { .item_id = 0x457, .quantity = 88 };
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_set_item(s, PKSAVE_POCKET_BALLS, 0, &new_item));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(buf, SRAM_SIZE, game);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_item_t items[25];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_get_pocket(s, PKSAVE_POCKET_BALLS, items, &count));
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT8(1, count);
+    TEST_ASSERT_EQUAL_UINT16(0x457, items[0].item_id);
+    TEST_ASSERT_EQUAL_UINT16(88,    items[0].quantity);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(buf, SRAM_SIZE, game));
+    pksave_close(s);
+}
+
+void test_bw_set_item_round_trip(void)
+    { gen5_item_round_trip(bw_buf, PKSAVE_GAME_BW, "bw.sav"); }
+void test_bw2_set_item_round_trip(void)
+    { gen5_item_round_trip(bw2_buf, PKSAVE_GAME_BW2, "bw2.sav"); }
+
+void test_bw_set_item_out_of_range(void)
+{
+    if (!load_fixture("bw.sav", bw_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(bw_buf, SRAM_SIZE, PKSAVE_GAME_BW);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_item_t item = { .item_id = 1, .quantity = 1 };
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE,
+        pksave_set_item(s, PKSAVE_POCKET_BALLS, 25, &item));
+    pksave_close(s);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -311,5 +376,10 @@ int main(void)
     RUN_TEST(test_bw_set_box_slot_round_trip);
     RUN_TEST(test_bw2_set_box_slot_round_trip);
     RUN_TEST(test_bw_set_box_slot_out_of_range);
+    RUN_TEST(test_bw_get_items_pocket);
+    RUN_TEST(test_bw2_get_items_pocket);
+    RUN_TEST(test_bw_set_item_round_trip);
+    RUN_TEST(test_bw2_set_item_round_trip);
+    RUN_TEST(test_bw_set_item_out_of_range);
     return UNITY_END();
 }

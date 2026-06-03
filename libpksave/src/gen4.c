@@ -498,11 +498,87 @@ int gen4_set_box_slot(pksave_save_t *s, uint8_t box, uint8_t slot, const pksave_
     return PKSAVE_OK;
 }
 
+/* ── bag / item pockets ──────────────────────────────────────────────────── */
+/* Each pocket is an array of u16 (id, qty) slots in the general block.
+ * Offsets and slot counts per PKHeX SAV4Sinnoh / SAV4HGSS BlockOfsBag tables. */
+
+struct g4_pocket_layout {
+    uint16_t off;
+    uint16_t max_slots;
+};
+
+static int g4_pocket_layout(pksave_game_t game, pksave_pocket_t p,
+                            struct g4_pocket_layout *out)
+{
+    switch (game) {
+        case PKSAVE_GAME_DP:
+            switch (p) {
+                case PKSAVE_POCKET_ITEMS:   out->off = 0x0624; out->max_slots = 165; return PKSAVE_OK;
+                case PKSAVE_POCKET_KEY:     out->off = 0x08B8; out->max_slots = 50;  return PKSAVE_OK;
+                case PKSAVE_POCKET_TM_HM:   out->off = 0x0980; out->max_slots = 100; return PKSAVE_OK;
+                case PKSAVE_POCKET_BERRIES: out->off = 0x0BE0; out->max_slots = 64;  return PKSAVE_OK;
+                case PKSAVE_POCKET_BALLS:   out->off = 0x0CE0; out->max_slots = 15;  return PKSAVE_OK;
+                default: return PKSAVE_ERR_GAME;
+            }
+        case PKSAVE_GAME_PLATINUM:
+            switch (p) {
+                case PKSAVE_POCKET_ITEMS:   out->off = 0x0630; out->max_slots = 165; return PKSAVE_OK;
+                case PKSAVE_POCKET_KEY:     out->off = 0x08C4; out->max_slots = 50;  return PKSAVE_OK;
+                case PKSAVE_POCKET_TM_HM:   out->off = 0x098C; out->max_slots = 100; return PKSAVE_OK;
+                case PKSAVE_POCKET_BERRIES: out->off = 0x0BEC; out->max_slots = 64;  return PKSAVE_OK;
+                case PKSAVE_POCKET_BALLS:   out->off = 0x0CEC; out->max_slots = 15;  return PKSAVE_OK;
+                default: return PKSAVE_ERR_GAME;
+            }
+        case PKSAVE_GAME_HGSS:
+            switch (p) {
+                case PKSAVE_POCKET_ITEMS:   out->off = 0x0644; out->max_slots = 165; return PKSAVE_OK;
+                case PKSAVE_POCKET_KEY:     out->off = 0x08D8; out->max_slots = 43;  return PKSAVE_OK;
+                case PKSAVE_POCKET_TM_HM:   out->off = 0x09A0; out->max_slots = 100; return PKSAVE_OK;
+                case PKSAVE_POCKET_BERRIES: out->off = 0x0C00; out->max_slots = 64;  return PKSAVE_OK;
+                case PKSAVE_POCKET_BALLS:   out->off = 0x0D00; out->max_slots = 24;  return PKSAVE_OK;
+                default: return PKSAVE_ERR_GAME;
+            }
+        default: return PKSAVE_ERR_GAME;
+    }
+}
+
 int gen4_get_pocket(pksave_save_t *s, pksave_pocket_t p, pksave_item_t *out, uint8_t *cnt)
-    { (void)s; (void)p; (void)out; *cnt = 0; return PKSAVE_OK; }
+{
+    struct g4_pocket_layout layout;
+    if (g4_pocket_layout(s->game, p, &layout) != PKSAVE_OK) {
+        *cnt = 0;
+        return PKSAVE_OK;
+    }
+    uint32_t bsz  = g4_general_size(s->game);
+    uint32_t base = g4_active_block(s->sram, bsz);
+    const uint8_t *pocket = s->sram + base + layout.off;
+    uint8_t n = 0;
+    for (uint16_t i = 0; i < layout.max_slots; i++) {
+        uint16_t id, qty;
+        memcpy(&id,  pocket + (size_t)i * 4,     2);
+        memcpy(&qty, pocket + (size_t)i * 4 + 2, 2);
+        if (id == 0) break;
+        out[n].item_id  = id;
+        out[n].quantity = qty;
+        n++;
+    }
+    *cnt = n;
+    return PKSAVE_OK;
+}
 
 int gen4_set_item(pksave_save_t *s, pksave_pocket_t p, uint8_t slot, const pksave_item_t *item)
-    { (void)s; (void)p; (void)slot; (void)item; return PKSAVE_ERR_RANGE; }
+{
+    struct g4_pocket_layout layout;
+    if (g4_pocket_layout(s->game, p, &layout) != PKSAVE_OK) return PKSAVE_ERR_GAME;
+    if ((uint16_t)slot >= layout.max_slots) return PKSAVE_ERR_RANGE;
+    uint32_t bsz  = g4_general_size(s->game);
+    uint32_t base = g4_active_block(s->sram, bsz);
+    uint8_t *entry = s->sram + base + layout.off + (size_t)slot * 4;
+    uint16_t id = item->item_id, qty = item->quantity;
+    memcpy(entry,     &id,  2);
+    memcpy(entry + 2, &qty, 2);
+    return PKSAVE_OK;
+}
 
 /* ── checksum ────────────────────────────────────────────────────────────── */
 

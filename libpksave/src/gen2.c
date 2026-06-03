@@ -462,18 +462,94 @@ int gen2_set_box_slot(pksave_save_t *s, uint8_t box, uint8_t slot,
     return PKSAVE_OK;
 }
 
+/* ── bag / item pockets ──────────────────────────────────────────────────── */
+/* Each pocket lays out as: 1 count byte, N×(id[, qty]) entries, 0xFF terminator.
+ * Items, Balls: 2 bytes/entry (id, qty). Key items: 1 byte/entry (id only). */
+
+#define GS_ITEMS_CNT    0x2449U
+#define GS_KEY_CNT      0x2474U
+#define GS_BALLS_CNT    0x248FU
+
+#define CRY_ITEMS_CNT   0x241FU
+#define CRY_KEY_CNT     0x244AU
+#define CRY_BALLS_CNT   0x2465U
+
+#define G2_ITEMS_MAX    20
+#define G2_KEY_MAX      25
+#define G2_BALLS_MAX    12
+
+struct g2_pocket_layout {
+    uint16_t count_off;
+    uint8_t  max_slots;
+    uint8_t  has_qty;
+};
+
+static int gen2_pocket_layout(pksave_save_t *s, pksave_pocket_t p,
+                              struct g2_pocket_layout *out)
+{
+    int is_cry = (s->game == PKSAVE_GAME_CRYSTAL);
+    switch (p) {
+        case PKSAVE_POCKET_ITEMS:
+            out->count_off = is_cry ? CRY_ITEMS_CNT : GS_ITEMS_CNT;
+            out->max_slots = G2_ITEMS_MAX;
+            out->has_qty   = 1;
+            return PKSAVE_OK;
+        case PKSAVE_POCKET_KEY:
+            out->count_off = is_cry ? CRY_KEY_CNT : GS_KEY_CNT;
+            out->max_slots = G2_KEY_MAX;
+            out->has_qty   = 0;
+            return PKSAVE_OK;
+        case PKSAVE_POCKET_BALLS:
+            out->count_off = is_cry ? CRY_BALLS_CNT : GS_BALLS_CNT;
+            out->max_slots = G2_BALLS_MAX;
+            out->has_qty   = 1;
+            return PKSAVE_OK;
+        case PKSAVE_POCKET_TM_HM:
+        case PKSAVE_POCKET_BERRIES:
+        default:
+            return PKSAVE_ERR_GAME;
+    }
+}
+
 int gen2_get_pocket(pksave_save_t *s, pksave_pocket_t p, pksave_item_t *out, uint8_t *cnt)
 {
-    (void)s; (void)p; (void)out;
-    *cnt = 0;
+    struct g2_pocket_layout layout;
+    if (gen2_pocket_layout(s, p, &layout) != PKSAVE_OK) {
+        *cnt = 0;
+        return PKSAVE_OK;
+    }
+    uint8_t n = s->sram[layout.count_off];
+    if (n > layout.max_slots) n = layout.max_slots;
+    *cnt = n;
+    const uint8_t *data = s->sram + layout.count_off + 1;
+    for (uint8_t i = 0; i < n; i++) {
+        if (layout.has_qty) {
+            out[i].item_id  = data[i * 2];
+            out[i].quantity = data[i * 2 + 1];
+        } else {
+            out[i].item_id  = data[i];
+            out[i].quantity = 1;   /* key items have no stored quantity */
+        }
+    }
     return PKSAVE_OK;
 }
 
 int gen2_set_item(pksave_save_t *s, pksave_pocket_t p, uint8_t slot,
                    const pksave_item_t *item)
 {
-    (void)s; (void)p; (void)slot; (void)item;
-    return PKSAVE_ERR_RANGE;
+    struct g2_pocket_layout layout;
+    if (gen2_pocket_layout(s, p, &layout) != PKSAVE_OK) return PKSAVE_ERR_GAME;
+    if (slot >= layout.max_slots) return PKSAVE_ERR_RANGE;
+    uint8_t *data = s->sram + layout.count_off + 1;
+    if (layout.has_qty) {
+        data[slot * 2]     = (uint8_t)item->item_id;
+        data[slot * 2 + 1] = (uint8_t)item->quantity;
+    } else {
+        data[slot] = (uint8_t)item->item_id;
+    }
+    if (slot >= s->sram[layout.count_off])
+        s->sram[layout.count_off] = slot + 1;
+    return PKSAVE_OK;
 }
 
 /* ── checksum ────────────────────────────────────────────────────────────── */
