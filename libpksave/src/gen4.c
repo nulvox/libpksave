@@ -498,6 +498,105 @@ int gen4_set_box_slot(pksave_save_t *s, uint8_t box, uint8_t slot, const pksave_
     return PKSAVE_OK;
 }
 
+/* ── pokerus ─────────────────────────────────────────────────────────────── */
+/* Pokerus byte sits at offset 0x82 in the canonical (unscrambled, decrypted)
+ * Gen IV box-mon layout. With the four 32-byte substructs at decrypted
+ * offsets 0..127 (A/B/C/D after unshuffling via PID%24), the byte falls at
+ * Block-D + 0x1A. Encryption uses a checksum-seeded PRNG identical to that
+ * used by the party/box encoder; the per-mon checksum at offset 0x06 must be
+ * recomputed after any write. */
+#define G4_PKRS_BLOCKD_OFF  0x1AU
+
+static int g4_locate_blockd(const uint8_t *mon, int *out_mp)
+{
+    uint32_t pid; memcpy(&pid, mon, 4);
+    uint16_t old_chk; memcpy(&old_chk, mon + 0x06, 2);
+    if (pid == 0 && old_chk == 0) return PKSAVE_ERR_RANGE;  /* empty slot */
+    const uint8_t *ord = g4_suborder[pid % 24];
+    for (int i = 0; i < 4; i++) {
+        if (ord[i] == 3) { *out_mp = i * 32; return PKSAVE_OK; }
+    }
+    return PKSAVE_ERR_CORRUPT;
+}
+
+static int g4_pokerus_read(const uint8_t *mon, pksave_pokerus_t *out)
+{
+    int mp;
+    int rc = g4_locate_blockd(mon, &mp);
+    if (rc != PKSAVE_OK) return rc;
+    uint16_t old_chk; memcpy(&old_chk, mon + 0x06, 2);
+    uint8_t dec[128];
+    g4_decrypt(mon + 0x08, old_chk, dec);
+    pksave_pokerus_decode(dec[mp + G4_PKRS_BLOCKD_OFF], out);
+    return PKSAVE_OK;
+}
+
+static int g4_pokerus_write(uint8_t *mon, uint8_t strain, uint8_t days)
+{
+    int mp;
+    int rc = g4_locate_blockd(mon, &mp);
+    if (rc != PKSAVE_OK) return rc;
+    uint16_t old_chk; memcpy(&old_chk, mon + 0x06, 2);
+    uint8_t dec[128];
+    g4_decrypt(mon + 0x08, old_chk, dec);
+    dec[mp + G4_PKRS_BLOCKD_OFF] = pksave_pokerus_encode(strain, days);
+    uint32_t sum = 0;
+    for (int i = 0; i < 128; i += 2) {
+        uint16_t w; memcpy(&w, dec + i, 2);
+        sum += w;
+    }
+    uint16_t new_chk = (uint16_t)sum;
+    memcpy(mon + 0x06, &new_chk, 2);
+    g4_decrypt(dec, new_chk, mon + 0x08);
+    return PKSAVE_OK;
+}
+
+int gen4_get_party_pokerus(pksave_save_t *s, uint8_t slot, pksave_pokerus_t *out)
+{
+    uint32_t bsz  = g4_general_size(s->game);
+    uint32_t base = g4_active_block(s->sram, bsz);
+    const uint8_t *blk = s->sram + base;
+    uint32_t off = g4_party_off(s->game);
+    uint32_t cnt;
+    memcpy(&cnt, blk + off, 4);
+    if (slot >= cnt) return PKSAVE_ERR_RANGE;
+    return g4_pokerus_read(blk + off + 4 + (size_t)slot * G4_MON_SIZE, out);
+}
+
+int gen4_set_party_pokerus(pksave_save_t *s, uint8_t slot,
+                            uint8_t strain, uint8_t days)
+{
+    uint32_t bsz  = g4_general_size(s->game);
+    uint32_t base = g4_active_block(s->sram, bsz);
+    uint8_t *blk  = s->sram + base;
+    uint32_t off  = g4_party_off(s->game);
+    uint32_t cnt;
+    memcpy(&cnt, blk + off, 4);
+    if (slot >= cnt) return PKSAVE_ERR_RANGE;
+    return g4_pokerus_write(blk + off + 4 + (size_t)slot * G4_MON_SIZE,
+                             strain, days);
+}
+
+int gen4_get_box_pokerus(pksave_save_t *s, uint8_t box, uint8_t slot,
+                          pksave_pokerus_t *out)
+{
+    if (box >= G4_NUM_BOXES) return PKSAVE_ERR_RANGE;
+    uint32_t storage = g4_storage_off(s->sram, s->game);
+    const uint8_t *boxes = s->sram + storage + G4_PC_BOX_BASE;
+    size_t off = ((size_t)box * G4_SLOTS_PER_BOX + slot) * G4_BOX_MON_SIZE;
+    return g4_pokerus_read(boxes + off, out);
+}
+
+int gen4_set_box_pokerus(pksave_save_t *s, uint8_t box, uint8_t slot,
+                          uint8_t strain, uint8_t days)
+{
+    if (box >= G4_NUM_BOXES) return PKSAVE_ERR_RANGE;
+    uint32_t storage = g4_storage_off(s->sram, s->game);
+    uint8_t *boxes = s->sram + storage + G4_PC_BOX_BASE;
+    size_t off = ((size_t)box * G4_SLOTS_PER_BOX + slot) * G4_BOX_MON_SIZE;
+    return g4_pokerus_write(boxes + off, strain, days);
+}
+
 /* ── bag / item pockets ──────────────────────────────────────────────────── */
 /* Each pocket is an array of u16 (id, qty) slots in the general block.
  * Offsets and slot counts per PKHeX SAV4Sinnoh / SAV4HGSS BlockOfsBag tables. */

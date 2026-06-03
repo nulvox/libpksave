@@ -101,6 +101,38 @@ int pksave_get_pocket(pksave_save_t *save, pksave_pocket_t pocket,
 int pksave_set_item(pksave_save_t *save, pksave_pocket_t pocket,
                     uint8_t slot, const pksave_item_t *item);
 
+/* ── Pokerus API ─────────────────────────────────────────────────────────── */
+/* Pokerus is a hidden status, present from Gen II onwards, that doubles the
+ * EV gain a Pokémon receives from battles. It is stored as a single byte:
+ *     high nibble = strain  (1-15; 0 = never infected)
+ *     low nibble  = days remaining  (counts down to 0 then "cures")
+ * States:
+ *   strain == 0                 → NEVER (never infected, no EV boost)
+ *   strain  > 0 && days > 0     → ACTIVE (infectious, EV boost active)
+ *   strain  > 0 && days == 0    → CURED (no longer infectious; permanent EV boost)
+ * Not supported on Gen I (the mechanic was introduced in Gen II).
+ */
+typedef enum {
+    PKSAVE_PKRS_NEVER  = 0,
+    PKSAVE_PKRS_ACTIVE = 1,
+    PKSAVE_PKRS_CURED  = 2,
+} pksave_pokerus_status_t;
+
+typedef struct {
+    uint8_t                  strain;   /* 0-15; 0 = never infected */
+    uint8_t                  days;     /* 0-15; days of active infection remaining */
+    pksave_pokerus_status_t  status;   /* derived from strain & days */
+} pksave_pokerus_t;
+
+int pksave_get_party_pokerus(pksave_save_t *save, uint8_t slot,
+                             pksave_pokerus_t *out);
+int pksave_set_party_pokerus(pksave_save_t *save, uint8_t slot,
+                             uint8_t strain, uint8_t days);
+int pksave_get_box_pokerus(pksave_save_t *save, uint8_t box, uint8_t slot,
+                           pksave_pokerus_t *out);
+int pksave_set_box_pokerus(pksave_save_t *save, uint8_t box, uint8_t slot,
+                           uint8_t strain, uint8_t days);
+
 /* ── Name lookup API ─────────────────────────────────────────────────────── */
 /* All return pointers into static read-only storage; never free. */
 /* Returns "???" for unknown IDs.                                 */

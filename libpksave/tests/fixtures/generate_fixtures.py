@@ -553,13 +553,13 @@ def gen2_make_party_mon(species, level, move1):
     struct.pack_into('>H', mon, 0x15, dvs)
     mon[0x17] = 35   # PP for move 1
     mon[0x1B] = 70   # friendship
-    mon[0x1C] = 0    # pokerus strain
-    mon[0x1D] = 0    # pokerus duration
-    # caught data at 0x1E-0x1F
-    mon[0x1E] = 0    # caught data (no special)
-    mon[0x1F] = 0
-    mon[0x20] = level  # level
-    mon[0x21] = 0      # status
+    mon[0x1C] = 0    # pokerus byte (high nibble strain, low nibble days)
+    # caught data at 0x1D-0x1E
+    mon[0x1D] = 0    # caught data lo
+    mon[0x1E] = 0    # caught data hi
+    mon[0x1F] = level  # level
+    mon[0x20] = 0      # status
+    mon[0x21] = 0      # unused
     struct.pack_into('>H', mon, 0x22, 20)   # current HP
     # Stats at 0x24: max_hp, atk, def, spd, spa, spd (6×2 = 12 bytes)
     struct.pack_into('>H', mon, 0x24, 20)   # max HP

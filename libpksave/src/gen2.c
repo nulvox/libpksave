@@ -36,13 +36,14 @@
  *   0x02-0x05: moves         0x06-0x07: OT ID (BE)
  *   0x08-0x0A: exp (3, BE)   0x0B-0x14: stat exp [HP,Atk,Def,Spd,Spc] (5×2 BE)
  *   0x15-0x16: DVs           0x17-0x1A: move PP
- *   0x1B: friendship         0x1C: pokerus strain
- *   0x1D: pokerus duration   0x1E-0x1F: caught_data
- *   0x20: level              0x21: status
+ *   0x1B: friendship         0x1C: pokerus byte
+ *                              (high nibble = strain, low nibble = days)
+ *   0x1D-0x1E: caught_data   0x1F: level
+ *   0x20: status             0x21: unused
  *   0x22-0x23: current HP (BE)
  *   0x24-0x2F: stats BE [maxHP, Atk, Def, Spd, SpA, SpD]
  *
- * Box mon struct (32 bytes): same as party mon 0x00-0x1F.
+ * Box mon struct (32 bytes): same as party mon 0x00-0x1F (includes level).
  */
 #include "pksave_internal.h"
 
@@ -202,7 +203,7 @@ static void gen2_decode_party_mon(const uint8_t *data,
     memset(out, 0, sizeof(*out));
     out->species   = data[0x00];
     out->held_item = data[0x01];
-    out->level     = data[0x20];
+    out->level     = data[0x1F];
     out->nature    = 0;
     out->ability   = 0;
 
@@ -263,7 +264,7 @@ static void gen2_encode_party_mon(const pksave_pokemon_t *in,
     memset(data, 0, G2_PARTY_MON_SIZE);
     data[0x00] = (uint8_t)in->species;
     data[0x01] = (uint8_t)in->held_item;
-    data[0x20] = in->level;
+    data[0x1F] = in->level;
 
     for (int i = 0; i < 4; i++) {
         data[0x02 + i] = in->move_ids[i];
@@ -459,6 +460,54 @@ int gen2_set_box_slot(pksave_save_t *s, uint8_t box, uint8_t slot,
         base[0] = slot + 1;
         species[slot + 1] = 0xFF;
     }
+    return PKSAVE_OK;
+}
+
+/* ── pokerus ─────────────────────────────────────────────────────────────── */
+/* Single byte at party-mon offset 0x1C (also at box-mon offset 0x1C — same
+ * layout, since box-mon is a prefix of party-mon). */
+#define G2_PKRS_BYTE_OFF   0x1CU
+
+int gen2_get_party_pokerus(pksave_save_t *s, uint8_t slot, pksave_pokerus_t *out)
+{
+    uint8_t cnt = s->sram[party_cnt_off(s->game)];
+    if (slot >= cnt) return PKSAVE_ERR_RANGE;
+    const uint8_t *mon = s->sram + party_data_off(s->game)
+                       + (size_t)slot * G2_PARTY_MON_SIZE;
+    pksave_pokerus_decode(mon[G2_PKRS_BYTE_OFF], out);
+    return PKSAVE_OK;
+}
+
+int gen2_set_party_pokerus(pksave_save_t *s, uint8_t slot,
+                            uint8_t strain, uint8_t days)
+{
+    uint8_t cnt = s->sram[party_cnt_off(s->game)];
+    if (slot >= cnt) return PKSAVE_ERR_RANGE;
+    uint8_t *mon = s->sram + party_data_off(s->game)
+                 + (size_t)slot * G2_PARTY_MON_SIZE;
+    mon[G2_PKRS_BYTE_OFF] = pksave_pokerus_encode(strain, days);
+    return PKSAVE_OK;
+}
+
+int gen2_get_box_pokerus(pksave_save_t *s, uint8_t box, uint8_t slot,
+                          pksave_pokerus_t *out)
+{
+    if (box >= G2_NUM_BOXES_GS || slot >= G2_BOX_PER_BOX) return PKSAVE_ERR_RANGE;
+    const uint8_t *base = s->sram + gen2_box_base(box);
+    if (slot >= base[0]) return PKSAVE_ERR_RANGE;
+    const uint8_t *mon = base + 22U + (size_t)slot * G2_BOX_MON_SIZE;
+    pksave_pokerus_decode(mon[G2_PKRS_BYTE_OFF], out);
+    return PKSAVE_OK;
+}
+
+int gen2_set_box_pokerus(pksave_save_t *s, uint8_t box, uint8_t slot,
+                          uint8_t strain, uint8_t days)
+{
+    if (box >= G2_NUM_BOXES_GS || slot >= G2_BOX_PER_BOX) return PKSAVE_ERR_RANGE;
+    uint8_t *base = s->sram + gen2_box_base(box);
+    if (slot >= base[0]) return PKSAVE_ERR_RANGE;
+    uint8_t *mon = base + 22U + (size_t)slot * G2_BOX_MON_SIZE;
+    mon[G2_PKRS_BYTE_OFF] = pksave_pokerus_encode(strain, days);
     return PKSAVE_OK;
 }
 

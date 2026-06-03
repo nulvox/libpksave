@@ -448,6 +448,101 @@ int gen5_set_box_slot(pksave_save_t *s, uint8_t box, uint8_t slot, const pksave_
     return PKSAVE_OK;
 }
 
+/* ── pokerus ─────────────────────────────────────────────────────────────── */
+/* Identical to Gen IV: byte at canonical offset 0x82 (= Block D + 0x1A).
+ * Substruct order from PID%24; encryption uses checksum-seeded PRNG. */
+#define G5_PKRS_BLOCKD_OFF  0x1AU
+
+static int g5_locate_blockd(const uint8_t *mon, int *out_mp)
+{
+    uint32_t pid; memcpy(&pid, mon, 4);
+    uint16_t old_chk; memcpy(&old_chk, mon + 0x06, 2);
+    if (pid == 0 && old_chk == 0) return PKSAVE_ERR_RANGE;
+    const uint8_t *ord = g5_suborder[pid % 24];
+    for (int i = 0; i < 4; i++) {
+        if (ord[i] == 3) { *out_mp = i * 32; return PKSAVE_OK; }
+    }
+    return PKSAVE_ERR_CORRUPT;
+}
+
+static int g5_pokerus_read(const uint8_t *mon, pksave_pokerus_t *out)
+{
+    int mp;
+    int rc = g5_locate_blockd(mon, &mp);
+    if (rc != PKSAVE_OK) return rc;
+    uint16_t old_chk; memcpy(&old_chk, mon + 0x06, 2);
+    uint8_t dec[128];
+    g5_decrypt(mon + 0x08, old_chk, dec);
+    pksave_pokerus_decode(dec[mp + G5_PKRS_BLOCKD_OFF], out);
+    return PKSAVE_OK;
+}
+
+static int g5_pokerus_write(uint8_t *mon, uint8_t strain, uint8_t days)
+{
+    int mp;
+    int rc = g5_locate_blockd(mon, &mp);
+    if (rc != PKSAVE_OK) return rc;
+    uint16_t old_chk; memcpy(&old_chk, mon + 0x06, 2);
+    uint8_t dec[128];
+    g5_decrypt(mon + 0x08, old_chk, dec);
+    dec[mp + G5_PKRS_BLOCKD_OFF] = pksave_pokerus_encode(strain, days);
+    uint32_t sum = 0;
+    for (int i = 0; i < 128; i += 2) {
+        uint16_t w; memcpy(&w, dec + i, 2);
+        sum += w;
+    }
+    uint16_t new_chk = (uint16_t)sum;
+    memcpy(mon + 0x06, &new_chk, 2);
+    g5_decrypt(dec, new_chk, mon + 0x08);
+    return PKSAVE_OK;
+}
+
+int gen5_get_party_pokerus(pksave_save_t *s, uint8_t slot, pksave_pokerus_t *out)
+{
+    uint32_t bsz  = g5_general_size(s->game);
+    uint32_t base = g5_active_block(s->sram, bsz);
+    const uint8_t *blk = s->sram + base;
+    uint32_t cnt;
+    memcpy(&cnt, blk + G5_PARTY_CNT_OFF, 4);
+    if (slot >= cnt) return PKSAVE_ERR_RANGE;
+    return g5_pokerus_read(blk + G5_PARTY_DATA_OFF + (size_t)slot * G5_MON_SIZE, out);
+}
+
+int gen5_set_party_pokerus(pksave_save_t *s, uint8_t slot,
+                            uint8_t strain, uint8_t days)
+{
+    uint32_t bsz  = g5_general_size(s->game);
+    uint32_t base = g5_active_block(s->sram, bsz);
+    uint8_t *blk  = s->sram + base;
+    uint32_t cnt;
+    memcpy(&cnt, blk + G5_PARTY_CNT_OFF, 4);
+    if (slot >= cnt) return PKSAVE_ERR_RANGE;
+    return g5_pokerus_write(blk + G5_PARTY_DATA_OFF + (size_t)slot * G5_MON_SIZE,
+                             strain, days);
+}
+
+int gen5_get_box_pokerus(pksave_save_t *s, uint8_t box, uint8_t slot,
+                          pksave_pokerus_t *out)
+{
+    if (box >= G5_NUM_BOXES) return PKSAVE_ERR_RANGE;
+    uint32_t bsz  = g5_general_size(s->game);
+    uint32_t base = g5_active_block(s->sram, bsz);
+    const uint8_t *boxes = s->sram + base + G5_PC_BOX_BASE;
+    size_t off = ((size_t)box * G5_SLOTS_PER_BOX + slot) * G5_BOX_MON_SIZE;
+    return g5_pokerus_read(boxes + off, out);
+}
+
+int gen5_set_box_pokerus(pksave_save_t *s, uint8_t box, uint8_t slot,
+                          uint8_t strain, uint8_t days)
+{
+    if (box >= G5_NUM_BOXES) return PKSAVE_ERR_RANGE;
+    uint32_t bsz  = g5_general_size(s->game);
+    uint32_t base = g5_active_block(s->sram, bsz);
+    uint8_t *boxes = s->sram + base + G5_PC_BOX_BASE;
+    size_t off = ((size_t)box * G5_SLOTS_PER_BOX + slot) * G5_BOX_MON_SIZE;
+    return g5_pokerus_write(boxes + off, strain, days);
+}
+
 /* ── bag / item pockets ──────────────────────────────────────────────────── */
 /* Same shape as Gen IV (u16 id + u16 quantity per slot), but different offsets
  * within the general block for BW vs BW2.                                    */
