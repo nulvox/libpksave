@@ -374,8 +374,79 @@ int gen5_get_box(pksave_save_t *s, uint8_t box, pksave_pokemon_t out[30], uint8_
     return PKSAVE_OK;
 }
 
+/* Encode a Pokemon into the 136-byte box-mon layout (no party extras).
+ * Mirrors g5_encode_mon but stops at the encrypted substruct region. */
+static void g5_encode_box_mon(uint8_t *dst, const pksave_pokemon_t *mon)
+{
+    uint32_t pid; memcpy(&pid, dst, 4);
+    uint16_t old_chk; memcpy(&old_chk, dst + 0x06, 2);
+
+    if (pid == 0 && old_chk == 0) {
+        pid = 0x12345678u;
+        memcpy(dst, &pid, 4);
+    }
+
+    uint8_t dec[128];
+    g5_decrypt(dst + 0x08, old_chk, dec);
+
+    const uint8_t *ord = g5_suborder[pid % 24];
+    int gp = 0, ap = 0, ep = 0, mp = 0;
+    for (int i = 0; i < 4; i++) {
+        if      (ord[i] == 0) gp = i * 32;
+        else if (ord[i] == 1) ap = i * 32;
+        else if (ord[i] == 2) ep = i * 32;
+        else                  mp = i * 32;
+    }
+
+    uint16_t sp = mon->species;   memcpy(dec + gp,     &sp, 2);
+    uint16_t it = mon->held_item; memcpy(dec + gp + 2, &it, 2);
+
+    for (int i = 0; i < 4; i++) {
+        uint16_t mv = mon->move_ids[i];
+        memcpy(dec + ap + i*2, &mv, 2);
+        dec[ap + 8 + i] = mon->move_pp[i];
+    }
+
+    dec[ep + 0] = (uint8_t)mon->evs[0];
+    dec[ep + 1] = (uint8_t)mon->evs[1];
+    dec[ep + 2] = (uint8_t)mon->evs[2];
+    dec[ep + 3] = (uint8_t)mon->evs[5];
+    dec[ep + 4] = (uint8_t)mon->evs[3];
+    dec[ep + 5] = (uint8_t)mon->evs[4];
+
+    uint32_t iv;
+    memcpy(&iv, dec + mp, 4);
+    uint32_t preserved = iv & 0xC0000000u;
+    iv = preserved
+       | ((uint32_t)(mon->ivs[0] & 0x1F))
+       | ((uint32_t)(mon->ivs[1] & 0x1F) << 5)
+       | ((uint32_t)(mon->ivs[2] & 0x1F) << 10)
+       | ((uint32_t)(mon->ivs[5] & 0x1F) << 15)
+       | ((uint32_t)(mon->ivs[3] & 0x1F) << 20)
+       | ((uint32_t)(mon->ivs[4] & 0x1F) << 25);
+    memcpy(dec + mp, &iv, 4);
+
+    uint32_t sum = 0;
+    for (int i = 0; i < 128; i += 2) {
+        uint16_t w; memcpy(&w, dec + i, 2);
+        sum += w;
+    }
+    uint16_t new_chk = (uint16_t)sum;
+    memcpy(dst + 0x06, &new_chk, 2);
+
+    g5_decrypt(dec, new_chk, dst + 0x08);
+}
+
 int gen5_set_box_slot(pksave_save_t *s, uint8_t box, uint8_t slot, const pksave_pokemon_t *mon)
-    { (void)s; (void)box; (void)slot; (void)mon; return PKSAVE_ERR_RANGE; }
+{
+    if (box >= G5_NUM_BOXES || slot >= G5_SLOTS_PER_BOX) return PKSAVE_ERR_RANGE;
+    uint32_t bsz  = g5_general_size(s->game);
+    uint32_t base = g5_active_block(s->sram, bsz);
+    uint8_t *boxes = s->sram + base + G5_PC_BOX_BASE;
+    size_t off = ((size_t)box * G5_SLOTS_PER_BOX + slot) * G5_BOX_MON_SIZE;
+    g5_encode_box_mon(boxes + off, mon);
+    return PKSAVE_OK;
+}
 
 int gen5_get_pocket(pksave_save_t *s, pksave_pocket_t p, pksave_item_t *out, uint8_t *cnt)
     { (void)s; (void)p; (void)out; *cnt = 0; return PKSAVE_OK; }

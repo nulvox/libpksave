@@ -279,6 +279,90 @@ void test_crystal_get_stored_box_with_mon(void)
     pksave_close(s);
 }
 
+/* ── Gen II PC box write ── */
+
+void test_gs_set_box_slot_round_trip(void)
+{
+    if (!load_fixture("gs.sav", gs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    TEST_ASSERT_EQUAL_UINT8(1, count);
+
+    box[0].species      = 158;   /* Totodile (Gen II ID) */
+    box[0].held_item    = 200;
+    box[0].move_ids[0]  = 44;    /* Bite */
+    box[0].move_pp[0]   = 25;
+    box[0].ivs[1]       = 30;    /* Atk DV=15 */
+    strcpy(box[0].nickname, "BOXY");
+    strcpy(box[0].ot_name, "ME");
+
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_box_slot(s, 1, 0, &box[0]));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    TEST_ASSERT_EQUAL_UINT8(1, count);
+    TEST_ASSERT_EQUAL_UINT16(158, box[0].species);
+    TEST_ASSERT_EQUAL_UINT16(200, box[0].held_item);
+    TEST_ASSERT_EQUAL_UINT8(44, box[0].move_ids[0]);
+    TEST_ASSERT_EQUAL_UINT8(25, box[0].move_pp[0]);
+    TEST_ASSERT_EQUAL_UINT8(30, box[0].ivs[1]);
+    TEST_ASSERT_EQUAL_STRING("BOXY", box[0].nickname);
+    TEST_ASSERT_EQUAL_STRING("ME", box[0].ot_name);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS));
+    pksave_close(s);
+}
+
+void test_crystal_set_box_slot_round_trip(void)
+{
+    if (!load_fixture("crystal.sav", crystal_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(crystal_buf, SRAM_SIZE, PKSAVE_GAME_CRYSTAL);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 7, box, &count));
+    TEST_ASSERT_EQUAL_UINT8(1, count);
+
+    box[0].species     = 155;   /* Cyndaquil */
+    box[0].move_ids[0] = 52;    /* Ember */
+    box[0].move_pp[0]  = 25;
+
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_box_slot(s, 7, 0, &box[0]));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(crystal_buf, SRAM_SIZE, PKSAVE_GAME_CRYSTAL);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 7, box, &count));
+    TEST_ASSERT_EQUAL_UINT8(1, count);
+    TEST_ASSERT_EQUAL_UINT16(155, box[0].species);
+    TEST_ASSERT_EQUAL_UINT8(52, box[0].move_ids[0]);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(crystal_buf, SRAM_SIZE, PKSAVE_GAME_CRYSTAL));
+    pksave_close(s);
+}
+
+void test_gs_set_box_slot_out_of_range(void)
+{
+    if (!load_fixture("gs.sav", gs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_pokemon_t mon;
+    memset(&mon, 0, sizeof(mon));
+    mon.species = 1;
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE, pksave_set_box_slot(s, 14, 0, &mon));
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE, pksave_set_box_slot(s, 0, 30, &mon));
+    pksave_close(s);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -295,5 +379,8 @@ int main(void)
     RUN_TEST(test_gs_get_empty_box);
     RUN_TEST(test_gs_get_stored_box_with_mon);
     RUN_TEST(test_crystal_get_stored_box_with_mon);
+    RUN_TEST(test_gs_set_box_slot_round_trip);
+    RUN_TEST(test_crystal_set_box_slot_round_trip);
+    RUN_TEST(test_gs_set_box_slot_out_of_range);
     return UNITY_END();
 }

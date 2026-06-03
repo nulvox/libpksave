@@ -238,6 +238,57 @@ void test_rb_get_stored_box_with_mon(void)
     pksave_close(s);
 }
 
+void test_rb_set_stored_box_slot_round_trip(void)
+{
+    if (!load_fixture("rb.sav", rb_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    TEST_ASSERT_EQUAL_UINT8(1, count);
+
+    /* Mutate slot 0 in stored box 1 */
+    box[0].species      = 0x15;   /* Pidgey internal ID */
+    box[0].level        = 25;
+    box[0].move_ids[0]  = 16;     /* Gust */
+    box[0].move_pp[0]   = 35;
+    box[0].ivs[1]       = 30;     /* Atk DV=15 */
+    strcpy(box[0].nickname, "BIRDY");
+
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_box_slot(s, 1, 0, &box[0]));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    TEST_ASSERT_EQUAL_UINT8(1, count);
+    TEST_ASSERT_EQUAL_UINT16(0x15, box[0].species);
+    TEST_ASSERT_EQUAL_UINT8(25, box[0].level);
+    TEST_ASSERT_EQUAL_UINT8(16, box[0].move_ids[0]);
+    TEST_ASSERT_EQUAL_UINT8(35, box[0].move_pp[0]);
+    TEST_ASSERT_EQUAL_UINT8(30, box[0].ivs[1]);
+    TEST_ASSERT_EQUAL_STRING("BIRDY", box[0].nickname);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB));
+    pksave_close(s);
+}
+
+void test_rb_set_box_slot_out_of_range(void)
+{
+    if (!load_fixture("rb.sav", rb_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_pokemon_t mon;
+    memset(&mon, 0, sizeof(mon));
+    mon.species = 1;
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE, pksave_set_box_slot(s, 12, 0, &mon));
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE, pksave_set_box_slot(s, 0, 30, &mon));
+    pksave_close(s);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -252,5 +303,7 @@ int main(void)
     RUN_TEST(test_rb_get_empty_current_box);
     RUN_TEST(test_rb_get_box_out_of_range);
     RUN_TEST(test_rb_get_stored_box_with_mon);
+    RUN_TEST(test_rb_set_stored_box_slot_round_trip);
+    RUN_TEST(test_rb_set_box_slot_out_of_range);
     return UNITY_END();
 }

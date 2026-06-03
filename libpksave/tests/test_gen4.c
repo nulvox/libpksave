@@ -299,6 +299,64 @@ void test_platinum_get_box_with_mon(void)
 void test_hgss_get_box_with_mon(void)
     { gen4_box_with_mon(hgss_buf, PKSAVE_GAME_HGSS, "hgss.sav"); }
 
+/* ── Gen IV PC box write ── */
+
+static void gen4_box_round_trip(uint8_t *buf, pksave_game_t game, const char *fixture)
+{
+    if (!load_fixture(fixture, buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(buf, SRAM_SIZE, game);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+
+    box[0].species     = 4;     /* Charmander */
+    box[0].held_item   = 17;
+    box[0].move_ids[0] = 10;    /* Scratch */
+    box[0].move_pp[0]  = 35;
+    box[0].evs[1]      = 100;
+    box[0].ivs[1]      = 28;
+    strcpy(box[0].nickname, "CHAR");
+
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_box_slot(s, 1, 0, &box[0]));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(buf, SRAM_SIZE, game);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    TEST_ASSERT_EQUAL_UINT16(4, box[0].species);
+    TEST_ASSERT_EQUAL_UINT16(17, box[0].held_item);
+    TEST_ASSERT_EQUAL_UINT8(10, box[0].move_ids[0]);
+    TEST_ASSERT_EQUAL_UINT8(35, box[0].move_pp[0]);
+    TEST_ASSERT_EQUAL_UINT8(100, box[0].evs[1]);
+    TEST_ASSERT_EQUAL_UINT8(28, box[0].ivs[1]);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(buf, SRAM_SIZE, game));
+    pksave_close(s);
+}
+
+void test_dp_set_box_slot_round_trip(void)
+    { gen4_box_round_trip(dp_buf, PKSAVE_GAME_DP, "dp.sav"); }
+void test_platinum_set_box_slot_round_trip(void)
+    { gen4_box_round_trip(platinum_buf, PKSAVE_GAME_PLATINUM, "platinum.sav"); }
+void test_hgss_set_box_slot_round_trip(void)
+    { gen4_box_round_trip(hgss_buf, PKSAVE_GAME_HGSS, "hgss.sav"); }
+
+void test_dp_set_box_slot_out_of_range(void)
+{
+    if (!load_fixture("dp.sav", dp_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(dp_buf, SRAM_SIZE, PKSAVE_GAME_DP);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_pokemon_t mon;
+    memset(&mon, 0, sizeof(mon));
+    mon.species = 1;
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE, pksave_set_box_slot(s, 18, 0, &mon));
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE, pksave_set_box_slot(s, 0, 30, &mon));
+    pksave_close(s);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -319,5 +377,9 @@ int main(void)
     RUN_TEST(test_dp_get_box_with_mon);
     RUN_TEST(test_platinum_get_box_with_mon);
     RUN_TEST(test_hgss_get_box_with_mon);
+    RUN_TEST(test_dp_set_box_slot_round_trip);
+    RUN_TEST(test_platinum_set_box_slot_round_trip);
+    RUN_TEST(test_hgss_set_box_slot_round_trip);
+    RUN_TEST(test_dp_set_box_slot_out_of_range);
     return UNITY_END();
 }

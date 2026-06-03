@@ -23,11 +23,11 @@ is committed **and** `make test` passes for that item.
 
 ## PC box write
 
-- [ ] `gen1_set_box_slot`
-- [ ] `gen2_set_box_slot`
-- [ ] `gen3_set_box_slot` — re-encrypt, recompute affected section checksum
-- [ ] `gen4_set_box_slot` — re-encrypt with checksum PRNG
-- [ ] `gen5_set_box_slot`
+- [x] `gen1_set_box_slot`
+- [x] `gen2_set_box_slot`
+- [x] `gen3_set_box_slot` — re-encrypt, recompute affected section checksum
+- [x] `gen4_set_box_slot` — re-encrypt with checksum PRNG
+- [x] `gen5_set_box_slot`
 
 ## Bag / item pockets read
 
