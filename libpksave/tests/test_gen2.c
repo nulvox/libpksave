@@ -217,6 +217,55 @@ void test_crystal_party_slot_round_trip(void)
     pksave_close(s);
 }
 
+/* ── Gen II pokerus ── */
+
+void test_gs_party_pokerus_round_trip(void)
+{
+    if (!load_fixture("gs.sav", gs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS);
+    TEST_ASSERT_NOT_NULL(s);
+
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_party_pokerus(s, 0, 2, 3));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_pokerus_t pkrs;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party_pokerus(s, 0, &pkrs));
+    TEST_ASSERT_EQUAL_UINT8(2, pkrs.strain);
+    TEST_ASSERT_EQUAL_UINT8(3, pkrs.days);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS));
+    pksave_close(s);
+}
+
+void test_gs_pokerus_status_never_active_cured(void)
+{
+    if (!load_fixture("gs.sav", gs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS);
+    TEST_ASSERT_NOT_NULL(s);
+
+    /* Fixture mon starts uninfected → status = NEVER */
+    pksave_pokerus_t pkrs;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party_pokerus(s, 0, &pkrs));
+    TEST_ASSERT_EQUAL(PKSAVE_PKRS_NEVER, pkrs.status);
+    TEST_ASSERT_EQUAL_UINT8(0, pkrs.strain);
+    TEST_ASSERT_EQUAL_UINT8(0, pkrs.days);
+
+    /* strain > 0, days > 0 → ACTIVE */
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_party_pokerus(s, 0, 1, 4));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party_pokerus(s, 0, &pkrs));
+    TEST_ASSERT_EQUAL(PKSAVE_PKRS_ACTIVE, pkrs.status);
+
+    /* strain > 0, days == 0 → CURED */
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_party_pokerus(s, 0, 1, 0));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party_pokerus(s, 0, &pkrs));
+    TEST_ASSERT_EQUAL(PKSAVE_PKRS_CURED, pkrs.status);
+    pksave_close(s);
+}
+
 /* ── Gen II PC box read ── */
 
 void test_gs_box_count(void)
@@ -276,6 +325,65 @@ void test_crystal_get_stored_box_with_mon(void)
     TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 7, box, &count));
     TEST_ASSERT_EQUAL_UINT8(1, count);
     TEST_ASSERT_EQUAL_UINT16(0x9A, box[0].species);
+    pksave_close(s);
+}
+
+void test_crystal_party_pokerus_round_trip(void)
+{
+    if (!load_fixture("crystal.sav", crystal_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(crystal_buf, SRAM_SIZE, PKSAVE_GAME_CRYSTAL);
+    TEST_ASSERT_NOT_NULL(s);
+
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_party_pokerus(s, 0, 4, 2));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(crystal_buf, SRAM_SIZE, PKSAVE_GAME_CRYSTAL);
+    pksave_pokerus_t pkrs;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party_pokerus(s, 0, &pkrs));
+    TEST_ASSERT_EQUAL_UINT8(4, pkrs.strain);
+    TEST_ASSERT_EQUAL_UINT8(2, pkrs.days);
+    TEST_ASSERT_EQUAL(PKSAVE_PKRS_ACTIVE, pkrs.status);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(crystal_buf, SRAM_SIZE, PKSAVE_GAME_CRYSTAL));
+    pksave_close(s);
+}
+
+void test_gs_box_pokerus_round_trip(void)
+{
+    if (!load_fixture("gs.sav", gs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS);
+    TEST_ASSERT_NOT_NULL(s);
+
+    /* Fixture populates box 1 slot 0 with a Bulbasaur */
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_box_pokerus(s, 1, 0, 3, 0));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS);
+    pksave_pokerus_t pkrs;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box_pokerus(s, 1, 0, &pkrs));
+    TEST_ASSERT_EQUAL_UINT8(3, pkrs.strain);
+    TEST_ASSERT_EQUAL_UINT8(0, pkrs.days);
+    TEST_ASSERT_EQUAL(PKSAVE_PKRS_CURED, pkrs.status);
+    pksave_close(s);
+}
+
+void test_crystal_box_pokerus_round_trip(void)
+{
+    if (!load_fixture("crystal.sav", crystal_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(crystal_buf, SRAM_SIZE, PKSAVE_GAME_CRYSTAL);
+    TEST_ASSERT_NOT_NULL(s);
+
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_box_pokerus(s, 7, 0, 1, 1));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(crystal_buf, SRAM_SIZE, PKSAVE_GAME_CRYSTAL);
+    pksave_pokerus_t pkrs;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box_pokerus(s, 7, 0, &pkrs));
+    TEST_ASSERT_EQUAL_UINT8(1, pkrs.strain);
+    TEST_ASSERT_EQUAL_UINT8(1, pkrs.days);
     pksave_close(s);
 }
 
@@ -618,6 +726,11 @@ int main(void)
     RUN_TEST(test_crystal_party_slot0);
     RUN_TEST(test_crystal_checksum_valid_after_flush);
     RUN_TEST(test_crystal_party_slot_round_trip);
+    RUN_TEST(test_gs_party_pokerus_round_trip);
+    RUN_TEST(test_gs_pokerus_status_never_active_cured);
+    RUN_TEST(test_crystal_party_pokerus_round_trip);
+    RUN_TEST(test_gs_box_pokerus_round_trip);
+    RUN_TEST(test_crystal_box_pokerus_round_trip);
     RUN_TEST(test_gs_box_count);
     RUN_TEST(test_gs_get_box_out_of_range);
     RUN_TEST(test_gs_get_empty_box);

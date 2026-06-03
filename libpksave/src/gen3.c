@@ -680,6 +680,115 @@ int gen3_set_box_slot(pksave_save_t *s, uint8_t box, uint8_t slot,
     return g3_pc_write(s->sram, slot_off, lin, buf, G3_BOX_MON_SIZE);
 }
 
+/* ── pokerus ─────────────────────────────────────────────────────────────── */
+/* Stored as byte 0 of the Misc substruct (M=3 in g3_suborder). Substructs
+ * are encrypted with key = PID XOR (TID|SID<<16), and the per-mon checksum
+ * at offset 0x1C must be recomputed after any write. */
+
+static int g3_substruct_offsets(const uint8_t *mon, uint32_t *out_key,
+                                 int *out_mp)
+{
+    uint32_t pid; memcpy(&pid, mon, 4);
+    uint16_t tid; memcpy(&tid, mon + 4, 2);
+    uint16_t sid; memcpy(&sid, mon + 6, 2);
+    if (pid == 0 && tid == 0 && sid == 0) return PKSAVE_ERR_RANGE; /* empty */
+    *out_key = pid ^ ((uint32_t)tid | ((uint32_t)sid << 16));
+    const uint8_t *ord = g3_suborder[pid % 24];
+    for (int i = 0; i < 4; i++) {
+        if (ord[i] == 3) { *out_mp = i * 12; return PKSAVE_OK; }
+    }
+    return PKSAVE_ERR_CORRUPT;
+}
+
+static int g3_pokerus_read(const uint8_t *mon, pksave_pokerus_t *out)
+{
+    uint32_t key; int mp;
+    int rc = g3_substruct_offsets(mon, &key, &mp);
+    if (rc != PKSAVE_OK) return rc;
+    uint8_t dec[48];
+    g3_crypt(mon + 0x20, key, dec);
+    pksave_pokerus_decode(dec[mp + 0], out);
+    return PKSAVE_OK;
+}
+
+static int g3_pokerus_write(uint8_t *mon, uint8_t strain, uint8_t days)
+{
+    uint32_t key; int mp;
+    int rc = g3_substruct_offsets(mon, &key, &mp);
+    if (rc != PKSAVE_OK) return rc;
+    uint8_t dec[48];
+    g3_crypt(mon + 0x20, key, dec);
+    dec[mp + 0] = pksave_pokerus_encode(strain, days);
+    uint32_t sum = 0;
+    for (int i = 0; i < 48; i += 2) {
+        uint16_t w; memcpy(&w, dec + i, 2);
+        sum += w;
+    }
+    uint16_t checksum = (uint16_t)sum;
+    memcpy(mon + 0x1C, &checksum, 2);
+    g3_crypt(dec, key, mon + 0x20);
+    return PKSAVE_OK;
+}
+
+int gen3_get_party_pokerus(pksave_save_t *s, uint8_t slot, pksave_pokerus_t *out)
+{
+    uint32_t slot_off = g3_active_slot(s->sram);
+    size_t s1 = g3_find_section(s->sram, slot_off, 1);
+    if (s1 == SIZE_MAX) return PKSAVE_ERR_CORRUPT;
+    const uint8_t *sec1 = s->sram + s1;
+    uint32_t cnt;
+    memcpy(&cnt, sec1 + g3_team_cnt_off(s->game), 4);
+    if (slot >= cnt) return PKSAVE_ERR_RANGE;
+    const uint8_t *mon = sec1 + g3_team_data_off(s->game)
+                       + (size_t)slot * G3_MON_SIZE;
+    return g3_pokerus_read(mon, out);
+}
+
+int gen3_set_party_pokerus(pksave_save_t *s, uint8_t slot,
+                            uint8_t strain, uint8_t days)
+{
+    uint32_t slot_off = g3_active_slot(s->sram);
+    size_t s1 = g3_find_section(s->sram, slot_off, 1);
+    if (s1 == SIZE_MAX) return PKSAVE_ERR_CORRUPT;
+    uint8_t *sec1 = s->sram + s1;
+    uint32_t cnt;
+    memcpy(&cnt, sec1 + g3_team_cnt_off(s->game), 4);
+    if (slot >= cnt) return PKSAVE_ERR_RANGE;
+    uint8_t *mon = sec1 + g3_team_data_off(s->game)
+                 + (size_t)slot * G3_MON_SIZE;
+    return g3_pokerus_write(mon, strain, days);
+}
+
+int gen3_get_box_pokerus(pksave_save_t *s, uint8_t box, uint8_t slot,
+                          pksave_pokerus_t *out)
+{
+    if (box >= G3_NUM_BOXES) return PKSAVE_ERR_RANGE;
+    uint32_t slot_off = g3_active_slot(s->sram);
+    uint8_t buf[G3_BOX_MON_SIZE];
+    uint32_t lin = 1U
+                 + (uint32_t)box  * G3_SLOTS_PER_BOX * G3_BOX_MON_SIZE
+                 + (uint32_t)slot * G3_BOX_MON_SIZE;
+    int rc = g3_pc_read(s->sram, slot_off, lin, buf, G3_BOX_MON_SIZE);
+    if (rc != PKSAVE_OK) return rc;
+    return g3_pokerus_read(buf, out);
+}
+
+int gen3_set_box_pokerus(pksave_save_t *s, uint8_t box, uint8_t slot,
+                          uint8_t strain, uint8_t days)
+{
+    if (box >= G3_NUM_BOXES) return PKSAVE_ERR_RANGE;
+    uint32_t slot_off = g3_active_slot(s->sram);
+    uint8_t buf[G3_BOX_MON_SIZE];
+    uint32_t lin = 1U
+                 + (uint32_t)box  * G3_SLOTS_PER_BOX * G3_BOX_MON_SIZE
+                 + (uint32_t)slot * G3_BOX_MON_SIZE;
+    int rc = g3_pc_read(s->sram, slot_off, lin, buf, G3_BOX_MON_SIZE);
+    if (rc != PKSAVE_OK) return rc;
+    rc = g3_pokerus_write(buf, strain, days);
+    if (rc != PKSAVE_OK) return rc;
+    return g3_pc_write(s->sram, slot_off, lin, buf, G3_BOX_MON_SIZE);
+}
+
 /* ── bag / item pockets ──────────────────────────────────────────────────── */
 /* Gen III item slot = u16 id + u16 quantity, quantity XORed with low 16 bits
  * of the section-0 security key. (RS key = 0 → no-op; FRLG key from sec0+0x0AF8.)

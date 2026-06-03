@@ -20,6 +20,25 @@ struct pksave_save {
     /* Generation-specific state added here when implementing each gen */
 };
 
+/* Pokerus byte ↔ struct helpers shared by all gens.
+ *   byte high nibble = strain (0-15), low nibble = days remaining (0-15).
+ *   strain 0:                NEVER (no infection)
+ *   strain >0 && days >0:    ACTIVE (infectious)
+ *   strain >0 && days ==0:   CURED  (permanent EV boost, not infectious) */
+static inline void pksave_pokerus_decode(uint8_t byte, pksave_pokerus_t *out)
+{
+    out->strain = (uint8_t)(byte >> 4);
+    out->days   = (uint8_t)(byte & 0x0F);
+    if (out->strain == 0)     out->status = PKSAVE_PKRS_NEVER;
+    else if (out->days > 0)   out->status = PKSAVE_PKRS_ACTIVE;
+    else                      out->status = PKSAVE_PKRS_CURED;
+}
+
+static inline uint8_t pksave_pokerus_encode(uint8_t strain, uint8_t days)
+{
+    return (uint8_t)(((strain & 0x0F) << 4) | (days & 0x0F));
+}
+
 /* Per-generation parse/serialize/checksum helpers declared here,
  * defined in each genN.c; guarded by PKSAVE_GENx at the call site. */
 
@@ -45,6 +64,10 @@ int  gen2_get_box(pksave_save_t *s, uint8_t box, pksave_pokemon_t out[30], uint8
 int  gen2_set_box_slot(pksave_save_t *s, uint8_t box, uint8_t slot, const pksave_pokemon_t *mon);
 int  gen2_get_pocket(pksave_save_t *s, pksave_pocket_t p, pksave_item_t *out, uint8_t *cnt);
 int  gen2_set_item(pksave_save_t *s, pksave_pocket_t p, uint8_t slot, const pksave_item_t *item);
+int  gen2_get_party_pokerus(pksave_save_t *s, uint8_t slot, pksave_pokerus_t *out);
+int  gen2_set_party_pokerus(pksave_save_t *s, uint8_t slot, uint8_t strain, uint8_t days);
+int  gen2_get_box_pokerus(pksave_save_t *s, uint8_t box, uint8_t slot, pksave_pokerus_t *out);
+int  gen2_set_box_pokerus(pksave_save_t *s, uint8_t box, uint8_t slot, uint8_t strain, uint8_t days);
 int  gen2_flush(pksave_save_t *s);
 int  gen2_validate_checksum(const uint8_t *sram, size_t len, pksave_game_t game);
 #endif
@@ -58,6 +81,10 @@ int  gen3_get_box(pksave_save_t *s, uint8_t box, pksave_pokemon_t out[30], uint8
 int  gen3_set_box_slot(pksave_save_t *s, uint8_t box, uint8_t slot, const pksave_pokemon_t *mon);
 int  gen3_get_pocket(pksave_save_t *s, pksave_pocket_t p, pksave_item_t *out, uint8_t *cnt);
 int  gen3_set_item(pksave_save_t *s, pksave_pocket_t p, uint8_t slot, const pksave_item_t *item);
+int  gen3_get_party_pokerus(pksave_save_t *s, uint8_t slot, pksave_pokerus_t *out);
+int  gen3_set_party_pokerus(pksave_save_t *s, uint8_t slot, uint8_t strain, uint8_t days);
+int  gen3_get_box_pokerus(pksave_save_t *s, uint8_t box, uint8_t slot, pksave_pokerus_t *out);
+int  gen3_set_box_pokerus(pksave_save_t *s, uint8_t box, uint8_t slot, uint8_t strain, uint8_t days);
 int  gen3_flush(pksave_save_t *s);
 int  gen3_validate_checksum(const uint8_t *sram, size_t len, pksave_game_t game);
 #endif
@@ -71,6 +98,10 @@ int  gen4_get_box(pksave_save_t *s, uint8_t box, pksave_pokemon_t out[30], uint8
 int  gen4_set_box_slot(pksave_save_t *s, uint8_t box, uint8_t slot, const pksave_pokemon_t *mon);
 int  gen4_get_pocket(pksave_save_t *s, pksave_pocket_t p, pksave_item_t *out, uint8_t *cnt);
 int  gen4_set_item(pksave_save_t *s, pksave_pocket_t p, uint8_t slot, const pksave_item_t *item);
+int  gen4_get_party_pokerus(pksave_save_t *s, uint8_t slot, pksave_pokerus_t *out);
+int  gen4_set_party_pokerus(pksave_save_t *s, uint8_t slot, uint8_t strain, uint8_t days);
+int  gen4_get_box_pokerus(pksave_save_t *s, uint8_t box, uint8_t slot, pksave_pokerus_t *out);
+int  gen4_set_box_pokerus(pksave_save_t *s, uint8_t box, uint8_t slot, uint8_t strain, uint8_t days);
 int  gen4_flush(pksave_save_t *s);
 int  gen4_validate_checksum(const uint8_t *sram, size_t len, pksave_game_t game);
 #endif
@@ -100,6 +131,10 @@ int  gen5_get_box(pksave_save_t *s, uint8_t box, pksave_pokemon_t out[30], uint8
 int  gen5_set_box_slot(pksave_save_t *s, uint8_t box, uint8_t slot, const pksave_pokemon_t *mon);
 int  gen5_get_pocket(pksave_save_t *s, pksave_pocket_t p, pksave_item_t *out, uint8_t *cnt);
 int  gen5_set_item(pksave_save_t *s, pksave_pocket_t p, uint8_t slot, const pksave_item_t *item);
+int  gen5_get_party_pokerus(pksave_save_t *s, uint8_t slot, pksave_pokerus_t *out);
+int  gen5_set_party_pokerus(pksave_save_t *s, uint8_t slot, uint8_t strain, uint8_t days);
+int  gen5_get_box_pokerus(pksave_save_t *s, uint8_t box, uint8_t slot, pksave_pokerus_t *out);
+int  gen5_set_box_pokerus(pksave_save_t *s, uint8_t box, uint8_t slot, uint8_t strain, uint8_t days);
 int  gen5_flush(pksave_save_t *s);
 int  gen5_validate_checksum(const uint8_t *sram, size_t len, pksave_game_t game);
 #endif

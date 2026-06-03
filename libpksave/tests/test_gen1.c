@@ -475,6 +475,45 @@ void test_rb_set_item_out_of_range(void)
     pksave_close(s);
 }
 
+/* ── Pokerus rejected on Gen 1 (mechanic introduced in Gen 2) ── */
+void test_rb_pokerus_unsupported(void)
+{
+    if (!load_fixture("rb.sav", rb_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_pokerus_t pkrs;
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_GAME, pksave_get_party_pokerus(s, 0, &pkrs));
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_GAME, pksave_set_party_pokerus(s, 0, 1, 1));
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_GAME, pksave_get_box_pokerus(s, 0, 0, &pkrs));
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_GAME, pksave_set_box_pokerus(s, 0, 0, 1, 1));
+    pksave_close(s);
+}
+
+/* ── Argument validation across pokerus API ── */
+void test_pokerus_rejects_bad_inputs(void)
+{
+    if (!load_fixture("rb.sav", rb_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    pksave_pokerus_t pkrs;
+
+    /* NULL save / out → ERR_NULL */
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_NULL, pksave_get_party_pokerus(NULL, 0, &pkrs));
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_NULL, pksave_get_party_pokerus(s, 0, NULL));
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_NULL, pksave_set_party_pokerus(NULL, 0, 0, 0));
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_NULL, pksave_get_box_pokerus(NULL, 0, 0, &pkrs));
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_NULL, pksave_get_box_pokerus(s, 0, 0, NULL));
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_NULL, pksave_set_box_pokerus(NULL, 0, 0, 0, 0));
+
+    /* Out-of-range slot/strain/days → ERR_RANGE */
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE, pksave_get_party_pokerus(s, 6, &pkrs));
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE, pksave_set_party_pokerus(s, 6, 0, 0));
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE, pksave_set_party_pokerus(s, 0, 16, 0));
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE, pksave_set_party_pokerus(s, 0, 0, 16));
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE, pksave_get_box_pokerus(s, 0, 30, &pkrs));
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE, pksave_set_box_pokerus(s, 0, 30, 0, 0));
+    pksave_close(s);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -500,5 +539,7 @@ int main(void)
     RUN_TEST(test_gen1_item_name_lookup);
     RUN_TEST(test_gen1_is_shiny_derived);
     RUN_TEST(test_gen1_stat_exp_passthrough);
+    RUN_TEST(test_rb_pokerus_unsupported);
+    RUN_TEST(test_pokerus_rejects_bad_inputs);
     return UNITY_END();
 }

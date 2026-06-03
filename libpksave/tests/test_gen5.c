@@ -391,6 +391,67 @@ void test_gen5_item_name_lookup(void)
     TEST_ASSERT_EQUAL_STRING("???",         pksave_item_name(PKSAVE_GAME_BW, 0));
 }
 
+/* ── Gen V pokerus ── */
+
+void test_bw_party_pokerus_round_trip(void)
+{
+    if (!load_fixture("bw.sav", bw_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(bw_buf, SRAM_SIZE, PKSAVE_GAME_BW);
+    TEST_ASSERT_NOT_NULL(s);
+
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_party_pokerus(s, 0, 8, 4));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(bw_buf, SRAM_SIZE, PKSAVE_GAME_BW);
+    pksave_pokerus_t pkrs;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party_pokerus(s, 0, &pkrs));
+    TEST_ASSERT_EQUAL_UINT8(8, pkrs.strain);
+    TEST_ASSERT_EQUAL_UINT8(4, pkrs.days);
+    TEST_ASSERT_EQUAL(PKSAVE_PKRS_ACTIVE, pkrs.status);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(bw_buf, SRAM_SIZE, PKSAVE_GAME_BW));
+    pksave_close(s);
+}
+
+void test_bw2_party_pokerus_round_trip(void)
+{
+    if (!load_fixture("bw2.sav", bw2_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(bw2_buf, SRAM_SIZE, PKSAVE_GAME_BW2);
+    TEST_ASSERT_NOT_NULL(s);
+
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_party_pokerus(s, 0, 4, 0));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(bw2_buf, SRAM_SIZE, PKSAVE_GAME_BW2);
+    pksave_pokerus_t pkrs;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party_pokerus(s, 0, &pkrs));
+    TEST_ASSERT_EQUAL_UINT8(4, pkrs.strain);
+    TEST_ASSERT_EQUAL_UINT8(0, pkrs.days);
+    TEST_ASSERT_EQUAL(PKSAVE_PKRS_CURED, pkrs.status);
+    pksave_close(s);
+}
+
+void test_bw_box_pokerus_round_trip(void)
+{
+    if (!load_fixture("bw.sav", bw_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(bw_buf, SRAM_SIZE, PKSAVE_GAME_BW);
+    TEST_ASSERT_NOT_NULL(s);
+
+    /* Fixture populates box 1 slot 0 */
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_box_pokerus(s, 1, 0, 2, 1));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(bw_buf, SRAM_SIZE, PKSAVE_GAME_BW);
+    pksave_pokerus_t pkrs;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box_pokerus(s, 1, 0, &pkrs));
+    TEST_ASSERT_EQUAL_UINT8(2, pkrs.strain);
+    TEST_ASSERT_EQUAL_UINT8(1, pkrs.days);
+    pksave_close(s);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -417,5 +478,8 @@ int main(void)
     RUN_TEST(test_gen5_species_name_lookup);
     RUN_TEST(test_gen5_move_name_lookup);
     RUN_TEST(test_gen5_item_name_lookup);
+    RUN_TEST(test_bw_party_pokerus_round_trip);
+    RUN_TEST(test_bw2_party_pokerus_round_trip);
+    RUN_TEST(test_bw_box_pokerus_round_trip);
     return UNITY_END();
 }

@@ -279,6 +279,122 @@ int pksave_set_box_slot(pksave_save_t *save, uint8_t box, uint8_t slot,
     }
 }
 
+/* ── Pokerus ─────────────────────────────────────────────────────────────── */
+
+int pksave_get_party_pokerus(pksave_save_t *save, uint8_t slot,
+                              pksave_pokerus_t *out)
+{
+    if (!save || !out) return PKSAVE_ERR_NULL;
+    if (slot >= 6)     return PKSAVE_ERR_RANGE;
+    switch (save->game) {
+#ifdef PKSAVE_GEN2
+        case PKSAVE_GAME_GS:
+        case PKSAVE_GAME_CRYSTAL:   return gen2_get_party_pokerus(save, slot, out);
+#endif
+#ifdef PKSAVE_GEN3
+        case PKSAVE_GAME_RS:
+        case PKSAVE_GAME_EMERALD:
+        case PKSAVE_GAME_FRLG:      return gen3_get_party_pokerus(save, slot, out);
+#endif
+#ifdef PKSAVE_GEN4
+        case PKSAVE_GAME_DP:
+        case PKSAVE_GAME_PLATINUM:
+        case PKSAVE_GAME_HGSS:      return gen4_get_party_pokerus(save, slot, out);
+#endif
+#ifdef PKSAVE_GEN5
+        case PKSAVE_GAME_BW:
+        case PKSAVE_GAME_BW2:       return gen5_get_party_pokerus(save, slot, out);
+#endif
+        default: return PKSAVE_ERR_GAME;
+    }
+}
+
+int pksave_set_party_pokerus(pksave_save_t *save, uint8_t slot,
+                              uint8_t strain, uint8_t days)
+{
+    if (!save)         return PKSAVE_ERR_NULL;
+    if (slot >= 6)     return PKSAVE_ERR_RANGE;
+    if (strain > 0x0F || days > 0x0F) return PKSAVE_ERR_RANGE;
+    switch (save->game) {
+#ifdef PKSAVE_GEN2
+        case PKSAVE_GAME_GS:
+        case PKSAVE_GAME_CRYSTAL:   return gen2_set_party_pokerus(save, slot, strain, days);
+#endif
+#ifdef PKSAVE_GEN3
+        case PKSAVE_GAME_RS:
+        case PKSAVE_GAME_EMERALD:
+        case PKSAVE_GAME_FRLG:      return gen3_set_party_pokerus(save, slot, strain, days);
+#endif
+#ifdef PKSAVE_GEN4
+        case PKSAVE_GAME_DP:
+        case PKSAVE_GAME_PLATINUM:
+        case PKSAVE_GAME_HGSS:      return gen4_set_party_pokerus(save, slot, strain, days);
+#endif
+#ifdef PKSAVE_GEN5
+        case PKSAVE_GAME_BW:
+        case PKSAVE_GAME_BW2:       return gen5_set_party_pokerus(save, slot, strain, days);
+#endif
+        default: return PKSAVE_ERR_GAME;
+    }
+}
+
+int pksave_get_box_pokerus(pksave_save_t *save, uint8_t box, uint8_t slot,
+                            pksave_pokerus_t *out)
+{
+    if (!save || !out) return PKSAVE_ERR_NULL;
+    if (slot >= 30)    return PKSAVE_ERR_RANGE;
+    switch (save->game) {
+#ifdef PKSAVE_GEN2
+        case PKSAVE_GAME_GS:
+        case PKSAVE_GAME_CRYSTAL:   return gen2_get_box_pokerus(save, box, slot, out);
+#endif
+#ifdef PKSAVE_GEN3
+        case PKSAVE_GAME_RS:
+        case PKSAVE_GAME_EMERALD:
+        case PKSAVE_GAME_FRLG:      return gen3_get_box_pokerus(save, box, slot, out);
+#endif
+#ifdef PKSAVE_GEN4
+        case PKSAVE_GAME_DP:
+        case PKSAVE_GAME_PLATINUM:
+        case PKSAVE_GAME_HGSS:      return gen4_get_box_pokerus(save, box, slot, out);
+#endif
+#ifdef PKSAVE_GEN5
+        case PKSAVE_GAME_BW:
+        case PKSAVE_GAME_BW2:       return gen5_get_box_pokerus(save, box, slot, out);
+#endif
+        default: return PKSAVE_ERR_GAME;
+    }
+}
+
+int pksave_set_box_pokerus(pksave_save_t *save, uint8_t box, uint8_t slot,
+                            uint8_t strain, uint8_t days)
+{
+    if (!save)         return PKSAVE_ERR_NULL;
+    if (slot >= 30)    return PKSAVE_ERR_RANGE;
+    if (strain > 0x0F || days > 0x0F) return PKSAVE_ERR_RANGE;
+    switch (save->game) {
+#ifdef PKSAVE_GEN2
+        case PKSAVE_GAME_GS:
+        case PKSAVE_GAME_CRYSTAL:   return gen2_set_box_pokerus(save, box, slot, strain, days);
+#endif
+#ifdef PKSAVE_GEN3
+        case PKSAVE_GAME_RS:
+        case PKSAVE_GAME_EMERALD:
+        case PKSAVE_GAME_FRLG:      return gen3_set_box_pokerus(save, box, slot, strain, days);
+#endif
+#ifdef PKSAVE_GEN4
+        case PKSAVE_GAME_DP:
+        case PKSAVE_GAME_PLATINUM:
+        case PKSAVE_GAME_HGSS:      return gen4_set_box_pokerus(save, box, slot, strain, days);
+#endif
+#ifdef PKSAVE_GEN5
+        case PKSAVE_GAME_BW:
+        case PKSAVE_GAME_BW2:       return gen5_set_box_pokerus(save, box, slot, strain, days);
+#endif
+        default: return PKSAVE_ERR_GAME;
+    }
+}
+
 /* ── Bag ─────────────────────────────────────────────────────────────────── */
 
 int pksave_get_pocket(pksave_save_t *save, pksave_pocket_t pocket,
