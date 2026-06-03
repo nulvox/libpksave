@@ -547,11 +547,137 @@ int gen3_get_box(pksave_save_t *s, uint8_t box, pksave_pokemon_t out[30], uint8_
     return PKSAVE_OK;
 }
 
+/* Mirror of g3_pc_read: write `src` bytes into the linear PC buffer starting
+ * at `lin_off`, splitting across sections 5..13. */
+static int g3_pc_write(uint8_t *sram, uint32_t slot_off,
+                        uint32_t lin_off, const uint8_t *src, size_t len)
+{
+    while (len > 0) {
+        uint16_t sec_idx;
+        uint32_t within, sec_data_size;
+        if (lin_off < G3_PC_REGULAR_TOTAL) {
+            sec_idx = (uint16_t)(G3_PC_FIRST_SEC + lin_off / G3_PC_SEC_SIZE);
+            within  = lin_off % G3_PC_SEC_SIZE;
+            sec_data_size = G3_PC_SEC_SIZE;
+        } else {
+            sec_idx = G3_PC_LAST_SEC;
+            within  = lin_off - G3_PC_REGULAR_TOTAL;
+            sec_data_size = G3_PC_SEC13_SIZE;
+        }
+        size_t sec_off = g3_find_section(sram, slot_off, sec_idx);
+        if (sec_off == SIZE_MAX) return PKSAVE_ERR_CORRUPT;
+        uint32_t avail = sec_data_size - within;
+        size_t put = (len < avail) ? len : avail;
+        memcpy(sram + sec_off + within, src, put);
+        src     += put;
+        lin_off += (uint32_t)put;
+        len     -= put;
+    }
+    return PKSAVE_OK;
+}
+
+/* Encode a Pokemon into the 80-byte box-mon layout.
+ * Mirrors g3_encode_mon but skips the party extras (level/stats at 0x50+). */
+static void g3_encode_box_mon(uint8_t *dst, const pksave_pokemon_t *mon,
+                               uint16_t trainer_tid, uint16_t trainer_sid)
+{
+    uint32_t pid; memcpy(&pid, dst, 4);
+    uint16_t tid; memcpy(&tid, dst + 4, 2);
+    uint16_t sid; memcpy(&sid, dst + 6, 2);
+    if (pid == 0 && tid == 0 && sid == 0) {
+        /* fresh slot — synthesize a minimal PID and inherit trainer IDs.
+         * Real games derive PID from RNG state; for editor use any non-zero
+         * value works (encryption is symmetric and shininess uses PID^OT). */
+        pid = 0x12345678u;
+        memcpy(dst, &pid, 4);
+        tid = trainer_tid;
+        sid = trainer_sid;
+        memcpy(dst + 4, &tid, 2);
+        memcpy(dst + 6, &sid, 2);
+    }
+
+    uint32_t key = pid ^ ((uint32_t)tid | ((uint32_t)sid << 16));
+
+    uint8_t dec[48];
+    g3_crypt(dst + 0x20, key, dec);
+
+    const uint8_t *ord = g3_suborder[pid % 24];
+    int gp = 0, ap = 0, ep = 0, mp = 0;
+    for (int i = 0; i < 4; i++) {
+        if      (ord[i] == 0) gp = i * 12;
+        else if (ord[i] == 1) ap = i * 12;
+        else if (ord[i] == 2) ep = i * 12;
+        else                  mp = i * 12;
+    }
+
+    uint16_t sp = mon->species;   memcpy(dec + gp,     &sp, 2);
+    uint16_t it = mon->held_item; memcpy(dec + gp + 2, &it, 2);
+
+    for (int i = 0; i < 4; i++) {
+        uint16_t mv = mon->move_ids[i];
+        memcpy(dec + ap + i*2, &mv, 2);
+        dec[ap + 8 + i] = mon->move_pp[i];
+    }
+
+    dec[ep + 0] = (uint8_t)mon->evs[0];
+    dec[ep + 1] = (uint8_t)mon->evs[1];
+    dec[ep + 2] = (uint8_t)mon->evs[2];
+    dec[ep + 3] = (uint8_t)mon->evs[5];
+    dec[ep + 4] = (uint8_t)mon->evs[3];
+    dec[ep + 5] = (uint8_t)mon->evs[4];
+
+    uint32_t iv;
+    memcpy(&iv, dec + mp, 4);
+    uint32_t preserved = iv & 0xC0000000u;
+    iv = preserved
+       | ((uint32_t)(mon->ivs[0] & 0x1F))
+       | ((uint32_t)(mon->ivs[1] & 0x1F) << 5)
+       | ((uint32_t)(mon->ivs[2] & 0x1F) << 10)
+       | ((uint32_t)(mon->ivs[5] & 0x1F) << 15)
+       | ((uint32_t)(mon->ivs[3] & 0x1F) << 20)
+       | ((uint32_t)(mon->ivs[4] & 0x1F) << 25);
+    memcpy(dec + mp, &iv, 4);
+
+    uint32_t sum = 0;
+    for (int i = 0; i < 48; i += 2) {
+        uint16_t w; memcpy(&w, dec + i, 2);
+        sum += w;
+    }
+    uint16_t checksum = (uint16_t)sum;
+    memcpy(dst + 0x1C, &checksum, 2);
+
+    g3_crypt(dec, key, dst + 0x20);
+
+    gen3_encode_name(mon->ot_name,  dst + 0x14, 7);
+    gen3_encode_name(mon->nickname, dst + 0x08, 10);
+}
+
 int gen3_set_box_slot(pksave_save_t *s, uint8_t box, uint8_t slot,
                        const pksave_pokemon_t *mon)
 {
-    (void)s; (void)box; (void)slot; (void)mon;
-    return PKSAVE_ERR_RANGE;
+    if (box >= G3_NUM_BOXES || slot >= G3_SLOTS_PER_BOX) return PKSAVE_ERR_RANGE;
+
+    uint32_t slot_off = g3_active_slot(s->sram);
+    size_t s0 = g3_find_section(s->sram, slot_off, 0);
+    if (s0 == SIZE_MAX) return PKSAVE_ERR_CORRUPT;
+
+    uint16_t trainer_tid, trainer_sid;
+    memcpy(&trainer_tid, s->sram + s0 + 0x00A, 2);
+    memcpy(&trainer_sid, s->sram + s0 + 0x00C, 2);
+
+    uint32_t lin = 1U
+                 + (uint32_t)box  * G3_SLOTS_PER_BOX * G3_BOX_MON_SIZE
+                 + (uint32_t)slot * G3_BOX_MON_SIZE;
+
+    /* Read the existing 80 bytes so the encode pass can preserve untouched
+     * fields (exp, friendship, contest stats, met data, egg/nickname flags). */
+    uint8_t buf[G3_BOX_MON_SIZE];
+    int rc = g3_pc_read(s->sram, slot_off, lin, buf, G3_BOX_MON_SIZE);
+    if (rc != PKSAVE_OK) return rc;
+
+    g3_encode_box_mon(buf, mon, trainer_tid, trainer_sid);
+
+    return g3_pc_write(s->sram, slot_off, lin, buf, G3_BOX_MON_SIZE);
 }
 
 int gen3_get_pocket(pksave_save_t *s, pksave_pocket_t p, pksave_item_t *out, uint8_t *cnt)

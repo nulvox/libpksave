@@ -321,6 +321,112 @@ void test_frlg_get_box_with_mon(void)
     pksave_close(s);
 }
 
+/* ── Gen III PC box write ── */
+
+void test_rs_set_box_slot_round_trip(void)
+{
+    if (!load_fixture("rs.sav", rs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+
+    /* Mutate slot 0 — keep PID/TID/SID from existing mon by reading then writing. */
+    box[0].species      = 4;     /* Charmander */
+    box[0].held_item    = 17;    /* Potion */
+    box[0].move_ids[0]  = 10;    /* Scratch */
+    box[0].move_pp[0]   = 35;
+    box[0].evs[1]       = 12;
+    box[0].ivs[1]       = 25;
+    strcpy(box[0].nickname, "CHAR");
+
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_box_slot(s, 1, 0, &box[0]));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    TEST_ASSERT_EQUAL_UINT16(4, box[0].species);
+    TEST_ASSERT_EQUAL_UINT16(17, box[0].held_item);
+    TEST_ASSERT_EQUAL_UINT8(10, box[0].move_ids[0]);
+    TEST_ASSERT_EQUAL_UINT8(35, box[0].move_pp[0]);
+    TEST_ASSERT_EQUAL_UINT16(12, box[0].evs[1]);
+    TEST_ASSERT_EQUAL_UINT8(25, box[0].ivs[1]);
+    TEST_ASSERT_EQUAL_STRING("CHAR", box[0].nickname);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS));
+    pksave_close(s);
+}
+
+void test_emerald_set_box_slot_round_trip(void)
+{
+    if (!load_fixture("emerald.sav", emerald_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(emerald_buf, SRAM_SIZE, PKSAVE_GAME_EMERALD);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+
+    box[0].species     = 7;    /* Squirtle */
+    box[0].move_ids[0] = 33;   /* Tackle */
+    box[0].move_pp[0]  = 35;
+
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_box_slot(s, 1, 0, &box[0]));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(emerald_buf, SRAM_SIZE, PKSAVE_GAME_EMERALD);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    TEST_ASSERT_EQUAL_UINT16(7, box[0].species);
+    TEST_ASSERT_EQUAL_UINT8(33, box[0].move_ids[0]);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(emerald_buf, SRAM_SIZE, PKSAVE_GAME_EMERALD));
+    pksave_close(s);
+}
+
+void test_frlg_set_box_slot_round_trip(void)
+{
+    if (!load_fixture("frlg.sav", frlg_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(frlg_buf, SRAM_SIZE, PKSAVE_GAME_FRLG);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+
+    box[0].species     = 25;   /* Pikachu */
+    box[0].move_ids[0] = 84;   /* Thunder Shock */
+
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_box_slot(s, 1, 0, &box[0]));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(frlg_buf, SRAM_SIZE, PKSAVE_GAME_FRLG);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    TEST_ASSERT_EQUAL_UINT16(25, box[0].species);
+    TEST_ASSERT_EQUAL_UINT8(84, box[0].move_ids[0]);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(frlg_buf, SRAM_SIZE, PKSAVE_GAME_FRLG));
+    pksave_close(s);
+}
+
+void test_rs_set_box_slot_out_of_range(void)
+{
+    if (!load_fixture("rs.sav", rs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_pokemon_t mon;
+    memset(&mon, 0, sizeof(mon));
+    mon.species = 1;
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE, pksave_set_box_slot(s, 14, 0, &mon));
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE, pksave_set_box_slot(s, 0, 30, &mon));
+    pksave_close(s);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -341,5 +447,9 @@ int main(void)
     RUN_TEST(test_rs_get_box_with_mon);
     RUN_TEST(test_emerald_get_box_with_mon);
     RUN_TEST(test_frlg_get_box_with_mon);
+    RUN_TEST(test_rs_set_box_slot_round_trip);
+    RUN_TEST(test_emerald_set_box_slot_round_trip);
+    RUN_TEST(test_frlg_set_box_slot_round_trip);
+    RUN_TEST(test_rs_set_box_slot_out_of_range);
     return UNITY_END();
 }

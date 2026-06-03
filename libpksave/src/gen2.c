@@ -435,8 +435,31 @@ int gen2_get_box(pksave_save_t *s, uint8_t box, pksave_pokemon_t out[30], uint8_
 int gen2_set_box_slot(pksave_save_t *s, uint8_t box, uint8_t slot,
                        const pksave_pokemon_t *mon)
 {
-    (void)s; (void)box; (void)slot; (void)mon;
-    return PKSAVE_ERR_RANGE;
+    if (box >= G2_NUM_BOXES_GS || slot >= G2_BOX_PER_BOX) return PKSAVE_ERR_RANGE;
+
+    uint8_t *base    = s->sram + gen2_box_base(box);
+    uint8_t *species = base + 1U;
+    uint8_t *data    = base + 22U + (size_t)slot * G2_BOX_MON_SIZE;
+    uint8_t *ot      = base + 22U + (size_t)G2_BOX_PER_BOX * G2_BOX_MON_SIZE
+                                  + (size_t)slot * G2_NAME_LEN;
+    uint8_t *nick    = base + 22U + (size_t)G2_BOX_PER_BOX * G2_BOX_MON_SIZE
+                                  + (size_t)G2_BOX_PER_BOX * G2_NAME_LEN
+                                  + (size_t)slot * G2_NAME_LEN;
+
+    /* Encode as party mon, then copy first 32 bytes (box mon omits level + stats). */
+    uint8_t tmp[G2_PARTY_MON_SIZE];
+    uint8_t ot_tmp[G2_NAME_LEN], nick_tmp[G2_NAME_LEN];
+    gen2_encode_party_mon(mon, tmp, ot_tmp, nick_tmp);
+    memcpy(data, tmp, G2_BOX_MON_SIZE);
+    memcpy(ot, ot_tmp, G2_NAME_LEN);
+    memcpy(nick, nick_tmp, G2_NAME_LEN);
+
+    species[slot] = (uint8_t)mon->species;
+    if (slot >= base[0]) {
+        base[0] = slot + 1;
+        species[slot + 1] = 0xFF;
+    }
+    return PKSAVE_OK;
 }
 
 int gen2_get_pocket(pksave_save_t *s, pksave_pocket_t p, pksave_item_t *out, uint8_t *cnt)
