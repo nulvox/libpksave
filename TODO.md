@@ -31,19 +31,19 @@ is committed **and** `make test` passes for that item.
 
 ## Bag / item pockets read
 
-- [ ] `gen1_get_pocket` — single items pocket at 0x25C9; 20 × (item_id, quantity)
-- [ ] `gen2_get_pocket` — items, key items, balls, TM/HM, PC box (offsets differ GS vs Crystal)
-- [ ] `gen3_get_pocket` — 5 pockets in section 1 (items, key items, balls, TM case, berries)
-- [ ] `gen4_get_pocket` — 8 pockets (items, key items, TMs, mail, medicine, berries, balls, battle)
-- [ ] `gen5_get_pocket` — same pocket layout as Gen IV
+- [x] `gen1_get_pocket` — single items pocket at 0x25C9; 20 × (item_id, quantity)
+- [x] `gen2_get_pocket` — items, balls, key items (TM/HM, PC box still TODO)
+- [x] `gen3_get_pocket` — 5 pockets in section 1 (items, key items, balls, TM case, berries)
+- [x] `gen4_get_pocket` — 5 exposed pockets (items, key items, TM/HM, berries, balls)
+- [x] `gen5_get_pocket` — same pocket layout as Gen IV, BW vs BW2 offsets
 
 ## Bag / item pockets write
 
-- [ ] `gen1_set_item`
-- [ ] `gen2_set_item`
-- [ ] `gen3_set_item` — recompute section 1 checksum after write
-- [ ] `gen4_set_item`
-- [ ] `gen5_set_item`
+- [x] `gen1_set_item`
+- [x] `gen2_set_item`
+- [x] `gen3_set_item` — quantity XORed with low16(security key)
+- [x] `gen4_set_item`
+- [x] `gen5_set_item`
 
 ## Name lookup tables (`names/`)
 

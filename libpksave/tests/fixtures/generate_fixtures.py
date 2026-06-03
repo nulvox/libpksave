@@ -464,6 +464,15 @@ def make_gen1_rb():
     gen1_write_box(buf, 0x4000 + 1 * GEN1_BOX_SIZE,
                    [(GEN12_SPECIES, 7, TEST_MOVE1)])
 
+    # Bag at 0x25C9: 1 count byte + 20×(id,qty) + 0xFF terminator (42 bytes total).
+    # Fixture carries 3 items: Master Ball ×1, Potion ×10, Antidote ×5.
+    buf[0x25C9]               = 3
+    buf[0x25CA:0x25CC]        = bytes([0x01, 0x01])  # Master Ball ×1
+    buf[0x25CC:0x25CE]        = bytes([0x14, 0x0A])  # Potion ×10
+    buf[0x25CE:0x25D0]        = bytes([0x0B, 0x05])  # Antidote ×5
+    # Remaining 17 slots zeroed, terminator 0xFF after last entry of the array
+    buf[0x25C9 + 1 + 20 * 2]  = 0xFF
+
     # Checksum
     buf[GEN1_CHKSUM_ADDR] = gen1_checksum(buf)
     return bytes(buf)
@@ -587,6 +596,38 @@ def make_gen2_base(party_count_off, party_species_off, party_data_off,
 
     return buf
 
+def gen2_write_pocket(buf, count_off, max_slots, has_qty, entries):
+    """Populate a Gen 2 bag pocket.
+
+    Layout: 1 count byte, max_slots × (1 or 2 byte entries), 0xFF terminator.
+    has_qty=True → 2 bytes per entry (id, qty).
+    has_qty=False → 1 byte per entry (id only — key items).
+    """
+    n = len(entries)
+    buf[count_off] = n
+    entry_size = 2 if has_qty else 1
+    data_off = count_off + 1
+    for i, ent in enumerate(entries):
+        if has_qty:
+            buf[data_off + i*2 + 0] = ent[0]
+            buf[data_off + i*2 + 1] = ent[1]
+        else:
+            buf[data_off + i] = ent[0]
+    # Terminator after the data array
+    buf[count_off + 1 + max_slots * entry_size] = 0xFF
+
+# GS pocket offsets (count byte; data follows at +1)
+GS_TMHM_OFF       = 0x2418   # 57 bytes packed (50 TMs + 7 HMs)
+GS_ITEMS_CNT      = 0x2449   # 1 + 20×2 + 0xFF
+GS_KEY_CNT        = 0x2474   # 1 + 25 + 0xFF
+GS_BALLS_CNT      = 0x248F   # 1 + 12×2 + 0xFF
+
+# Crystal pocket offsets (shifted relative to GS)
+CRY_TMHM_OFF      = 0x23E6
+CRY_ITEMS_CNT     = 0x241F
+CRY_KEY_CNT       = 0x244A
+CRY_BALLS_CNT     = 0x2465
+
 def make_gen2_gs():
     buf = make_gen2_base(
         party_count_off=0x288A, party_species_off=0x288B, party_data_off=0x2892,
@@ -595,6 +636,15 @@ def make_gen2_gs():
     # Populate box 1 (stored, bank 2) with one Bulbasaur lvl 8
     gen2_write_box(buf, gen2_box_base(1),
                    [(GEN12_SPECIES, 8, TEST_MOVE1)])
+
+    # Bag pockets
+    gen2_write_pocket(buf, GS_ITEMS_CNT, 20, True,
+                      [(0x12, 5), (0x49, 2)])   # Super Potion ×5, Repel ×2
+    gen2_write_pocket(buf, GS_BALLS_CNT, 12, True,
+                      [(0x04, 7)])              # Poke Ball ×7
+    gen2_write_pocket(buf, GS_KEY_CNT, 25, False,
+                      [(0x07,)])                # Bicycle
+
     # Primary checksum: sum bytes 0x2009..0x2D68
     chk1 = gen2_checksum_range(buf, 0x2009, 0x2D68)
     struct.pack_into('<H', buf, 0x2D69, chk1)
@@ -609,6 +659,15 @@ def make_gen2_crystal():
     # coverage of gen2_get_box
     gen2_write_box(buf, gen2_box_base(7),
                    [(0x9A, 16, TEST_MOVE1)])
+
+    # Bag pockets (Crystal offsets)
+    gen2_write_pocket(buf, CRY_ITEMS_CNT, 20, True,
+                      [(0x12, 3)])              # Super Potion ×3
+    gen2_write_pocket(buf, CRY_BALLS_CNT, 12, True,
+                      [])                       # empty
+    gen2_write_pocket(buf, CRY_KEY_CNT, 25, False,
+                      [])                       # empty
+
     # Crystal primary checksum: sum bytes 0x2009..0x2B82 → store at 0x2D0D
     chk1 = gen2_checksum_range(buf, 0x2009, 0x2B82)
     struct.pack_into('<H', buf, 0x2D0D, chk1)
@@ -656,6 +715,25 @@ def gen3_make_section0(trainer_name_bytes, tid, sid, game_code_or_key, security_
     struct.pack_into('<I', data, 0x0AF8, security_key_frlg)
     return bytes(data)
 
+def gen3_pack_item_slot(data, off, item_id, quantity, security_key):
+    """Pack one Gen III item slot: u16 id + u16 (quantity XOR low16(key))."""
+    struct.pack_into('<H', data, off,     item_id)
+    struct.pack_into('<H', data, off + 2, quantity ^ (security_key & 0xFFFF))
+
+# RS/Emerald (RS-layout) pocket offsets within section 1 data
+GEN3_RSE_ITEMS_OFF   = 0x560
+GEN3_RSE_KEY_OFF     = 0x5B0
+GEN3_RSE_BALLS_OFF   = 0x600
+GEN3_RSE_TMHM_OFF    = 0x640
+GEN3_RSE_BERRIES_OFF = 0x740
+
+# FRLG pocket offsets within section 1 data
+GEN3_FRLG_ITEMS_OFF   = 0x310
+GEN3_FRLG_KEY_OFF     = 0x3B8
+GEN3_FRLG_BALLS_OFF   = 0x430
+GEN3_FRLG_TMHM_OFF    = 0x464
+GEN3_FRLG_BERRIES_OFF = 0x54C
+
 def gen3_make_section1_rse(money, security_key, party_mon_bytes):
     """Build section 1 data (SaveBlock1) for RS/E layout."""
     data = bytearray(3968)
@@ -666,10 +744,13 @@ def gen3_make_section1_rse(money, security_key, party_mon_bytes):
     # Money at 0x490 (XORed with security key)
     money_enc = money ^ security_key
     struct.pack_into('<I', data, 0x490, money_enc)
-    # Badges at 0x4? (varies) — simplified: put TEST_BADGES somewhere accessible
-    # From pokeemerald SaveBlock2: badges are in section 0 at a specific offset.
-    # For simplicity, we'll store badges in section 4 or a separate field.
-    # Actually badges in Gen III are stored in SaveBlock2 (section 0).
+
+    # Items pocket: 2 items (Potion ×5, Hyper Potion-ish ×2)
+    gen3_pack_item_slot(data, GEN3_RSE_ITEMS_OFF + 0*4, 13,   5, security_key)
+    gen3_pack_item_slot(data, GEN3_RSE_ITEMS_OFF + 1*4, 0x44, 2, security_key)
+
+    # Balls pocket: 1 Poke Ball ×10
+    gen3_pack_item_slot(data, GEN3_RSE_BALLS_OFF + 0*4, 4, 10, security_key)
     return bytes(data)
 
 def gen3_make_section1_frlg(money, security_key, party_mon_bytes):
@@ -679,6 +760,9 @@ def gen3_make_section1_frlg(money, security_key, party_mon_bytes):
     data[0x038:0x038+100] = party_mon_bytes[:100]
     money_enc = money ^ security_key
     struct.pack_into('<I', data, 0x290, money_enc)
+
+    # Items pocket: Potion ×7
+    gen3_pack_item_slot(data, GEN3_FRLG_ITEMS_OFF + 0*4, 13, 7, security_key)
     return bytes(data)
 
 GEN3_BOX_MON_SIZE = 80
@@ -818,6 +902,16 @@ GEN4_PARTY_OFF = {
     'hgss':0x00DC,
 }
 
+GEN4_ITEMS_OFF = {
+    'dp':   0x0624,
+    'pt':   0x0630,
+    'hgss': 0x0644,
+}
+
+def gen4_write_item(buf, off, slot, item_id, quantity):
+    struct.pack_into('<H', buf, off + slot * 4,     item_id)
+    struct.pack_into('<H', buf, off + slot * 4 + 2, quantity)
+
 def gen4_make_general_block(variant):
     size = GEN4_GENERAL_SIZES[variant]
     buf = bytearray(size)
@@ -835,6 +929,11 @@ def gen4_make_general_block(variant):
     buf[party_off:party_off+4] = struct.pack('<I', 1)   # team count
     mon = gen4_make_party_mon(GEN3P_SPECIES, TEST_LEVEL, TEST_MOVE1, TEST_TID, TEST_SID)
     buf[party_off+4:party_off+4+236] = mon
+
+    # Bag items pocket: Potion ×5, 0x4A ×2
+    items_off = GEN4_ITEMS_OFF[variant]
+    gen4_write_item(buf, items_off, 0, 17,   5)   # Potion
+    gen4_write_item(buf, items_off, 1, 0x4A, 2)
 
     # Build footer
     footer_off = size - 0x14
@@ -920,6 +1019,15 @@ GEN5_NUM_BOXES = 24
 GEN5_SLOTS_PER_BOX = 30
 GEN5_BOX_MON_SIZE = 136
 
+GEN5_ITEMS_OFF = {
+    'bw':  0x18400,
+    'bw2': 0x18470,
+}
+
+def gen5_write_item(buf, off, slot, item_id, quantity):
+    struct.pack_into('<H', buf, off + slot * 4,     item_id)
+    struct.pack_into('<H', buf, off + slot * 4 + 2, quantity)
+
 def gen5_make_box_mon(species, level, move1, ot_tid, ot_sid, pid=0):
     return gen4_make_party_mon(species, level, move1, ot_tid, ot_sid, pid)[:GEN5_BOX_MON_SIZE]
 
@@ -944,6 +1052,11 @@ def gen5_make_general_block(variant):
     box_mon = gen5_make_box_mon(GEN3P_SPECIES, TEST_LEVEL, TEST_MOVE1, TEST_TID, TEST_SID)
     box_off = GEN5_PC_BOX_BASE + (1 * GEN5_SLOTS_PER_BOX + 0) * GEN5_BOX_MON_SIZE
     buf[box_off:box_off+GEN5_BOX_MON_SIZE] = box_mon
+
+    # Bag items: Potion ×5, 0x4A ×2
+    items_off = GEN5_ITEMS_OFF[variant]
+    gen5_write_item(buf, items_off, 0, 17,   5)
+    gen5_write_item(buf, items_off, 1, 0x4A, 2)
 
     footer_off = size - 0x14
     connection_id = 1

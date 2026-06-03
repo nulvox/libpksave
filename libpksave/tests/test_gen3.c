@@ -427,6 +427,136 @@ void test_rs_set_box_slot_out_of_range(void)
     pksave_close(s);
 }
 
+/* ── Gen 3 bag (RS layout used for RS+Emerald fixtures, FRLG separate) ── */
+
+void test_rs_get_items_pocket(void)
+{
+    if (!load_fixture("rs.sav", rs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_item_t items[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_get_pocket(s, PKSAVE_POCKET_ITEMS, items, &count));
+    TEST_ASSERT_EQUAL_UINT8(2, count);
+    TEST_ASSERT_EQUAL_UINT16(13,   items[0].item_id); /* Potion (Gen 3 ID) */
+    TEST_ASSERT_EQUAL_UINT16(5,    items[0].quantity);
+    TEST_ASSERT_EQUAL_UINT16(0x44, items[1].item_id); /* Hyper Potion-ish */
+    TEST_ASSERT_EQUAL_UINT16(2,    items[1].quantity);
+    pksave_close(s);
+}
+
+void test_rs_get_balls_pocket(void)
+{
+    if (!load_fixture("rs.sav", rs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_item_t items[16];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_get_pocket(s, PKSAVE_POCKET_BALLS, items, &count));
+    TEST_ASSERT_EQUAL_UINT8(1, count);
+    TEST_ASSERT_EQUAL_UINT16(4, items[0].item_id);    /* Poke Ball */
+    TEST_ASSERT_EQUAL_UINT16(10, items[0].quantity);
+    pksave_close(s);
+}
+
+void test_emerald_get_items_pocket_with_xor(void)
+{
+    /* Emerald encrypts quantities with the section 0 security key.
+     * The fixture writes pre-XORed values; the library must un-XOR.
+     * Emerald shares the RS-layout fixture (2 items: Potion ×5, ×2). */
+    if (!load_fixture("emerald.sav", emerald_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(emerald_buf, SRAM_SIZE, PKSAVE_GAME_EMERALD);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_item_t items[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_get_pocket(s, PKSAVE_POCKET_ITEMS, items, &count));
+    TEST_ASSERT_EQUAL_UINT8(2, count);
+    TEST_ASSERT_EQUAL_UINT16(13, items[0].item_id);  /* Potion */
+    TEST_ASSERT_EQUAL_UINT16(5,  items[0].quantity); /* un-XORed quantity */
+    pksave_close(s);
+}
+
+void test_frlg_get_items_pocket(void)
+{
+    if (!load_fixture("frlg.sav", frlg_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(frlg_buf, SRAM_SIZE, PKSAVE_GAME_FRLG);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_item_t items[42];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_get_pocket(s, PKSAVE_POCKET_ITEMS, items, &count));
+    TEST_ASSERT_EQUAL_UINT8(1, count);
+    TEST_ASSERT_EQUAL_UINT16(13, items[0].item_id);
+    TEST_ASSERT_EQUAL_UINT16(7,  items[0].quantity);
+    pksave_close(s);
+}
+
+void test_rs_set_item_round_trip(void)
+{
+    if (!load_fixture("rs.sav", rs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_item_t new_item = { .item_id = 0xAB, .quantity = 17 };
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_set_item(s, PKSAVE_POCKET_ITEMS, 0, &new_item));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_item_t items[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_get_pocket(s, PKSAVE_POCKET_ITEMS, items, &count));
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT8(1, count);
+    TEST_ASSERT_EQUAL_UINT16(0xAB, items[0].item_id);
+    TEST_ASSERT_EQUAL_UINT16(17,   items[0].quantity);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS));
+    pksave_close(s);
+}
+
+void test_emerald_set_item_round_trip(void)
+{
+    if (!load_fixture("emerald.sav", emerald_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(emerald_buf, SRAM_SIZE, PKSAVE_GAME_EMERALD);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_item_t new_item = { .item_id = 0xCD, .quantity = 99 };
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_set_item(s, PKSAVE_POCKET_BALLS, 0, &new_item));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(emerald_buf, SRAM_SIZE, PKSAVE_GAME_EMERALD);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_item_t items[16];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_get_pocket(s, PKSAVE_POCKET_BALLS, items, &count));
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT8(1, count);
+    TEST_ASSERT_EQUAL_UINT16(0xCD, items[0].item_id);
+    TEST_ASSERT_EQUAL_UINT16(99,   items[0].quantity);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(emerald_buf, SRAM_SIZE, PKSAVE_GAME_EMERALD));
+    pksave_close(s);
+}
+
+void test_rs_set_item_out_of_range(void)
+{
+    if (!load_fixture("rs.sav", rs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_item_t item = { .item_id = 1, .quantity = 1 };
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE,
+        pksave_set_item(s, PKSAVE_POCKET_ITEMS, 30, &item));
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE,
+        pksave_set_item(s, PKSAVE_POCKET_BALLS, 16, &item));
+    pksave_close(s);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -451,5 +581,12 @@ int main(void)
     RUN_TEST(test_emerald_set_box_slot_round_trip);
     RUN_TEST(test_frlg_set_box_slot_round_trip);
     RUN_TEST(test_rs_set_box_slot_out_of_range);
+    RUN_TEST(test_rs_get_items_pocket);
+    RUN_TEST(test_rs_get_balls_pocket);
+    RUN_TEST(test_emerald_get_items_pocket_with_xor);
+    RUN_TEST(test_frlg_get_items_pocket);
+    RUN_TEST(test_rs_set_item_round_trip);
+    RUN_TEST(test_emerald_set_item_round_trip);
+    RUN_TEST(test_rs_set_item_out_of_range);
     return UNITY_END();
 }

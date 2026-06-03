@@ -357,6 +357,75 @@ void test_dp_set_box_slot_out_of_range(void)
     pksave_close(s);
 }
 
+/* ── Gen 4 bag ── */
+
+static void gen4_items_get(uint8_t *buf, pksave_game_t game, const char *name)
+{
+    if (!load_fixture(name, buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(buf, SRAM_SIZE, game);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_item_t items[10];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_get_pocket(s, PKSAVE_POCKET_ITEMS, items, &count));
+    TEST_ASSERT_EQUAL_UINT8(2, count);
+    TEST_ASSERT_EQUAL_UINT16(17,   items[0].item_id);  /* Potion (Gen 4 ID) */
+    TEST_ASSERT_EQUAL_UINT16(5,    items[0].quantity);
+    TEST_ASSERT_EQUAL_UINT16(0x4A, items[1].item_id);
+    TEST_ASSERT_EQUAL_UINT16(2,    items[1].quantity);
+    pksave_close(s);
+}
+
+void test_dp_get_items_pocket(void)
+    { gen4_items_get(dp_buf, PKSAVE_GAME_DP, "dp.sav"); }
+void test_platinum_get_items_pocket(void)
+    { gen4_items_get(platinum_buf, PKSAVE_GAME_PLATINUM, "platinum.sav"); }
+void test_hgss_get_items_pocket(void)
+    { gen4_items_get(hgss_buf, PKSAVE_GAME_HGSS, "hgss.sav"); }
+
+static void gen4_item_round_trip(uint8_t *buf, pksave_game_t game, const char *name)
+{
+    if (!load_fixture(name, buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(buf, SRAM_SIZE, game);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_item_t new_item = { .item_id = 0x456, .quantity = 99 };
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_set_item(s, PKSAVE_POCKET_BALLS, 0, &new_item));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(buf, SRAM_SIZE, game);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_item_t items[16];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_get_pocket(s, PKSAVE_POCKET_BALLS, items, &count));
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT8(1, count);
+    TEST_ASSERT_EQUAL_UINT16(0x456, items[0].item_id);
+    TEST_ASSERT_EQUAL_UINT16(99,    items[0].quantity);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(buf, SRAM_SIZE, game));
+    pksave_close(s);
+}
+
+void test_dp_set_item_round_trip(void)
+    { gen4_item_round_trip(dp_buf, PKSAVE_GAME_DP, "dp.sav"); }
+void test_platinum_set_item_round_trip(void)
+    { gen4_item_round_trip(platinum_buf, PKSAVE_GAME_PLATINUM, "platinum.sav"); }
+void test_hgss_set_item_round_trip(void)
+    { gen4_item_round_trip(hgss_buf, PKSAVE_GAME_HGSS, "hgss.sav"); }
+
+void test_dp_set_item_out_of_range(void)
+{
+    if (!load_fixture("dp.sav", dp_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(dp_buf, SRAM_SIZE, PKSAVE_GAME_DP);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_item_t item = { .item_id = 1, .quantity = 1 };
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE,
+        pksave_set_item(s, PKSAVE_POCKET_BALLS, 15, &item));
+    pksave_close(s);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -381,5 +450,12 @@ int main(void)
     RUN_TEST(test_platinum_set_box_slot_round_trip);
     RUN_TEST(test_hgss_set_box_slot_round_trip);
     RUN_TEST(test_dp_set_box_slot_out_of_range);
+    RUN_TEST(test_dp_get_items_pocket);
+    RUN_TEST(test_platinum_get_items_pocket);
+    RUN_TEST(test_hgss_get_items_pocket);
+    RUN_TEST(test_dp_set_item_round_trip);
+    RUN_TEST(test_platinum_set_item_round_trip);
+    RUN_TEST(test_hgss_set_item_round_trip);
+    RUN_TEST(test_dp_set_item_out_of_range);
     return UNITY_END();
 }

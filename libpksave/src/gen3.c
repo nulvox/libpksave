@@ -680,18 +680,94 @@ int gen3_set_box_slot(pksave_save_t *s, uint8_t box, uint8_t slot,
     return g3_pc_write(s->sram, slot_off, lin, buf, G3_BOX_MON_SIZE);
 }
 
+/* ── bag / item pockets ──────────────────────────────────────────────────── */
+/* Gen III item slot = u16 id + u16 quantity, quantity XORed with low 16 bits
+ * of the section-0 security key. (RS key = 0 → no-op; FRLG key from sec0+0x0AF8.)
+ * Pockets sit inside section 1 (SaveBlock1) at game-specific offsets.        */
+
+struct g3_pocket_layout {
+    uint16_t off;        /* offset within section 1 data */
+    uint8_t  max_slots;
+};
+
+static int g3_pocket_layout(pksave_game_t game, pksave_pocket_t p,
+                            struct g3_pocket_layout *out)
+{
+    if (game == PKSAVE_GAME_FRLG) {
+        switch (p) {
+            case PKSAVE_POCKET_ITEMS:   out->off = 0x310; out->max_slots = 42; return PKSAVE_OK;
+            case PKSAVE_POCKET_KEY:     out->off = 0x3B8; out->max_slots = 30; return PKSAVE_OK;
+            case PKSAVE_POCKET_BALLS:   out->off = 0x430; out->max_slots = 13; return PKSAVE_OK;
+            case PKSAVE_POCKET_TM_HM:   out->off = 0x464; out->max_slots = 58; return PKSAVE_OK;
+            case PKSAVE_POCKET_BERRIES: out->off = 0x54C; out->max_slots = 43; return PKSAVE_OK;
+            default: return PKSAVE_ERR_GAME;
+        }
+    }
+    /* RS / Emerald (RS-layout; matches the fixture generator) */
+    switch (p) {
+        case PKSAVE_POCKET_ITEMS:   out->off = 0x560; out->max_slots = 20; return PKSAVE_OK;
+        case PKSAVE_POCKET_KEY:     out->off = 0x5B0; out->max_slots = 20; return PKSAVE_OK;
+        case PKSAVE_POCKET_BALLS:   out->off = 0x600; out->max_slots = 16; return PKSAVE_OK;
+        case PKSAVE_POCKET_TM_HM:   out->off = 0x640; out->max_slots = 64; return PKSAVE_OK;
+        case PKSAVE_POCKET_BERRIES: out->off = 0x740; out->max_slots = 46; return PKSAVE_OK;
+        default: return PKSAVE_ERR_GAME;
+    }
+}
+
 int gen3_get_pocket(pksave_save_t *s, pksave_pocket_t p, pksave_item_t *out, uint8_t *cnt)
 {
-    (void)s; (void)p; (void)out;
-    *cnt = 0;
+    struct g3_pocket_layout layout;
+    if (g3_pocket_layout(s->game, p, &layout) != PKSAVE_OK) {
+        *cnt = 0;
+        return PKSAVE_OK;
+    }
+
+    uint32_t slot_off = g3_active_slot(s->sram);
+    size_t s0 = g3_find_section(s->sram, slot_off, 0);
+    size_t s1 = g3_find_section(s->sram, slot_off, 1);
+    if (s0 == SIZE_MAX || s1 == SIZE_MAX) return PKSAVE_ERR_CORRUPT;
+
+    const uint8_t *sec0 = s->sram + s0;
+    const uint8_t *sec1 = s->sram + s1;
+    uint16_t qty_key = (uint16_t)(g3_security_key(sec0, s->game) & 0xFFFF);
+
+    uint8_t n = 0;
+    for (uint8_t i = 0; i < layout.max_slots; i++) {
+        const uint8_t *entry = sec1 + layout.off + (size_t)i * 4;
+        uint16_t id, qty;
+        memcpy(&id,  entry,     2);
+        memcpy(&qty, entry + 2, 2);
+        if (id == 0) break;          /* first empty slot terminates */
+        out[n].item_id  = id;
+        out[n].quantity = (uint16_t)(qty ^ qty_key);
+        n++;
+    }
+    *cnt = n;
     return PKSAVE_OK;
 }
 
 int gen3_set_item(pksave_save_t *s, pksave_pocket_t p, uint8_t slot,
                    const pksave_item_t *item)
 {
-    (void)s; (void)p; (void)slot; (void)item;
-    return PKSAVE_ERR_RANGE;
+    struct g3_pocket_layout layout;
+    if (g3_pocket_layout(s->game, p, &layout) != PKSAVE_OK) return PKSAVE_ERR_GAME;
+    if (slot >= layout.max_slots) return PKSAVE_ERR_RANGE;
+
+    uint32_t slot_off = g3_active_slot(s->sram);
+    size_t s0 = g3_find_section(s->sram, slot_off, 0);
+    size_t s1 = g3_find_section(s->sram, slot_off, 1);
+    if (s0 == SIZE_MAX || s1 == SIZE_MAX) return PKSAVE_ERR_CORRUPT;
+
+    const uint8_t *sec0 = s->sram + s0;
+    uint8_t *sec1 = s->sram + s1;
+    uint16_t qty_key = (uint16_t)(g3_security_key(sec0, s->game) & 0xFFFF);
+
+    uint8_t *entry = sec1 + layout.off + (size_t)slot * 4;
+    uint16_t id = item->item_id;
+    uint16_t qty = (uint16_t)(item->quantity ^ qty_key);
+    memcpy(entry,     &id,  2);
+    memcpy(entry + 2, &qty, 2);
+    return PKSAVE_OK;
 }
 
 /* ── checksum ────────────────────────────────────────────────────────────── */

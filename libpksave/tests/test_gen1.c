@@ -289,6 +289,80 @@ void test_rb_set_box_slot_out_of_range(void)
     pksave_close(s);
 }
 
+/* ── Gen I bag / items pocket ── */
+
+void test_rb_get_items_pocket(void)
+{
+    if (!load_fixture("rb.sav", rb_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_item_t items[20];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_get_pocket(s, PKSAVE_POCKET_ITEMS, items, &count));
+    TEST_ASSERT_EQUAL_UINT8(3, count);
+    TEST_ASSERT_EQUAL_UINT16(0x01, items[0].item_id);   /* Master Ball */
+    TEST_ASSERT_EQUAL_UINT16(1,    items[0].quantity);
+    TEST_ASSERT_EQUAL_UINT16(0x14, items[1].item_id);   /* Potion */
+    TEST_ASSERT_EQUAL_UINT16(10,   items[1].quantity);
+    TEST_ASSERT_EQUAL_UINT16(0x0B, items[2].item_id);   /* Antidote */
+    TEST_ASSERT_EQUAL_UINT16(5,    items[2].quantity);
+    pksave_close(s);
+}
+
+void test_rb_other_pockets_empty(void)
+{
+    /* Gen I only has an ITEMS pocket. The other pocket IDs should report
+     * 0 items rather than ERR_GAME, so frontends can iterate uniformly. */
+    if (!load_fixture("rb.sav", rb_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_item_t items[1];
+    uint8_t count = 99;
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_get_pocket(s, PKSAVE_POCKET_BALLS, items, &count));
+    TEST_ASSERT_EQUAL_UINT8(0, count);
+    pksave_close(s);
+}
+
+void test_rb_set_item_round_trip(void)
+{
+    if (!load_fixture("rb.sav", rb_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_item_t new_item = { .item_id = 0x4A, .quantity = 99 }; /* Full Heal */
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_set_item(s, PKSAVE_POCKET_ITEMS, 1, &new_item));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_item_t items[20];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_get_pocket(s, PKSAVE_POCKET_ITEMS, items, &count));
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT8(2, count);
+    TEST_ASSERT_EQUAL_UINT16(0x4A, items[1].item_id);
+    TEST_ASSERT_EQUAL_UINT16(99,   items[1].quantity);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB));
+    pksave_close(s);
+}
+
+void test_rb_set_item_out_of_range(void)
+{
+    if (!load_fixture("rb.sav", rb_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_item_t item = { .item_id = 1, .quantity = 1 };
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE,
+        pksave_set_item(s, PKSAVE_POCKET_ITEMS, 20, &item));
+    pksave_close(s);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -305,5 +379,9 @@ int main(void)
     RUN_TEST(test_rb_get_stored_box_with_mon);
     RUN_TEST(test_rb_set_stored_box_slot_round_trip);
     RUN_TEST(test_rb_set_box_slot_out_of_range);
+    RUN_TEST(test_rb_get_items_pocket);
+    RUN_TEST(test_rb_other_pockets_empty);
+    RUN_TEST(test_rb_set_item_round_trip);
+    RUN_TEST(test_rb_set_item_out_of_range);
     return UNITY_END();
 }
