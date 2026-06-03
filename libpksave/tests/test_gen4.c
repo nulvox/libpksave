@@ -200,17 +200,75 @@ void test_hgss_checksum_valid_after_flush(void)
         pksave_validate_checksum(hgss_buf, SRAM_SIZE, PKSAVE_GAME_HGSS));
 }
 
+/* Party-write round-trip: re-encrypt with checksum-seeded PRNG, write
+ * the four 32-byte substructs.  Validates that an edited Pokémon decrypts
+ * back to the values written and that the block CRC remains valid. */
+static void gen4_party_round_trip(uint8_t *buf, pksave_game_t game,
+                                   const char *fixture)
+{
+    if (!load_fixture(fixture, buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(buf, SRAM_SIZE, game);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_pokemon_t party[6];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party(s, party, &count));
+    TEST_ASSERT_GREATER_THAN(0, (int)count);
+
+    party[0].species  = 7;      /* Squirtle */
+    party[0].level    = 60;
+    party[0].held_item = 1;     /* Master Ball */
+    party[0].move_ids[0] = 55;  /* Water Gun */
+    party[0].move_pp[0]  = 25;
+    party[0].evs[0]   = 200;
+    party[0].evs[3]   = 150;
+    party[0].ivs[0]   = 25;
+    party[0].ivs[3]   = 31;
+    party[0].stat[0]  = 200;
+
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_party_slot(s, 0, &party[0]));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(buf, SRAM_SIZE, game);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party(s, party, &count));
+    TEST_ASSERT_EQUAL_UINT16(7, party[0].species);
+    TEST_ASSERT_EQUAL_UINT8(60, party[0].level);
+    TEST_ASSERT_EQUAL_UINT16(1, party[0].held_item);
+    TEST_ASSERT_EQUAL_UINT8(55, party[0].move_ids[0]);
+    TEST_ASSERT_EQUAL_UINT8(25, party[0].move_pp[0]);
+    TEST_ASSERT_EQUAL_UINT8(200, party[0].evs[0]);
+    TEST_ASSERT_EQUAL_UINT8(150, party[0].evs[3]);
+    TEST_ASSERT_EQUAL_UINT8(25, party[0].ivs[0]);
+    TEST_ASSERT_EQUAL_UINT8(31, party[0].ivs[3]);
+    TEST_ASSERT_EQUAL_UINT16(200, party[0].stat[0]);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(buf, SRAM_SIZE, game));
+    pksave_close(s);
+}
+
+void test_dp_party_slot_round_trip(void)
+    { gen4_party_round_trip(dp_buf, PKSAVE_GAME_DP, "dp.sav"); }
+void test_platinum_party_slot_round_trip(void)
+    { gen4_party_round_trip(platinum_buf, PKSAVE_GAME_PLATINUM, "platinum.sav"); }
+void test_hgss_party_slot_round_trip(void)
+    { gen4_party_round_trip(hgss_buf, PKSAVE_GAME_HGSS, "hgss.sav"); }
+
 int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_dp_trainer_round_trip);
     RUN_TEST(test_dp_party_slot0);
     RUN_TEST(test_dp_checksum_valid_after_flush);
+    RUN_TEST(test_dp_party_slot_round_trip);
     RUN_TEST(test_platinum_trainer_round_trip);
     RUN_TEST(test_platinum_party_slot0);
     RUN_TEST(test_platinum_checksum_valid_after_flush);
+    RUN_TEST(test_platinum_party_slot_round_trip);
     RUN_TEST(test_hgss_trainer_round_trip);
     RUN_TEST(test_hgss_party_slot0);
     RUN_TEST(test_hgss_checksum_valid_after_flush);
+    RUN_TEST(test_hgss_party_slot_round_trip);
     return UNITY_END();
 }

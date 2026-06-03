@@ -213,8 +213,96 @@ int gen5_get_party(pksave_save_t *s, pksave_pokemon_t out[6], uint8_t *count)
     return PKSAVE_OK;
 }
 
+/* Encode mon into the 236-byte party slot at `dst`.  Algorithm matches Gen IV
+ * (checksum-seeded PRNG over 128 bytes of 4×32-byte substructs); only the
+ * containing block base offset differs. */
+static void g5_encode_mon(uint8_t *dst, const pksave_pokemon_t *mon)
+{
+    uint32_t pid; memcpy(&pid, dst, 4);
+    uint16_t old_chk; memcpy(&old_chk, dst + 0x06, 2);
+
+    uint8_t dec[128];
+    g5_decrypt(dst + 0x08, old_chk, dec);
+
+    const uint8_t *ord = g5_suborder[pid % 24];
+    int gp = 0, ap = 0, ep = 0, mp = 0;
+    for (int i = 0; i < 4; i++) {
+        if      (ord[i] == 0) gp = i * 32;
+        else if (ord[i] == 1) ap = i * 32;
+        else if (ord[i] == 2) ep = i * 32;
+        else                  mp = i * 32;
+    }
+
+    uint16_t sp = mon->species;   memcpy(dec + gp,     &sp, 2);
+    uint16_t it = mon->held_item; memcpy(dec + gp + 2, &it, 2);
+
+    for (int i = 0; i < 4; i++) {
+        uint16_t mv = mon->move_ids[i];
+        memcpy(dec + ap + i*2, &mv, 2);
+        dec[ap + 8 + i] = mon->move_pp[i];
+    }
+
+    dec[ep + 0] = (uint8_t)mon->evs[0];
+    dec[ep + 1] = (uint8_t)mon->evs[1];
+    dec[ep + 2] = (uint8_t)mon->evs[2];
+    dec[ep + 3] = (uint8_t)mon->evs[5];
+    dec[ep + 4] = (uint8_t)mon->evs[3];
+    dec[ep + 5] = (uint8_t)mon->evs[4];
+
+    uint32_t iv;
+    memcpy(&iv, dec + mp, 4);
+    uint32_t preserved = iv & 0xC0000000u;
+    iv = preserved
+       | ((uint32_t)(mon->ivs[0] & 0x1F))
+       | ((uint32_t)(mon->ivs[1] & 0x1F) << 5)
+       | ((uint32_t)(mon->ivs[2] & 0x1F) << 10)
+       | ((uint32_t)(mon->ivs[5] & 0x1F) << 15)
+       | ((uint32_t)(mon->ivs[3] & 0x1F) << 20)
+       | ((uint32_t)(mon->ivs[4] & 0x1F) << 25);
+    memcpy(dec + mp, &iv, 4);
+
+    uint32_t sum = 0;
+    for (int i = 0; i < 128; i += 2) {
+        uint16_t w; memcpy(&w, dec + i, 2);
+        sum += w;
+    }
+    uint16_t new_chk = (uint16_t)sum;
+    memcpy(dst + 0x06, &new_chk, 2);
+
+    g5_decrypt(dec, new_chk, dst + 0x08);
+
+    dst[0x8C] = mon->level;
+
+    uint16_t v;
+    v = mon->stat[0]; memcpy(dst + 0x8E, &v, 2);
+    v = mon->stat[0]; memcpy(dst + 0x90, &v, 2);
+    v = mon->stat[1]; memcpy(dst + 0x92, &v, 2);
+    v = mon->stat[2]; memcpy(dst + 0x94, &v, 2);
+    v = mon->stat[5]; memcpy(dst + 0x96, &v, 2);
+    v = mon->stat[3]; memcpy(dst + 0x98, &v, 2);
+    v = mon->stat[4]; memcpy(dst + 0x9A, &v, 2);
+}
+
 int gen5_set_party_slot(pksave_save_t *s, uint8_t slot, const pksave_pokemon_t *mon)
-    { (void)s; (void)slot; (void)mon; return PKSAVE_ERR_RANGE; }
+{
+    if (slot >= 6) return PKSAVE_ERR_RANGE;
+
+    uint32_t bsz  = g5_general_size(s->game);
+    uint32_t base = g5_active_block(s->sram, bsz);
+    uint8_t *blk  = s->sram + base;
+
+    uint32_t cnt;
+    memcpy(&cnt, blk + G5_PARTY_CNT_OFF, 4);
+
+    uint8_t *dst = blk + G5_PARTY_DATA_OFF + (size_t)slot * G5_MON_SIZE;
+    g5_encode_mon(dst, mon);
+
+    if ((uint32_t)slot >= cnt) {
+        cnt = (uint32_t)slot + 1;
+        memcpy(blk + G5_PARTY_CNT_OFF, &cnt, 4);
+    }
+    return PKSAVE_OK;
+}
 
 int gen5_get_box(pksave_save_t *s, uint8_t box, pksave_pokemon_t out[30], uint8_t *cnt)
     { (void)s; (void)box; (void)out; *cnt = 0; return PKSAVE_OK; }

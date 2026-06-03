@@ -7,11 +7,11 @@ is committed **and** `make test` passes for that item.
 
 ## Party write
 
-- [ ] `gen1_set_party_slot` — encode 44-byte party struct, recompute DVs and stat exp
-- [ ] `gen2_set_party_slot` — encode 48-byte struct (BE TID, BCD money region, friendship)
-- [ ] `gen3_set_party_slot` — re-encrypt with PID^(TID|SID<<16) PRNG, recompute section checksum
-- [ ] `gen4_set_party_slot` — re-encrypt with checksum PRNG, write 32-byte substructs
-- [ ] `gen5_set_party_slot` — same algorithm as Gen IV, different block base offset
+- [x] `gen1_set_party_slot` — encode 44-byte party struct, recompute DVs and stat exp
+- [x] `gen2_set_party_slot` — encode 48-byte struct (BE TID, BCD money region, friendship)
+- [x] `gen3_set_party_slot` — re-encrypt with PID^(TID|SID<<16) PRNG, recompute section checksum
+- [x] `gen4_set_party_slot` — re-encrypt with checksum PRNG, write 32-byte substructs
+- [x] `gen5_set_party_slot` — same algorithm as Gen IV, different block base offset
 
 ## PC box read
 

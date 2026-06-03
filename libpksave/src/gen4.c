@@ -242,8 +242,107 @@ int gen4_get_party(pksave_save_t *s, pksave_pokemon_t out[6], uint8_t *count)
     return PKSAVE_OK;
 }
 
+/* Encode mon into the 236-byte party slot at `dst`.  Decrypts the existing
+ * 128-byte substruct region (using its stored checksum), overwrites the
+ * fields exposed by pksave_pokemon_t, computes a new checksum from the
+ * modified plaintext, then re-encrypts under the new checksum seed. */
+static void g4_encode_mon(uint8_t *dst, const pksave_pokemon_t *mon)
+{
+    uint32_t pid; memcpy(&pid, dst, 4);
+    uint16_t old_chk; memcpy(&old_chk, dst + 0x06, 2);
+
+    uint8_t dec[128];
+    g4_decrypt(dst + 0x08, old_chk, dec);
+
+    const uint8_t *ord = g4_suborder[pid % 24];
+    int gp = 0, ap = 0, ep = 0, mp = 0;
+    for (int i = 0; i < 4; i++) {
+        if      (ord[i] == 0) gp = i * 32;
+        else if (ord[i] == 1) ap = i * 32;
+        else if (ord[i] == 2) ep = i * 32;
+        else                  mp = i * 32;
+    }
+
+    /* Growth (Block A): species(2), item(2) */
+    uint16_t sp = mon->species;   memcpy(dec + gp,     &sp, 2);
+    uint16_t it = mon->held_item; memcpy(dec + gp + 2, &it, 2);
+
+    /* Attacks (Block B): moves(2 each), PP(1 each) */
+    for (int i = 0; i < 4; i++) {
+        uint16_t mv = mon->move_ids[i];
+        memcpy(dec + ap + i*2, &mv, 2);
+        dec[ap + 8 + i] = mon->move_pp[i];
+    }
+
+    /* EVs (Block C): HP,Atk,Def,Spd,SpA,SpD at ep+0..5 */
+    dec[ep + 0] = (uint8_t)mon->evs[0];
+    dec[ep + 1] = (uint8_t)mon->evs[1];
+    dec[ep + 2] = (uint8_t)mon->evs[2];
+    dec[ep + 3] = (uint8_t)mon->evs[5];
+    dec[ep + 4] = (uint8_t)mon->evs[3];
+    dec[ep + 5] = (uint8_t)mon->evs[4];
+
+    /* Misc (Block D): IVs packed (5 bits each), preserve bits 30-31 */
+    uint32_t iv;
+    memcpy(&iv, dec + mp, 4);
+    uint32_t preserved = iv & 0xC0000000u;
+    iv = preserved
+       | ((uint32_t)(mon->ivs[0] & 0x1F))
+       | ((uint32_t)(mon->ivs[1] & 0x1F) << 5)
+       | ((uint32_t)(mon->ivs[2] & 0x1F) << 10)
+       | ((uint32_t)(mon->ivs[5] & 0x1F) << 15)
+       | ((uint32_t)(mon->ivs[3] & 0x1F) << 20)
+       | ((uint32_t)(mon->ivs[4] & 0x1F) << 25);
+    memcpy(dec + mp, &iv, 4);
+
+    /* New checksum = 16-bit sum of uint16 words in modified plaintext */
+    uint32_t sum = 0;
+    for (int i = 0; i < 128; i += 2) {
+        uint16_t w; memcpy(&w, dec + i, 2);
+        sum += w;
+    }
+    uint16_t new_chk = (uint16_t)sum;
+    memcpy(dst + 0x06, &new_chk, 2);
+
+    /* Re-encrypt under the new checksum-seeded PRNG.  g4_decrypt is its own
+     * inverse because XOR is symmetric and the seed schedule only depends
+     * on the initial seed. */
+    g4_decrypt(dec, new_chk, dst + 0x08);
+
+    /* Party extras: level at 0x8C, stats at 0x90..0x9A */
+    dst[0x8C] = mon->level;
+
+    uint16_t v;
+    v = mon->stat[0]; memcpy(dst + 0x8E, &v, 2);  /* current HP = max */
+    v = mon->stat[0]; memcpy(dst + 0x90, &v, 2);
+    v = mon->stat[1]; memcpy(dst + 0x92, &v, 2);
+    v = mon->stat[2]; memcpy(dst + 0x94, &v, 2);
+    v = mon->stat[5]; memcpy(dst + 0x96, &v, 2);
+    v = mon->stat[3]; memcpy(dst + 0x98, &v, 2);
+    v = mon->stat[4]; memcpy(dst + 0x9A, &v, 2);
+}
+
 int gen4_set_party_slot(pksave_save_t *s, uint8_t slot, const pksave_pokemon_t *mon)
-    { (void)s; (void)slot; (void)mon; return PKSAVE_ERR_RANGE; }
+{
+    if (slot >= 6) return PKSAVE_ERR_RANGE;
+
+    uint32_t bsz  = g4_general_size(s->game);
+    uint32_t base = g4_active_block(s->sram, bsz);
+    uint8_t *blk  = s->sram + base;
+    uint32_t off  = g4_party_off(s->game);
+
+    uint32_t cnt;
+    memcpy(&cnt, blk + off, 4);
+
+    uint8_t *dst = blk + off + 4 + (size_t)slot * G4_MON_SIZE;
+    g4_encode_mon(dst, mon);
+
+    if ((uint32_t)slot >= cnt) {
+        cnt = (uint32_t)slot + 1;
+        memcpy(blk + off, &cnt, 4);
+    }
+    return PKSAVE_OK;
+}
 
 int gen4_get_box(pksave_save_t *s, uint8_t box, pksave_pokemon_t out[30], uint8_t *cnt)
     { (void)s; (void)box; (void)out; *cnt = 0; return PKSAVE_OK; }

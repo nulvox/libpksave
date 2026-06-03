@@ -308,10 +308,130 @@ int gen3_get_party(pksave_save_t *s, pksave_pokemon_t out[6], uint8_t *count)
     return PKSAVE_OK;
 }
 
+/* Encode mon into the 100-byte party slot starting at `dst`.
+ * Decrypts existing substructs first so untouched fields (exp, friendship,
+ * contest stats, met data, etc.) survive the write.  Then overwrites the
+ * fields exposed by pksave_pokemon_t, recomputes the checksum, and
+ * re-encrypts. */
+static void g3_encode_mon(uint8_t *dst, const pksave_pokemon_t *mon,
+                          uint16_t trainer_tid, uint16_t trainer_sid)
+{
+    uint32_t pid; memcpy(&pid, dst, 4);
+    uint16_t tid; memcpy(&tid, dst + 4, 2);
+    uint16_t sid; memcpy(&sid, dst + 6, 2);
+    if (tid == 0 && sid == 0) {  /* fresh slot — inherit from trainer */
+        tid = trainer_tid;
+        sid = trainer_sid;
+        memcpy(dst + 4, &tid, 2);
+        memcpy(dst + 6, &sid, 2);
+    }
+
+    uint32_t key = pid ^ ((uint32_t)tid | ((uint32_t)sid << 16));
+
+    uint8_t dec[48];
+    g3_crypt(dst + 0x20, key, dec);
+
+    const uint8_t *ord = g3_suborder[pid % 24];
+    int gp = 0, ap = 0, ep = 0, mp = 0;
+    for (int i = 0; i < 4; i++) {
+        if      (ord[i] == 0) gp = i * 12;
+        else if (ord[i] == 1) ap = i * 12;
+        else if (ord[i] == 2) ep = i * 12;
+        else                  mp = i * 12;
+    }
+
+    /* Growth: species(2), held_item(2) */
+    uint16_t sp = mon->species;     memcpy(dec + gp,     &sp, 2);
+    uint16_t it = mon->held_item;   memcpy(dec + gp + 2, &it, 2);
+
+    /* Attacks: 4 moves (2 each), 4 PP (1 each) */
+    for (int i = 0; i < 4; i++) {
+        uint16_t mv = mon->move_ids[i];
+        memcpy(dec + ap + i*2, &mv, 2);
+        dec[ap + 8 + i] = mon->move_pp[i];
+    }
+
+    /* EVs at ep+0..5: HP,Atk,Def,Spd,SpA,SpD (1 each, Gen III capped at 255) */
+    dec[ep + 0] = (uint8_t)mon->evs[0];
+    dec[ep + 1] = (uint8_t)mon->evs[1];
+    dec[ep + 2] = (uint8_t)mon->evs[2];
+    dec[ep + 3] = (uint8_t)mon->evs[5];
+    dec[ep + 4] = (uint8_t)mon->evs[3];
+    dec[ep + 5] = (uint8_t)mon->evs[4];
+
+    /* Misc IVs: bits 0-4=HP, 5-9=Atk, 10-14=Def, 15-19=Spd, 20-24=SpA, 25-29=SpD;
+     * preserve bits 30-31 (egg/nicknamed flags). */
+    uint32_t iv;
+    memcpy(&iv, dec + mp, 4);
+    uint32_t preserved = iv & 0xC0000000u;
+    iv = preserved
+       | ((uint32_t)(mon->ivs[0] & 0x1F))
+       | ((uint32_t)(mon->ivs[1] & 0x1F) << 5)
+       | ((uint32_t)(mon->ivs[2] & 0x1F) << 10)
+       | ((uint32_t)(mon->ivs[5] & 0x1F) << 15)
+       | ((uint32_t)(mon->ivs[3] & 0x1F) << 20)
+       | ((uint32_t)(mon->ivs[4] & 0x1F) << 25);
+    memcpy(dec + mp, &iv, 4);
+
+    /* Checksum = 16-bit sum of uint16 words in unencrypted substructs */
+    uint32_t sum = 0;
+    for (int i = 0; i < 48; i += 2) {
+        uint16_t w; memcpy(&w, dec + i, 2);
+        sum += w;
+    }
+    uint16_t checksum = (uint16_t)sum;
+    memcpy(dst + 0x1C, &checksum, 2);
+
+    /* Encrypt back into the slot */
+    g3_crypt(dec, key, dst + 0x20);
+
+    /* OT name and nickname (raw byte writes; charset handled by gen3_encode_name) */
+    gen3_encode_name(mon->ot_name,  dst + 0x14, 7);
+    gen3_encode_name(mon->nickname, dst + 0x08, 10);
+
+    /* Party extras: status@0x50(4), level@0x52, mail@0x53, currentHP@0x54,
+     * maxHP@0x56, Atk@0x58, Def@0x5A, Spd@0x5C, SpA@0x5E, SpD@0x60 */
+    dst[0x52] = mon->level;
+
+    uint16_t v;
+    v = mon->stat[0]; memcpy(dst + 0x54, &v, 2);  /* current HP = max */
+    v = mon->stat[0]; memcpy(dst + 0x56, &v, 2);
+    v = mon->stat[1]; memcpy(dst + 0x58, &v, 2);
+    v = mon->stat[2]; memcpy(dst + 0x5A, &v, 2);
+    v = mon->stat[5]; memcpy(dst + 0x5C, &v, 2);
+    v = mon->stat[3]; memcpy(dst + 0x5E, &v, 2);
+    v = mon->stat[4]; memcpy(dst + 0x60, &v, 2);
+}
+
 int gen3_set_party_slot(pksave_save_t *s, uint8_t slot, const pksave_pokemon_t *mon)
 {
-    (void)s; (void)slot; (void)mon;
-    return PKSAVE_ERR_RANGE;
+    if (slot >= 6) return PKSAVE_ERR_RANGE;
+
+    uint32_t slot_off = g3_active_slot(s->sram);
+    size_t s0 = g3_find_section(s->sram, slot_off, 0);
+    size_t s1 = g3_find_section(s->sram, slot_off, 1);
+    if (s0 == SIZE_MAX || s1 == SIZE_MAX) return PKSAVE_ERR_CORRUPT;
+
+    uint8_t *sec0 = s->sram + s0;
+    uint8_t *sec1 = s->sram + s1;
+
+    uint16_t trainer_tid, trainer_sid;
+    memcpy(&trainer_tid, sec0 + 0x00A, 2);
+    memcpy(&trainer_sid, sec0 + 0x00C, 2);
+
+    uint32_t cnt;
+    memcpy(&cnt, sec1 + g3_team_cnt_off(s->game), 4);
+
+    uint16_t doff = g3_team_data_off(s->game);
+    uint8_t *dst = sec1 + doff + (size_t)slot * G3_MON_SIZE;
+
+    g3_encode_mon(dst, mon, trainer_tid, trainer_sid);
+
+    if ((uint32_t)slot >= cnt) {
+        cnt = (uint32_t)slot + 1;
+        memcpy(sec1 + g3_team_cnt_off(s->game), &cnt, 4);
+    }
+    return PKSAVE_OK;
 }
 
 int gen3_get_box(pksave_save_t *s, uint8_t box, pksave_pokemon_t out[30], uint8_t *cnt)
