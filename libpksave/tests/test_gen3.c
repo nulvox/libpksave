@@ -258,6 +258,69 @@ void test_emerald_party_slot_round_trip(void)
 void test_frlg_party_slot_round_trip(void)
     { gen3_party_round_trip(frlg_buf, PKSAVE_GAME_FRLG, "frlg.sav"); }
 
+/* ── Gen III PC box read ── */
+
+void test_rs_box_count(void)
+{
+    if (!load_fixture("rs.sav", rs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQUAL_INT(14, pksave_get_box_count(s));
+    pksave_close(s);
+}
+
+void test_rs_get_box_out_of_range(void)
+{
+    if (!load_fixture("rs.sav", rs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE, pksave_get_box(s, 14, box, &count));
+    pksave_close(s);
+}
+
+void test_rs_get_box_with_mon(void)
+{
+    if (!load_fixture("rs.sav", rs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    /* Fixture populates box 1 slot 0 with Bulbasaur (national dex 1) */
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    TEST_ASSERT_EQUAL_UINT8(30, count);             /* fixed 30-slot box */
+    TEST_ASSERT_EQUAL_UINT16(1, box[0].species);    /* Bulbasaur */
+    TEST_ASSERT_EQUAL_UINT8(33, box[0].move_ids[0]); /* Tackle */
+    /* slot 1 should be empty (species 0) */
+    TEST_ASSERT_EQUAL_UINT16(0, box[1].species);
+    pksave_close(s);
+}
+
+void test_emerald_get_box_with_mon(void)
+{
+    if (!load_fixture("emerald.sav", emerald_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(emerald_buf, SRAM_SIZE, PKSAVE_GAME_EMERALD);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    TEST_ASSERT_EQUAL_UINT16(1, box[0].species);
+    pksave_close(s);
+}
+
+void test_frlg_get_box_with_mon(void)
+{
+    if (!load_fixture("frlg.sav", frlg_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(frlg_buf, SRAM_SIZE, PKSAVE_GAME_FRLG);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    TEST_ASSERT_EQUAL_UINT16(1, box[0].species);
+    pksave_close(s);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -273,5 +336,10 @@ int main(void)
     RUN_TEST(test_frlg_party_slot0);
     RUN_TEST(test_frlg_checksum_valid_after_flush);
     RUN_TEST(test_frlg_party_slot_round_trip);
+    RUN_TEST(test_rs_box_count);
+    RUN_TEST(test_rs_get_box_out_of_range);
+    RUN_TEST(test_rs_get_box_with_mon);
+    RUN_TEST(test_emerald_get_box_with_mon);
+    RUN_TEST(test_frlg_get_box_with_mon);
     return UNITY_END();
 }

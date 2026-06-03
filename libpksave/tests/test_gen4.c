@@ -255,6 +255,50 @@ void test_platinum_party_slot_round_trip(void)
 void test_hgss_party_slot_round_trip(void)
     { gen4_party_round_trip(hgss_buf, PKSAVE_GAME_HGSS, "hgss.sav"); }
 
+/* ── Gen IV PC box read ── */
+
+void test_dp_box_count(void)
+{
+    if (!load_fixture("dp.sav", dp_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(dp_buf, SRAM_SIZE, PKSAVE_GAME_DP);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQUAL_INT(18, pksave_get_box_count(s));
+    pksave_close(s);
+}
+
+void test_dp_get_box_out_of_range(void)
+{
+    if (!load_fixture("dp.sav", dp_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(dp_buf, SRAM_SIZE, PKSAVE_GAME_DP);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE, pksave_get_box(s, 18, box, &count));
+    pksave_close(s);
+}
+
+static void gen4_box_with_mon(uint8_t *buf, pksave_game_t game, const char *fixture)
+{
+    if (!load_fixture(fixture, buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(buf, SRAM_SIZE, game);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    TEST_ASSERT_EQUAL_UINT8(30, count);
+    TEST_ASSERT_EQUAL_UINT16(1, box[0].species);    /* Bulbasaur */
+    TEST_ASSERT_EQUAL_UINT8(33, box[0].move_ids[0]); /* Tackle */
+    TEST_ASSERT_EQUAL_UINT16(0, box[1].species);    /* slot 1 empty */
+    pksave_close(s);
+}
+
+void test_dp_get_box_with_mon(void)
+    { gen4_box_with_mon(dp_buf, PKSAVE_GAME_DP, "dp.sav"); }
+void test_platinum_get_box_with_mon(void)
+    { gen4_box_with_mon(platinum_buf, PKSAVE_GAME_PLATINUM, "platinum.sav"); }
+void test_hgss_get_box_with_mon(void)
+    { gen4_box_with_mon(hgss_buf, PKSAVE_GAME_HGSS, "hgss.sav"); }
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -270,5 +314,10 @@ int main(void)
     RUN_TEST(test_hgss_party_slot0);
     RUN_TEST(test_hgss_checksum_valid_after_flush);
     RUN_TEST(test_hgss_party_slot_round_trip);
+    RUN_TEST(test_dp_box_count);
+    RUN_TEST(test_dp_get_box_out_of_range);
+    RUN_TEST(test_dp_get_box_with_mon);
+    RUN_TEST(test_platinum_get_box_with_mon);
+    RUN_TEST(test_hgss_get_box_with_mon);
     return UNITY_END();
 }

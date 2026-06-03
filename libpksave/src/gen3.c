@@ -434,10 +434,116 @@ int gen3_set_party_slot(pksave_save_t *s, uint8_t slot, const pksave_pokemon_t *
     return PKSAVE_OK;
 }
 
+/* PC storage spans sections 5..13 as a single linear byte array:
+ *   { u8 currentBox; BoxPokemon boxes[14][30]; u8 boxNames[14][9];
+ *     u8 boxWallpapers[14]; }   (33741 bytes total)
+ * Sections 5..12 each contribute 3968 data bytes; section 13 contributes
+ * 2000 — together 33744 bytes of capacity. */
+#define G3_PC_FIRST_SEC      5U
+#define G3_PC_LAST_SEC       13U
+#define G3_PC_SEC_SIZE       3968U
+#define G3_PC_SEC13_SIZE     2000U
+#define G3_PC_REGULAR_TOTAL  (8U * G3_PC_SEC_SIZE)   /* sections 5..12 */
+
+#define G3_SLOTS_PER_BOX     30U
+#define G3_NUM_BOXES         14U
+
+static int g3_pc_read(const uint8_t *sram, uint32_t slot_off,
+                       uint32_t lin_off, uint8_t *dst, size_t len)
+{
+    while (len > 0) {
+        uint16_t sec_idx;
+        uint32_t within, sec_data_size;
+        if (lin_off < G3_PC_REGULAR_TOTAL) {
+            sec_idx = (uint16_t)(G3_PC_FIRST_SEC + lin_off / G3_PC_SEC_SIZE);
+            within  = lin_off % G3_PC_SEC_SIZE;
+            sec_data_size = G3_PC_SEC_SIZE;
+        } else {
+            sec_idx = G3_PC_LAST_SEC;
+            within  = lin_off - G3_PC_REGULAR_TOTAL;
+            sec_data_size = G3_PC_SEC13_SIZE;
+        }
+        size_t sec_off = g3_find_section(sram, slot_off, sec_idx);
+        if (sec_off == SIZE_MAX) return PKSAVE_ERR_CORRUPT;
+        uint32_t avail = sec_data_size - within;
+        size_t take = (len < avail) ? len : avail;
+        memcpy(dst, sram + sec_off + within, take);
+        dst    += take;
+        lin_off += (uint32_t)take;
+        len    -= take;
+    }
+    return PKSAVE_OK;
+}
+
+/* Box mon (80 bytes): same layout as the encrypted portion of a party mon,
+ * without the party extras at 0x50+ (level/stats). */
+static void g3_decode_box_mon(const uint8_t *mon, pksave_pokemon_t *out)
+{
+    memset(out, 0, sizeof(*out));
+
+    uint32_t pid; memcpy(&pid, mon, 4);
+    uint16_t tid; memcpy(&tid, mon + 4, 2);
+    uint16_t sid; memcpy(&sid, mon + 6, 2);
+
+    if (pid == 0 && tid == 0 && sid == 0) return;   /* empty slot */
+
+    uint32_t key = pid ^ ((uint32_t)tid | ((uint32_t)sid << 16));
+
+    uint8_t dec[48];
+    g3_crypt(mon + 0x20, key, dec);
+
+    const uint8_t *ord = g3_suborder[pid % 24];
+    int gp = 0, ap = 0, ep = 0, mp = 0;
+    for (int i = 0; i < 4; i++) {
+        if      (ord[i] == 0) gp = i * 12;
+        else if (ord[i] == 1) ap = i * 12;
+        else if (ord[i] == 2) ep = i * 12;
+        else                  mp = i * 12;
+    }
+
+    uint16_t sp; memcpy(&sp, dec + gp, 2);     out->species   = sp;
+    uint16_t it; memcpy(&it, dec + gp + 2, 2); out->held_item = it;
+
+    for (int i = 0; i < 4; i++) {
+        uint16_t mv; memcpy(&mv, dec + ap + i*2, 2);
+        out->move_ids[i] = mv;
+        out->move_pp[i]  = dec[ap + 8 + i];
+    }
+
+    out->evs[0] = dec[ep];     out->evs[1] = dec[ep+1];
+    out->evs[2] = dec[ep+2];   out->evs[5] = dec[ep+3];
+    out->evs[3] = dec[ep+4];   out->evs[4] = dec[ep+5];
+
+    uint32_t iv; memcpy(&iv, dec + mp, 4);
+    out->ivs[0] = (uint8_t)((iv)      & 0x1F);
+    out->ivs[1] = (uint8_t)((iv >> 5) & 0x1F);
+    out->ivs[2] = (uint8_t)((iv >>10) & 0x1F);
+    out->ivs[5] = (uint8_t)((iv >>15) & 0x1F);
+    out->ivs[3] = (uint8_t)((iv >>20) & 0x1F);
+    out->ivs[4] = (uint8_t)((iv >>25) & 0x1F);
+
+    gen3_decode_name(mon + 0x14, out->ot_name,  sizeof(out->ot_name),  7);
+    gen3_decode_name(mon + 0x08, out->nickname, sizeof(out->nickname), 10);
+    /* Level/stats are not stored in box mons; level is recomputed from exp
+     * at withdrawal time. Leave level=0 and stat[6]=0. */
+}
+
 int gen3_get_box(pksave_save_t *s, uint8_t box, pksave_pokemon_t out[30], uint8_t *cnt)
 {
-    (void)s; (void)box; (void)out;
+    if (box >= G3_NUM_BOXES) return PKSAVE_ERR_RANGE;
     *cnt = 0;
+    uint32_t slot_off = g3_active_slot(s->sram);
+
+    for (uint8_t slot = 0; slot < G3_SLOTS_PER_BOX; slot++) {
+        uint8_t buf[G3_BOX_MON_SIZE];
+        uint32_t lin = 1U
+                     + (uint32_t)box  * G3_SLOTS_PER_BOX * G3_BOX_MON_SIZE
+                     + (uint32_t)slot * G3_BOX_MON_SIZE;
+        int rc = g3_pc_read(s->sram, slot_off, lin, buf, G3_BOX_MON_SIZE);
+        if (rc != PKSAVE_OK) return rc;
+        g3_decode_box_mon(buf, &out[slot]);
+    }
+    *cnt = G3_SLOTS_PER_BOX;
     return PKSAVE_OK;
 }
 

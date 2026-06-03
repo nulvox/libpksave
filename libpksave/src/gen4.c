@@ -344,8 +344,82 @@ int gen4_set_party_slot(pksave_save_t *s, uint8_t slot, const pksave_pokemon_t *
     return PKSAVE_OK;
 }
 
+/* ── PC box read ─────────────────────────────────────────────────────────── */
+
+/* The storage block follows the general block within the active slot.
+ * For synthetic-fixture purposes the layout in the storage block is:
+ *   +0x00: u32 currentBox
+ *   +0x04: BoxPokemon mons[18][30]   (136 bytes each, 73440 bytes total)
+ * The PRD calls for 18 boxes × 30 slots; offsets are PRD-consistent and
+ * survive round-trip through the fixture generator and library together.
+ */
+#define G4_PC_BOX_BASE     0x04U
+#define G4_SLOTS_PER_BOX   30U
+#define G4_NUM_BOXES       18U
+
+/* Active storage block (general block size away from active slot base). */
+static uint32_t g4_storage_off(const uint8_t *sram, pksave_game_t game)
+{
+    uint32_t bsz  = g4_general_size(game);
+    return g4_active_block(sram, bsz) + bsz;
+}
+
+static void g4_decode_box_mon(const uint8_t *mon, pksave_pokemon_t *out)
+{
+    memset(out, 0, sizeof(*out));
+
+    uint32_t pid; memcpy(&pid, mon, 4);
+    uint16_t checksum; memcpy(&checksum, mon + 0x06, 2);
+    if (pid == 0 && checksum == 0) return;   /* empty slot */
+
+    uint8_t dec[128];
+    g4_decrypt(mon + 0x08, checksum, dec);
+
+    const uint8_t *ord = g4_suborder[pid % 24];
+    int gp = 0, ap = 0, ep = 0, mp = 0;
+    for (int i = 0; i < 4; i++) {
+        if      (ord[i] == 0) gp = i * 32;
+        else if (ord[i] == 1) ap = i * 32;
+        else if (ord[i] == 2) ep = i * 32;
+        else                  mp = i * 32;
+    }
+
+    uint16_t sp; memcpy(&sp, dec + gp, 2);     out->species   = sp;
+    uint16_t it; memcpy(&it, dec + gp + 2, 2); out->held_item = it;
+
+    for (int i = 0; i < 4; i++) {
+        uint16_t mv; memcpy(&mv, dec + ap + i*2, 2);
+        out->move_ids[i] = mv;
+        out->move_pp[i]  = dec[ap + 8 + i];
+    }
+
+    out->evs[0] = dec[ep];     out->evs[1] = dec[ep+1];
+    out->evs[2] = dec[ep+2];   out->evs[5] = dec[ep+3];
+    out->evs[3] = dec[ep+4];   out->evs[4] = dec[ep+5];
+
+    uint32_t iv; memcpy(&iv, dec + mp, 4);
+    out->ivs[0] = (uint8_t)((iv)      & 0x1F);
+    out->ivs[1] = (uint8_t)((iv >> 5) & 0x1F);
+    out->ivs[2] = (uint8_t)((iv >>10) & 0x1F);
+    out->ivs[5] = (uint8_t)((iv >>15) & 0x1F);
+    out->ivs[3] = (uint8_t)((iv >>20) & 0x1F);
+    out->ivs[4] = (uint8_t)((iv >>25) & 0x1F);
+    /* Box mons have no party extras; level and stats stay 0. */
+}
+
 int gen4_get_box(pksave_save_t *s, uint8_t box, pksave_pokemon_t out[30], uint8_t *cnt)
-    { (void)s; (void)box; (void)out; *cnt = 0; return PKSAVE_OK; }
+{
+    if (box >= G4_NUM_BOXES) return PKSAVE_ERR_RANGE;
+    *cnt = 0;
+    uint32_t storage = g4_storage_off(s->sram, s->game);
+    const uint8_t *boxes = s->sram + storage + G4_PC_BOX_BASE;
+    for (uint8_t slot = 0; slot < G4_SLOTS_PER_BOX; slot++) {
+        size_t off = ((size_t)box * G4_SLOTS_PER_BOX + slot) * G4_BOX_MON_SIZE;
+        g4_decode_box_mon(boxes + off, &out[slot]);
+    }
+    *cnt = (uint8_t)G4_SLOTS_PER_BOX;
+    return PKSAVE_OK;
+}
 
 int gen4_set_box_slot(pksave_save_t *s, uint8_t box, uint8_t slot, const pksave_pokemon_t *mon)
     { (void)s; (void)box; (void)slot; (void)mon; return PKSAVE_ERR_RANGE; }
