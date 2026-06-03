@@ -557,6 +557,49 @@ void test_rs_set_item_out_of_range(void)
     pksave_close(s);
 }
 
+/* ── Gen III name lookups ── */
+
+void test_gen3_species_name_lookup(void)
+{
+    /* National dex order for #1-251; Hoenn species start at internal ID 277 */
+    TEST_ASSERT_EQUAL_STRING("Bulbasaur",  pksave_species_name(PKSAVE_GAME_RS, 1));
+    TEST_ASSERT_EQUAL_STRING("Pikachu",    pksave_species_name(PKSAVE_GAME_RS, 25));
+    TEST_ASSERT_EQUAL_STRING("Mewtwo",     pksave_species_name(PKSAVE_GAME_EMERALD, 150));
+    TEST_ASSERT_EQUAL_STRING("Celebi",     pksave_species_name(PKSAVE_GAME_RS, 251));
+    TEST_ASSERT_EQUAL_STRING("Treecko",    pksave_species_name(PKSAVE_GAME_RS, 277));
+    TEST_ASSERT_EQUAL_STRING("Blaziken",   pksave_species_name(PKSAVE_GAME_RS, 282));
+    TEST_ASSERT_EQUAL_STRING("Swampert",   pksave_species_name(PKSAVE_GAME_EMERALD, 285));
+    TEST_ASSERT_EQUAL_STRING("Rayquaza",   pksave_species_name(PKSAVE_GAME_EMERALD, 406));
+    TEST_ASSERT_EQUAL_STRING("Deoxys",     pksave_species_name(PKSAVE_GAME_EMERALD, 410));
+    TEST_ASSERT_EQUAL_STRING("Chimecho",   pksave_species_name(PKSAVE_GAME_EMERALD, 411));
+    TEST_ASSERT_EQUAL_STRING("Egg",        pksave_species_name(PKSAVE_GAME_EMERALD, 412));
+    TEST_ASSERT_EQUAL_STRING("???",        pksave_species_name(PKSAVE_GAME_RS, 65535));
+}
+
+void test_gen3_move_name_lookup(void)
+{
+    TEST_ASSERT_EQUAL_STRING("Pound",        pksave_move_name(PKSAVE_GAME_RS, 1));
+    TEST_ASSERT_EQUAL_STRING("Thunderbolt",  pksave_move_name(PKSAVE_GAME_RS, 85));
+    TEST_ASSERT_EQUAL_STRING("Struggle",     pksave_move_name(PKSAVE_GAME_EMERALD, 165));
+    TEST_ASSERT_EQUAL_STRING("Hidden Power", pksave_move_name(PKSAVE_GAME_RS, 237));
+    TEST_ASSERT_EQUAL_STRING("Volt Tackle",  pksave_move_name(PKSAVE_GAME_EMERALD, 344));
+    TEST_ASSERT_EQUAL_STRING("Psycho Boost", pksave_move_name(PKSAVE_GAME_EMERALD, 354));
+    TEST_ASSERT_EQUAL_STRING("???",          pksave_move_name(PKSAVE_GAME_RS, 0));
+    TEST_ASSERT_EQUAL_STRING("???",          pksave_move_name(PKSAVE_GAME_RS, 500));
+}
+
+void test_gen3_item_name_lookup(void)
+{
+    TEST_ASSERT_EQUAL_STRING("Master Ball", pksave_item_name(PKSAVE_GAME_RS, 1));
+    TEST_ASSERT_EQUAL_STRING("Potion",      pksave_item_name(PKSAVE_GAME_EMERALD, 13));
+    TEST_ASSERT_EQUAL_STRING("Rare Candy",  pksave_item_name(PKSAVE_GAME_RS, 68));
+    TEST_ASSERT_EQUAL_STRING("TM01",        pksave_item_name(PKSAVE_GAME_RS, 289));
+    TEST_ASSERT_EQUAL_STRING("TM50",        pksave_item_name(PKSAVE_GAME_EMERALD, 338));
+    TEST_ASSERT_EQUAL_STRING("HM01",        pksave_item_name(PKSAVE_GAME_RS, 339));
+    TEST_ASSERT_EQUAL_STRING("HM08",        pksave_item_name(PKSAVE_GAME_EMERALD, 346));
+    TEST_ASSERT_EQUAL_STRING("???",         pksave_item_name(PKSAVE_GAME_RS, 0));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -588,5 +631,8 @@ int main(void)
     RUN_TEST(test_rs_set_item_round_trip);
     RUN_TEST(test_emerald_set_item_round_trip);
     RUN_TEST(test_rs_set_item_out_of_range);
+    RUN_TEST(test_gen3_species_name_lookup);
+    RUN_TEST(test_gen3_move_name_lookup);
+    RUN_TEST(test_gen3_item_name_lookup);
     return UNITY_END();
 }

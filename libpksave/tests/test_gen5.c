@@ -358,6 +358,39 @@ void test_bw_set_item_out_of_range(void)
     pksave_close(s);
 }
 
+/* ── Gen V name lookups ── */
+
+void test_gen5_species_name_lookup(void)
+{
+    TEST_ASSERT_EQUAL_STRING("Bulbasaur",  pksave_species_name(PKSAVE_GAME_BW, 1));
+    TEST_ASSERT_EQUAL_STRING("Pikachu",    pksave_species_name(PKSAVE_GAME_BW, 25));
+    TEST_ASSERT_EQUAL_STRING("Arceus",     pksave_species_name(PKSAVE_GAME_BW2, 493));
+    TEST_ASSERT_EQUAL_STRING("Victini",    pksave_species_name(PKSAVE_GAME_BW, 494));
+    TEST_ASSERT_EQUAL_STRING("Snivy",      pksave_species_name(PKSAVE_GAME_BW, 495));
+    TEST_ASSERT_EQUAL_STRING("Reshiram",   pksave_species_name(PKSAVE_GAME_BW, 643));
+    TEST_ASSERT_EQUAL_STRING("Zekrom",     pksave_species_name(PKSAVE_GAME_BW, 644));
+    TEST_ASSERT_EQUAL_STRING("Genesect",   pksave_species_name(PKSAVE_GAME_BW2, 649));
+    TEST_ASSERT_EQUAL_STRING("???",        pksave_species_name(PKSAVE_GAME_BW, 0));
+}
+
+void test_gen5_move_name_lookup(void)
+{
+    TEST_ASSERT_EQUAL_STRING("Pound",        pksave_move_name(PKSAVE_GAME_BW, 1));
+    TEST_ASSERT_EQUAL_STRING("Thunderbolt",  pksave_move_name(PKSAVE_GAME_BW, 85));
+    TEST_ASSERT_EQUAL_STRING("Volt Tackle",  pksave_move_name(PKSAVE_GAME_BW2, 344));
+    TEST_ASSERT_EQUAL_STRING("V-create",     pksave_move_name(PKSAVE_GAME_BW2, 557));
+    TEST_ASSERT_EQUAL_STRING("Fusion Bolt",  pksave_move_name(PKSAVE_GAME_BW, 559));
+    TEST_ASSERT_EQUAL_STRING("???",          pksave_move_name(PKSAVE_GAME_BW, 0));
+}
+
+void test_gen5_item_name_lookup(void)
+{
+    TEST_ASSERT_EQUAL_STRING("Master Ball", pksave_item_name(PKSAVE_GAME_BW, 1));
+    TEST_ASSERT_EQUAL_STRING("Sport Ball",  pksave_item_name(PKSAVE_GAME_BW, 499));
+    TEST_ASSERT_EQUAL_STRING("Shiny Charm", pksave_item_name(PKSAVE_GAME_BW2, 632));
+    TEST_ASSERT_EQUAL_STRING("???",         pksave_item_name(PKSAVE_GAME_BW, 0));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -381,5 +414,8 @@ int main(void)
     RUN_TEST(test_bw_set_item_round_trip);
     RUN_TEST(test_bw2_set_item_round_trip);
     RUN_TEST(test_bw_set_item_out_of_range);
+    RUN_TEST(test_gen5_species_name_lookup);
+    RUN_TEST(test_gen5_move_name_lookup);
+    RUN_TEST(test_gen5_item_name_lookup);
     return UNITY_END();
 }
