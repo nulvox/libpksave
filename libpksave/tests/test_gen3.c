@@ -200,17 +200,78 @@ void test_frlg_checksum_valid_after_flush(void)
         pksave_validate_checksum(frlg_buf, SRAM_SIZE, PKSAVE_GAME_FRLG));
 }
 
+/* Party-write round-trip: re-encrypt with PID^(TID|SID<<16) PRNG, recompute
+ * section 1 checksum on flush.  Validates that an edited Pokémon decrypts
+ * back to the values written, and that section checksums remain valid. */
+static void gen3_party_round_trip(uint8_t *buf, pksave_game_t game,
+                                   const char *fixture)
+{
+    if (!load_fixture(fixture, buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(buf, SRAM_SIZE, game);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_pokemon_t party[6];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party(s, party, &count));
+    TEST_ASSERT_GREATER_THAN(0, (int)count);
+
+    party[0].species  = 4;      /* Charmander */
+    party[0].level    = 50;
+    party[0].held_item = 200;
+    party[0].move_ids[0] = 52;  /* Ember */
+    party[0].move_pp[0]  = 21;
+    party[0].evs[0]   = 100;
+    party[0].evs[1]   = 50;
+    party[0].ivs[0]   = 31;
+    party[0].ivs[1]   = 27;
+    party[0].ivs[5]   = 11;
+    party[0].stat[0]  = 123;    /* max HP */
+
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_party_slot(s, 0, &party[0]));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    /* Reopen and verify */
+    s = pksave_open(buf, SRAM_SIZE, game);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party(s, party, &count));
+    TEST_ASSERT_EQUAL_UINT16(4, party[0].species);
+    TEST_ASSERT_EQUAL_UINT8(50, party[0].level);
+    TEST_ASSERT_EQUAL_UINT16(200, party[0].held_item);
+    TEST_ASSERT_EQUAL_UINT8(52, party[0].move_ids[0]);
+    TEST_ASSERT_EQUAL_UINT8(21, party[0].move_pp[0]);
+    TEST_ASSERT_EQUAL_UINT8(100, party[0].evs[0]);
+    TEST_ASSERT_EQUAL_UINT8(50, party[0].evs[1]);
+    TEST_ASSERT_EQUAL_UINT8(31, party[0].ivs[0]);
+    TEST_ASSERT_EQUAL_UINT8(27, party[0].ivs[1]);
+    TEST_ASSERT_EQUAL_UINT8(11, party[0].ivs[5]);
+    TEST_ASSERT_EQUAL_UINT16(123, party[0].stat[0]);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(buf, SRAM_SIZE, game));
+    pksave_close(s);
+}
+
+void test_rs_party_slot_round_trip(void)
+    { gen3_party_round_trip(rs_buf, PKSAVE_GAME_RS, "rs.sav"); }
+void test_emerald_party_slot_round_trip(void)
+    { gen3_party_round_trip(emerald_buf, PKSAVE_GAME_EMERALD, "emerald.sav"); }
+void test_frlg_party_slot_round_trip(void)
+    { gen3_party_round_trip(frlg_buf, PKSAVE_GAME_FRLG, "frlg.sav"); }
+
 int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_rs_trainer_round_trip);
     RUN_TEST(test_rs_party_slot0);
     RUN_TEST(test_rs_checksum_valid_after_flush);
+    RUN_TEST(test_rs_party_slot_round_trip);
     RUN_TEST(test_emerald_trainer_round_trip);
     RUN_TEST(test_emerald_party_slot0);
     RUN_TEST(test_emerald_checksum_valid_after_flush);
+    RUN_TEST(test_emerald_party_slot_round_trip);
     RUN_TEST(test_frlg_trainer_round_trip);
     RUN_TEST(test_frlg_party_slot0);
     RUN_TEST(test_frlg_checksum_valid_after_flush);
+    RUN_TEST(test_frlg_party_slot_round_trip);
     return UNITY_END();
 }

@@ -146,14 +146,87 @@ void test_crystal_checksum_valid_after_flush(void)
         pksave_validate_checksum(crystal_buf, SRAM_SIZE, PKSAVE_GAME_CRYSTAL));
 }
 
+void test_gs_party_slot_round_trip(void)
+{
+    if (!load_fixture("gs.sav", gs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_pokemon_t party[6];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party(s, party, &count));
+    TEST_ASSERT_GREATER_THAN(0, (int)count);
+
+    party[0].species  = 152;  /* Chikorita (Gen II internal ID) */
+    party[0].level    = 37;
+    party[0].held_item = 200;
+    party[0].move_ids[0] = 75;   /* Razor Leaf */
+    party[0].move_pp[0]  = 25;
+    party[0].evs[0]   = 54321;   /* stat exp passthrough 0-65535 */
+    party[0].ivs[1]   = 30;      /* Atk DV=15 */
+    party[0].ivs[5]   = 20;      /* Spe DV=10 */
+
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_party_slot(s, 0, &party[0]));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party(s, party, &count));
+    TEST_ASSERT_EQUAL_UINT16(152, party[0].species);
+    TEST_ASSERT_EQUAL_UINT8(37, party[0].level);
+    TEST_ASSERT_EQUAL_UINT16(200, party[0].held_item);
+    TEST_ASSERT_EQUAL_UINT8(75, party[0].move_ids[0]);
+    TEST_ASSERT_EQUAL_UINT8(25, party[0].move_pp[0]);
+    TEST_ASSERT_EQUAL_UINT16(54321, party[0].evs[0]);
+    TEST_ASSERT_EQUAL_UINT8(30, party[0].ivs[1]);
+    TEST_ASSERT_EQUAL_UINT8(20, party[0].ivs[5]);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS));
+    pksave_close(s);
+}
+
+void test_crystal_party_slot_round_trip(void)
+{
+    if (!load_fixture("crystal.sav", crystal_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(crystal_buf, SRAM_SIZE, PKSAVE_GAME_CRYSTAL);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_pokemon_t party[6];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party(s, party, &count));
+    TEST_ASSERT_GREATER_THAN(0, (int)count);
+
+    party[0].species  = 158;  /* Totodile */
+    party[0].level    = 50;
+    party[0].move_ids[0] = 44;   /* Bite */
+    party[0].move_pp[0]  = 20;
+
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_party_slot(s, 0, &party[0]));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(crystal_buf, SRAM_SIZE, PKSAVE_GAME_CRYSTAL);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party(s, party, &count));
+    TEST_ASSERT_EQUAL_UINT16(158, party[0].species);
+    TEST_ASSERT_EQUAL_UINT8(50, party[0].level);
+    TEST_ASSERT_EQUAL_UINT8(44, party[0].move_ids[0]);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(crystal_buf, SRAM_SIZE, PKSAVE_GAME_CRYSTAL));
+    pksave_close(s);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_gs_trainer_round_trip);
     RUN_TEST(test_gs_party_slot0);
     RUN_TEST(test_gs_checksum_valid_after_flush);
+    RUN_TEST(test_gs_party_slot_round_trip);
     RUN_TEST(test_crystal_trainer_round_trip);
     RUN_TEST(test_crystal_party_slot0);
     RUN_TEST(test_crystal_checksum_valid_after_flush);
+    RUN_TEST(test_crystal_party_slot_round_trip);
     return UNITY_END();
 }

@@ -92,6 +92,46 @@ void test_rb_checksum_valid_after_flush(void)
         pksave_validate_checksum(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB));
 }
 
+void test_rb_party_slot_round_trip(void)
+{
+    if (!load_fixture("rb.sav", rb_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_pokemon_t party[6];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party(s, party, &count));
+    TEST_ASSERT_GREATER_THAN(0, (int)count);
+
+    party[0].species  = 25;   /* Pikachu (Gen I internal ID) */
+    party[0].level    = 42;
+    party[0].move_ids[0] = 85;  /* Thunderbolt */
+    party[0].move_pp[0]  = 15;
+    /* Stat exp passthrough: Gen I/II use 0-65535, not clamped */
+    party[0].evs[0]   = 12345;
+    /* DVs scaled 0-31 → encoded as 0-15 */
+    party[0].ivs[1]   = 30;   /* Atk DV=15 */
+    party[0].ivs[2]   = 28;   /* Def DV=14 */
+
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_party_slot(s, 0, &party[0]));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party(s, party, &count));
+    TEST_ASSERT_EQUAL_UINT16(25, party[0].species);
+    TEST_ASSERT_EQUAL_UINT8(42, party[0].level);
+    TEST_ASSERT_EQUAL_UINT8(85, party[0].move_ids[0]);
+    TEST_ASSERT_EQUAL_UINT8(15, party[0].move_pp[0]);
+    TEST_ASSERT_EQUAL_UINT16(12345, party[0].evs[0]);
+    TEST_ASSERT_EQUAL_UINT8(30, party[0].ivs[1]);
+    TEST_ASSERT_EQUAL_UINT8(28, party[0].ivs[2]);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB));
+    pksave_close(s);
+}
+
 /* ── yellow ── */
 static uint8_t yellow_buf[SRAM_SIZE];
 
@@ -152,6 +192,7 @@ int main(void)
     RUN_TEST(test_rb_trainer_round_trip);
     RUN_TEST(test_rb_party_slot0);
     RUN_TEST(test_rb_checksum_valid_after_flush);
+    RUN_TEST(test_rb_party_slot_round_trip);
     RUN_TEST(test_yellow_trainer_round_trip);
     RUN_TEST(test_yellow_party_slot0);
     RUN_TEST(test_yellow_checksum_valid_after_flush);
