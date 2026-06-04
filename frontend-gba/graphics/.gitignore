@@ -1,0 +1,5 @@
+# Bitmap fonts copied at build time from $(BUTANO_HOME)/common/graphics
+# by the EXTTOOL hook in ../Makefile.  Don't commit them — the canonical
+# copy lives in butano's tarball, downloaded inside docker/gba.
+common_*.bmp
+common_*.json

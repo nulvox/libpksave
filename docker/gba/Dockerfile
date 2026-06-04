@@ -32,4 +32,4 @@ ENV BUTANO_HOME="${BUTANO_DIR}"
 
 WORKDIR /src
 
-CMD ["make", "-C", "/src/frontend-gba", "all"]
+CMD ["make", "-C", "/src/frontend-gba", "install"]

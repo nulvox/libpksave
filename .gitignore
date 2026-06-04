@@ -15,12 +15,18 @@ bin/*.map
 frontend-gba/*.gba
 frontend-gba/*.elf
 frontend-gba/*.map
+frontend-gba/build/
 frontend-gbc/*.gbc
 frontend-gbc/*.elf
 frontend-gbc/*.map
 frontend-nds/*.nds
 frontend-nds/*.elf
 frontend-nds/*.map
+
+# User-supplied frontend-gba fixtures (real Gen III .sav dumps — not
+# committed; see frontend-gba/tests/fixtures/README.md).
+frontend-gba/tests/fixtures/*.sav
+frontend-gba/tests/fixtures/*.bin
 
 # Test runner binaries and output
 libpksave/tests/*.out
