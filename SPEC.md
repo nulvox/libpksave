@@ -73,7 +73,7 @@ Each platform container passes only the flags it needs:
 **Language:** C99  
 **License:** MIT  
 **Dependencies:** none (stdint.h, stddef.h, string.h only)  
-**Format source:** pret decomp projects (primary), PKHeX source (secondary, edge cases only)
+**Format source:** pret decomp projects
 
 ### Game Variant Enum
 
@@ -284,7 +284,6 @@ Primary sources (in order of authority):
    - https://github.com/pret/pokecrystal (Gen II)
    - https://github.com/pret/pokeemerald, pokeruby, pokefirered (Gen III)
    - https://github.com/pret/pokeplatinum, pokegold (Gen IV)
-   - Gen V decomps (in progress as of 2025 — supplement with PKHeX)
-2. **PKHeX** (https://github.com/kwsch/PKHeX) — reference for checksum edge cases and Gen V structures not yet fully decomped; MIT-incompatible (GPL v3), so reference only, no copy-paste
+   - Gen V decomps (in progress as of 2025)
 
 All libpksave implementations must be written from scratch using the above as documentation, not as a translation of existing code.

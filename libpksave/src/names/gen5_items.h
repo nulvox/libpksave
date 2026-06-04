@@ -3,7 +3,6 @@
  * Copyright (c) 2026 gbsdk contributors
  *
  * Gen 5 item name table indexed by item ID (1-639).
- * Sourced from PKHeX en text resources.
  */
 #ifdef PKSAVE_GEN5
 static const char * const gen5_item_names[] = {

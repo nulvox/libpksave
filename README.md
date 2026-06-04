@@ -100,5 +100,4 @@ encodings directly; the library owns all save-format knowledge.
 
 MIT. See SPDX headers at the top of every source file. Struct layouts
 and offsets are derived from the [pret](https://github.com/pret) decomp
-projects (factual data, no code copied) and never from
-[PKHeX](https://github.com/kwsch/PKHeX) (GPL v3, reference only).
+projects (factual data, no code copied).

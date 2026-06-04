@@ -111,7 +111,7 @@ are deliberately not on the v1 path even if straightforward.
    ([pokered](https://github.com/pret/pokered),
     [pokecrystal](https://github.com/pret/pokecrystal),
     [pokeemerald](https://github.com/pret/pokeemerald), etc.) to find the
-    offset and layout. PKHeX is GPL v3 and **reference only**.
+    offset and layout.
 2. Add the offset constants near the top of the relevant `genN.c`
    (private to that translation unit).
 3. Add the read/write helper inside the `genN.c` file.

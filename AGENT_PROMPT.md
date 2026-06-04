@@ -41,9 +41,6 @@ Use these sources to derive every byte offset, struct layout, and checksum algor
 - Gen III: https://github.com/pret/pokeemerald, https://github.com/pret/pokeruby, https://github.com/pret/pokefirered
 - Gen IV: https://github.com/pret/pokeplatinum, https://github.com/pret/pokegold
 
-**Secondary (Gen V edge cases and anything the decomps don't make clear):**
-- PKHeX: https://github.com/kwsch/PKHeX — GPL v3, reference only, no code copying
-
 The pret repos contain the actual struct definitions and save block layouts in their C headers. Look in `include/` and `src/` directories for save-related files (`save.h`, `save.c`, `pokemon.h`, etc.).
 
 ## libpksave Implementation Rules
@@ -104,7 +101,7 @@ The pret repos contain the actual struct definitions and save block layouts in t
 
 ## License
 
-MIT. Every source file must have the MIT license header. Do not copy code from PKHeX (GPL v3) or any GPL-licensed source. Struct layouts and byte offsets derived from pret repos are facts, not copyrightable expression — they are safe to use.
+MIT. Every source file must have the MIT license header. Do not copy code from any GPL-licensed source. Struct layouts and byte offsets derived from pret repos are facts, not copyrightable expression — they are safe to use.
 
 ## What Done Looks Like
 

@@ -3,7 +3,6 @@
  * Copyright (c) 2026 gbsdk contributors
  *
  * Gen 5 move name table indexed by move ID (1-559).
- * Sourced from PKHeX en text resources.
  */
 #ifdef PKSAVE_GEN5
 static const char * const gen5_move_names[] = {

@@ -3,7 +3,7 @@
  * Copyright (c) 2026 gbsdk contributors
  *
  * Gen IV (Diamond/Pearl, Platinum, HeartGold/SoulSilver) save format.
- * Offsets from pret/pokeheartgold and PKHeX source.
+ * Offsets from pret/pokeheartgold.
  *
  * Save layout (512KB): 2 slots at 0x00000 and 0x40000.
  * Each slot = general block (trainer/party) + storage block (PC boxes).
@@ -598,8 +598,7 @@ int gen4_set_box_pokerus(pksave_save_t *s, uint8_t box, uint8_t slot,
 }
 
 /* ── bag / item pockets ──────────────────────────────────────────────────── */
-/* Each pocket is an array of u16 (id, qty) slots in the general block.
- * Offsets and slot counts per PKHeX SAV4Sinnoh / SAV4HGSS BlockOfsBag tables. */
+/* Each pocket is an array of u16 (id, qty) slots in the general block. */
 
 struct g4_pocket_layout {
     uint16_t off;

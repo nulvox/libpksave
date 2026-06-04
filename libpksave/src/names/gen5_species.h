@@ -3,7 +3,6 @@
  * Copyright (c) 2026 gbsdk contributors
  *
  * Gen 5 species name table indexed by national dex ID (1-649).
- * Sourced from PKHeX en text resources (factual name data only).
  */
 #ifdef PKSAVE_GEN5
 static const char * const gen5_species_names[] = {

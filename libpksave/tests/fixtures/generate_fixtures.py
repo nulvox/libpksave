@@ -1000,7 +1000,7 @@ def make_gen4_hgss():     return make_gen4('hgss')
 
 # ── Gen V (Black/White, Black 2/White 2) — 512 KB ────────────────────────────
 # Similar to Gen IV. Two general blocks (each 0x40000 bytes).
-# General block sizes: BW ~0x26A00, BW2 ~0x26E00 (approximate from PKHeX)
+# General block sizes: BW ~0x26A00, BW2 ~0x26E00 (approximate)
 # Footer: same structure as Gen IV.
 # Trainer data: BW at 0x19D0, BW2 at 0x19D0 (approximate)
 
