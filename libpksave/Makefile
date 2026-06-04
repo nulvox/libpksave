@@ -14,6 +14,7 @@ SRC = src/detect.c \
       src/checksum.c \
       src/session.c \
       src/names.c \
+      src/limits.c \
       src/gen1.c \
       src/gen2.c \
       src/gen3.c \
@@ -28,7 +29,8 @@ TEST_BINS = \
     tests/test_gen2 \
     tests/test_gen3 \
     tests/test_gen4 \
-    tests/test_gen5
+    tests/test_gen5 \
+    tests/test_limits
 
 .PHONY: test fixtures clean
 

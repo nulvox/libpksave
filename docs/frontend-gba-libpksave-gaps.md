@@ -73,9 +73,9 @@ Promoted to a pre-UI library sprint instead. Rationale:
 
 | ID | Helper | Notes |
 |----|--------|-------|
-| **D1** | `pksave_ev_max_per_stat(game) → uint16_t`, `pksave_ev_total_max(game) → uint16_t` | 252 / 510 in Gen III+; different units in Gen I/II stat-exp world |
-| **D2** | `pksave_iv_max(game) → uint8_t` | 31 in Gen III+; 15 in Gen I/II DV world |
-| **D3** | `PKSAVE_GEN3_TRAINER_NAME_MAX`, `PKSAVE_GEN3_NICKNAME_MAX`, `PKSAVE_GEN3_OT_NAME_MAX` — public `#define`s in `pksave.h`; per-gen equivalents added when those frontends land | Frontends pull from the header; no magic numbers in bridge code |
+| ~~**D1**~~ | ~~`pksave_ev_max_per_stat(game) → uint16_t`, `pksave_ev_total_max(game) → uint16_t`~~ | ~~252 / 510 in Gen III+; different units in Gen I/II stat-exp world~~ — **Resolved** 2026-06-04 in `libpksave/src/limits.c`; tested in `tests/test_limits.c`. Gen I/II `ev_total_max` returns `0` as a sentinel meaning "no total cap". |
+| ~~**D2**~~ | ~~`pksave_iv_max(game) → uint8_t`~~ | ~~31 in Gen III+; 15 in Gen I/II DV world~~ — **Resolved** 2026-06-04 in `libpksave/src/limits.c`; tested in `tests/test_limits.c`. |
+| ~~**D3**~~ | ~~`PKSAVE_GEN3_TRAINER_NAME_MAX`, `PKSAVE_GEN3_NICKNAME_MAX`, `PKSAVE_GEN3_OT_NAME_MAX` — public `#define`s in `pksave.h`; per-gen equivalents added when those frontends land~~ | ~~Frontends pull from the header; no magic numbers in bridge code~~ — **Resolved** 2026-06-04 in `libpksave/include/pksave.h`; tested in `tests/test_limits.c`. |
 
 ---
 
