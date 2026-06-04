@@ -142,6 +142,28 @@ const char *pksave_item_name(pksave_game_t game, uint16_t item_id);
 const char *pksave_ability_name(pksave_game_t game, uint8_t ability_id);
 const char *pksave_nature_name(uint8_t nature_id);
 
+/* ── Gen III in-game name-length limits (excluding null terminator) ─────── */
+/* These are the character limits the Gen III name-entry screen enforces.
+ * Per-gen equivalents (PKSAVE_GEN1_*, PKSAVE_GEN2_*, ...) will be added
+ * when those frontends land. */
+#define PKSAVE_GEN3_TRAINER_NAME_MAX  7
+#define PKSAVE_GEN3_NICKNAME_MAX      10
+#define PKSAVE_GEN3_OT_NAME_MAX       7
+
+/* ── Per-game numeric limits ────────────────────────────────────────────── */
+/* Maximum IV (or DV in Gen I/II) per stat.  Returns 0 for unknown game. */
+uint8_t  pksave_iv_max(pksave_game_t game);
+
+/* Maximum EV value per stat.  Gen III+: 252.  Gen I/II (stat exp): 65535.
+ * Returns 0 for unknown game. */
+uint16_t pksave_ev_max_per_stat(pksave_game_t game);
+
+/* Maximum EV total summed across all six stats.  Gen III+: 510.  Gen I/II
+ * has no total cap, so returns 0 as a sentinel meaning "no total cap".
+ * Returns 0 for unknown game (same sentinel; consumers should consult
+ * pksave_ev_max_per_stat to disambiguate). */
+uint16_t pksave_ev_total_max(pksave_game_t game);
+
 /* ── Test helper (test container only) ──────────────────────────────────── */
 int pksave_validate_checksum(const uint8_t *sram, size_t len, pksave_game_t game);
 

@@ -66,4 +66,5 @@ clean:
 	      libpksave/tests/test_gen2 \
 	      libpksave/tests/test_gen3 \
 	      libpksave/tests/test_gen4 \
-	      libpksave/tests/test_gen5
+	      libpksave/tests/test_gen5 \
+	      libpksave/tests/test_limits
