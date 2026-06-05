@@ -123,11 +123,20 @@ contracts; don't relitigate during implementation.
 
 ### Testing strategy
 
-13. **Strategy ii — manual + fixtures.** Each checkpoint ships a
-    documented manual checklist in `frontend-gba/tests/checklist.md`,
-    backed by per-variant fixture saves under `frontend-gba/tests/
-    fixtures/` (one each for RS, Emerald, FRLG). Headless mGBA via Lua
-    is deferred to post-GBA work.
+13. **Two-track testing.**
+    - **Maintainer track — Unity + mGBA Lua automation (planned).**
+      libpksave correctness is locked in by the existing Unity suite.
+      Frontend correctness (scene loop, FLASH↔EWRAM, save flow, dirty
+      indicator, UI grammar) is *currently unverified* and will be
+      covered by a headless-mGBA Lua harness — see §"mGBA Lua
+      automation" below.  Manual mGBA runs are **not** a merge gate;
+      the maintainer's time budget doesn't sustain them.
+    - **User-facing track — manual checklist + fixtures.** The
+      per-checkpoint checklist in `frontend-gba/tests/checklist.md` is
+      published for end users who want to verify their own build, and
+      as a wishlist of scenarios the Lua harness should eventually
+      cover. The header of that file says so explicitly so nobody
+      mistakes it for an internal QA process.
 
 ---
 
@@ -249,10 +258,16 @@ the original game.
       `frontend-gba/tests/checklist.md` §CP#2; emulator-side verification
       is the merge gate — see below.)
 
-**Code-complete** as of 2026-06-05 (commit 13beb9e). The CP#2 manual
-checklist in `frontend-gba/tests/checklist.md` is the merge gate: the
-maintainer runs `make gba` in the docker image, symlinks a real Gen III
-`.sav` into the cartridge slot, ticks each check on mGBA, then merges.
+**Code-complete** as of 2026-06-05 (commit 13beb9e). Frontend behaviour
+(scene loop, FLASH↔EWRAM plumbing, save-blocks-input, dirty indicator,
+trainer-name round-trip on a real cartridge) is **unverified at the
+emulator level** — the manual checklist in `frontend-gba/tests/
+checklist.md` is published for end users / contributors who want to
+spot-check, not as a maintainer merge gate.  Library-side correctness
+(charset round-trip, FLASH bytes match pret canonical, stat recalc) is
+covered by Unity.  Real emulator verification arrives with the mGBA Lua
+harness (see §"mGBA Lua automation" below).
+
 Bundled into the CP#2 PR: the `.gitignore` fix + `git rm --cached` of
 the nine `libpksave/tests/test_*` binaries (clear miss surfaced while
 closing L1/L2 — clean to ship in the same PR).
@@ -385,6 +400,72 @@ species.
 
 ---
 
+## mGBA Lua automation — the only real frontend verification layer
+
+Originally deferred to post-GBA work.  **Promoted to load-bearing**
+because manual emulator runs aren't happening per merge — without this
+harness, every frontend change ships unverified at the emulator level.
+
+### Why now
+
+- libpksave Unity covers byte-level correctness (encoder, PID-derive,
+  recalc, set/get round-trips).  It cannot catch scene-loop bugs,
+  FLASH bank-switch errors, save-blocks-input regressions, or the
+  trainer-name-round-trips-on-a-real-cart end-to-end check.
+- The CP#2 manual checklist already enumerates the scenarios that need
+  this coverage — those rows become Lua test cases one-to-one.
+- Building the harness during CP#3 (the largest UI checkpoint) doubles
+  as the moment the test surface is broadest and the regression risk
+  is highest.
+
+### Scope of the POC (timeboxed: 2 days)
+
+- [ ] **`docker/test-gba` container** with headless mGBA built
+      `-DUSE_LUA=ON` (or Debian's `mgba-sdl` if it ships Lua).
+- [ ] **Python harness** in `frontend-gba/tests/automation/` that
+      spawns mGBA with `--script <test>.lua`, captures the SRAM dump
+      written by the Lua script, decodes via libpksave (`ctypes` over
+      the same `.a` Unity uses), and asserts.
+- [ ] **One end-to-end Lua test** proving the harness: boot ROM, drive
+      cursor to Trainer, enter a known name via text_input, Save & Exit,
+      dump SRAM, decode, assert trainer.name matches.  Per-variant
+      fixtures (RS / Emerald / FRLG) — same fixture story as the
+      libpksave Unity suite.
+- [ ] **`make test-gba` target** wired into the root Makefile alongside
+      `make test`.
+
+### Scope of full coverage (incremental, post-POC)
+
+- One Lua case per box ticked in `frontend-gba/tests/checklist.md`.
+- SRAM-roundtrip assertions cover any test that touches the save buffer
+  (trainer fields, party slot edits, bag changes, box edits — most of
+  the checklist).
+- A small number of tile-pattern / framebuffer-byte assertions cover
+  the cases SRAM can't reach: "dirty indicator appears", "save scene
+  blocks input", "cursor wraps at list ends".
+- Per-test wall time budget: <30s.  Full suite target: <10 min.
+
+### Constraints / known risks
+
+- mGBA Lua API is small and moderately stable; button-timing across
+  frame boundaries is the main source of script fragility.  Mitigate by
+  centralising `wait_frames(n)` and `tap(button)` helpers — when butano
+  debounce changes, you tune two helpers instead of N scripts.
+- Headless mGBA in docker needs explicit `--frameskip` / SDL-null;
+  verify in the POC before scaling out.
+- The harness should fail loudly if mGBA crashes mid-test (no silent
+  green-on-skipped).
+
+### Relationship to the manual checklist
+
+- `frontend-gba/tests/checklist.md` stays in the repo as the
+  user-facing verification doc and as the wishlist of scenarios this
+  harness should eventually cover.  Each Lua test in
+  `frontend-gba/tests/automation/` should reference the checklist row
+  it discharges so the two stay synchronised.
+
+---
+
 ## Acceptance criteria (v1 complete)
 
 - [ ] `make gba` (no args) produces `pksave-gba.gba` with silhouettes only.
@@ -408,7 +489,6 @@ species.
 
 - Does not extend `libpksave` for Gen IV/V — those gaps are the Gen IV
   developer's discovery loop.
-- Does not implement headless mGBA Lua testing (Strategy iii, deferred).
 - Does not surface game flavor (types, item descriptions, ability
   descriptions, named badges, nature stat modifiers). See the scoping
   principle in the gaps matrix.

@@ -5,9 +5,26 @@ Copyright (c) 2026 gbsdk contributors
 
 # frontend-gba manual test checklist
 
-Manual checks per checkpoint.  Each top-level section corresponds to
-one milestone in `docs/frontend-gba-plan.md`.  Tick a box when the
-check passes on your hardware/emulator.
+> **Status — read this first.** This checklist is **not** the project's
+> verification gate.  The maintainer ships frontend changes without
+> running it: the manual cost (boot ROM in mGBA, drive each scene by
+> hand, verify on the original Pokémon ROM) is too high to repeat per
+> merge.  Frontend behaviour is therefore **unverified at the emulator
+> level** unless and until the mGBA-Lua automation work lands — see
+> `docs/frontend-gba-plan.md` §"mGBA Lua automation" for the planned
+> SRAM-roundtrip harness that will replace the load-bearing parts of
+> this document.
+>
+> What this file *is* good for:
+>   - **End users** verifying their own build of `pksave-gba.gba`
+>     before trusting it with a real save.
+>   - **Contributors** wanting a regression-list to spot-check a PR.
+>   - **A wishlist for the mGBA automation harness** — every box here
+>     is a scenario the Lua harness should eventually cover.
+
+Each top-level section corresponds to one milestone in
+`docs/frontend-gba-plan.md`.  Tick a box when the check passes on
+your hardware/emulator.
 
 Fixtures live in `tests/fixtures/` (see that directory's README) and
 must be supplied by the user — no fixture is committed.
