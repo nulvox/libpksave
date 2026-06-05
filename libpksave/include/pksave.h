@@ -101,6 +101,13 @@ int pksave_get_pocket(pksave_save_t *save, pksave_pocket_t pocket,
 int pksave_set_item(pksave_save_t *save, pksave_pocket_t pocket,
                     uint8_t slot, const pksave_item_t *item);
 
+/* ── Stat recalculation ──────────────────────────────────────────────────── */
+/* Recompute pkm->stat[6] in-place from species, level, nature, IVs, and EVs.
+ * Uses the official Gen III formula (HP and per-stat) with nature ±10%.
+ * Caller is responsible for setting nature; pksave_get_party / get_box
+ * populate it from PID on Gen III reads.  Unknown species → stats zeroed. */
+void pksave_recalc_stats(pksave_pokemon_t *pkm, pksave_game_t game);
+
 /* ── Pokerus API ─────────────────────────────────────────────────────────── */
 /* Pokerus is a hidden status, present from Gen II onwards, that doubles the
  * EV gain a Pokémon receives from battles. It is stored as a single byte:

@@ -252,7 +252,8 @@ static void g3_decode_mon(const uint8_t *mon, pksave_pokemon_t *out)
     out->evs[2] = dec[ep+2];   out->evs[5] = dec[ep+3];
     out->evs[3] = dec[ep+4];   out->evs[4] = dec[ep+5];
 
-    /* Misc IVs: bits 0-4=HP, 5-9=Atk, 10-14=Def, 15-19=Spd, 20-24=SpA, 25-29=SpD */
+    /* Misc IVs: bits 0-4=HP, 5-9=Atk, 10-14=Def, 15-19=Spd, 20-24=SpA, 25-29=SpD;
+     * bit 30 is the egg flag; bit 31 is the ability slot (0 or 1). */
     uint32_t iv; memcpy(&iv, dec + mp, 4);
     out->ivs[0] = (uint8_t)((iv)      & 0x1F);
     out->ivs[1] = (uint8_t)((iv >> 5) & 0x1F);
@@ -260,6 +261,11 @@ static void g3_decode_mon(const uint8_t *mon, pksave_pokemon_t *out)
     out->ivs[5] = (uint8_t)((iv >>15) & 0x1F);
     out->ivs[3] = (uint8_t)((iv >>20) & 0x1F);
     out->ivs[4] = (uint8_t)((iv >>25) & 0x1F);
+    out->ability = (uint8_t)((iv >> 31) & 1U);
+
+    /* Nature is PID % 25; shininess is (low^high^TID^SID) < 8 per Gen 3 rule. */
+    out->nature   = (uint8_t)(pid % 25U);
+    out->is_shiny = (uint8_t)(((((pid & 0xFFFFU) ^ (pid >> 16)) ^ tid ^ sid) < 8U) ? 1 : 0);
 
     gen3_decode_name(mon + 0x14, out->ot_name, sizeof(out->ot_name), 7);
     gen3_decode_name(mon + 0x08, out->nickname, sizeof(out->nickname), 10);
@@ -552,6 +558,10 @@ static void g3_decode_box_mon(const uint8_t *mon, pksave_pokemon_t *out)
     out->ivs[5] = (uint8_t)((iv >>15) & 0x1F);
     out->ivs[3] = (uint8_t)((iv >>20) & 0x1F);
     out->ivs[4] = (uint8_t)((iv >>25) & 0x1F);
+    out->ability = (uint8_t)((iv >> 31) & 1U);
+
+    out->nature   = (uint8_t)(pid % 25U);
+    out->is_shiny = (uint8_t)(((((pid & 0xFFFFU) ^ (pid >> 16)) ^ tid ^ sid) < 8U) ? 1 : 0);
 
     gen3_decode_name(mon + 0x14, out->ot_name,  sizeof(out->ot_name),  7);
     gen3_decode_name(mon + 0x08, out->nickname, sizeof(out->nickname), 10);

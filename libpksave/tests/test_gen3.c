@@ -600,6 +600,54 @@ void test_gen3_item_name_lookup(void)
     TEST_ASSERT_EQUAL_STRING("???",         pksave_item_name(PKSAVE_GAME_RS, 0));
 }
 
+/* ── Gen III PID-derived fields (nature / is_shiny / ability) ── */
+
+/* Party slot 0 fixture: PID=0, TID=0x1234, SID=0x5678; iv_word with bit 31
+ * clear (generator writes IV=10 for all stats — bit 31 is the ability slot).
+ *   nature  = PID % 25                        = 0  (Hardy)
+ *   shiny   = (pid^pid>>16^TID^SID) < 8       = false
+ *   ability = (iv_word >> 31) & 1             = 0
+ */
+void test_rs_party_slot0_pid_derived_fields(void)
+{
+    if (!load_fixture("rs.sav", rs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_pokemon_t party[6];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party(s, party, &count));
+    TEST_ASSERT_GREATER_THAN(0, (int)count);
+
+    TEST_ASSERT_EQUAL_UINT8(0, party[0].nature);
+    TEST_ASSERT_EQUAL_UINT8(0, party[0].is_shiny);
+    TEST_ASSERT_EQUAL_UINT8(0, party[0].ability);
+
+    pksave_close(s);
+}
+
+/* Box 1 slot 0 fixture: PID=0x12345678, TID=0x1234, SID=0x5678.
+ *   nature  = 0x12345678 % 25                       = 21 (Sassy)
+ *   shiny   = (0x5678 ^ 0x1234 ^ 0x1234 ^ 0x5678)=0 < 8 → true
+ *   ability = (iv_word >> 31) & 1                   = 0
+ */
+void test_rs_box_pid_derived_fields(void)
+{
+    if (!load_fixture("rs.sav", rs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+
+    TEST_ASSERT_EQUAL_UINT8(21, box[0].nature);
+    TEST_ASSERT_EQUAL_UINT8(1,  box[0].is_shiny);
+    TEST_ASSERT_EQUAL_UINT8(0,  box[0].ability);
+
+    pksave_close(s);
+}
+
 /* ── Gen III pokerus ── */
 
 void test_rs_party_pokerus_round_trip(void)
@@ -715,6 +763,8 @@ int main(void)
     RUN_TEST(test_gen3_species_name_lookup);
     RUN_TEST(test_gen3_move_name_lookup);
     RUN_TEST(test_gen3_item_name_lookup);
+    RUN_TEST(test_rs_party_slot0_pid_derived_fields);
+    RUN_TEST(test_rs_box_pid_derived_fields);
     RUN_TEST(test_rs_party_pokerus_round_trip);
     RUN_TEST(test_emerald_party_pokerus_round_trip);
     RUN_TEST(test_frlg_party_pokerus_round_trip);

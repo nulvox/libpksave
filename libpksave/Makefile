@@ -18,6 +18,7 @@ SRC = src/detect.c \
       src/session.c \
       src/names.c \
       src/limits.c \
+      src/recalc.c \
       src/gen1.c \
       src/gen2.c \
       src/gen3.c \
@@ -32,6 +33,7 @@ TEST_BINS = \
     tests/test_gen2 \
     tests/test_gen3 \
     tests/test_gen3_charset \
+    tests/test_gen3_recalc \
     tests/test_gen4 \
     tests/test_gen5 \
     tests/test_limits

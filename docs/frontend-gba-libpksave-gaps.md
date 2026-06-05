@@ -32,7 +32,7 @@ critical path.
 
 | ID | Gap | Blocks | Effort | Risk if deferred |
 |----|-----|--------|--------|-------------------|
-| **L1** | `pksave_recalc_stats(pkm, game)` — recompute `stat[6]` from species + level + nature + EVs + IVs | Checkpoint #3 (Pokemon editor STATS tab) | Medium — Gen III base-stats table (387 species × 6 stats) + nature multiplier table + formula | Stale cached stats in UI after edits; confusing UX |
+| ~~**L1**~~ | ~~`pksave_recalc_stats(pkm, game)` — recompute `stat[6]` from species + level + nature + EVs + IVs~~ — **Resolved** 2026-06-04 in `libpksave/src/recalc.c` (formula + 25-nature mod table), `libpksave/src/names/gen3_base_stats.h` (413-entry table sourced from pret/pokeruby `src/data/pokemon/base_stats.h`), and `libpksave/src/gen3.c` (PID-derived `nature` / `is_shiny` / `ability` populated on party + box read — prerequisite for the UI flow to work). Public prototype in `pksave.h`. Coverage in `tests/test_gen3_recalc.c` (8 cases: HP/non-HP formula, Adamant/Bold nature mods, multi-species lookup, unknown-species guard) and the extended `tests/test_gen3.c` PID-derived field assertions. | — | — | — |
 | **L2** | Verify `pksave_set_party_slot` honors `is_shiny`; add explicit setter if PID-recompute is missing | Checkpoint #3 (Identity tab Shiny toggle) | Small if already supported (write a test); Medium if PID-recompute logic missing | Shiny becomes display-only; toggle is a no-op |
 | **L4** | `pksave_species_abilities(game, species_id) → {slot0_id, slot1_id}` — populates the ability cycler with valid choices | Checkpoint #3 (Identity tab ability field) | Small — parallel table in `names/gen3_species.h` | Cycler walks all abilities; can pick invalid ones (game may reject on save) |
 | **L5** | `pksave_move_base_pp(game, move_id)` — for PP numeric field cap (×1.6 to allow PP-Up headroom) | Checkpoint #3 (Moves tab) | Small — parallel table in `names/gen3_moves.h` | Frontend hardcodes caps; drifts from format truth |
@@ -136,7 +136,7 @@ through the row in the table above and add a **Resolved** YYYY-MM-DD
 note pointing at the file(s) where it landed (see D1–D3 for the
 pattern).
 
-- [ ] **L1** — `pksave_recalc_stats` (CP#3 kickoff)
+- [x] **L1** — `pksave_recalc_stats` (resolved 2026-06-04; canonical Gen 3 stat formula + nature mod + full 413-entry base-stats table in `libpksave/src/recalc.c` + `names/gen3_base_stats.h`; bundled with PID-derivation of `nature`/`is_shiny`/`ability` on Gen 3 reads in `gen3.c` since recalc is unusable without it)
 - [ ] **L2** — verify / fix `pksave_set_party_slot` shiny round-trip (CP#3 kickoff)
 - [ ] **L4** — `pksave_species_abilities` (CP#3 kickoff)
 - [ ] **L5** — `pksave_move_base_pp` (CP#3 kickoff)

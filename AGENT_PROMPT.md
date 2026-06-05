@@ -43,6 +43,8 @@ Use these sources to derive every byte offset, struct layout, and checksum algor
 
 The pret repos contain the actual struct definitions and save block layouts in their C headers. Look in `include/` and `src/` directories for save-related files (`save.h`, `save.c`, `pokemon.h`, etc.).
 
+**Conflict-resolution rule:** when any value you've been given (by a user, an earlier doc, an existing table, or a subagent prompt) disagrees with pret on a Gen 1-5 cartridge fact — base stats, type tables, move power/accuracy/PP, item or ability IDs, charsets, byte offsets, checksum algorithms, encryption keys — **prefer pret** and flag the discrepancy. Existing code, in-flight specs, and human memory all drift; pret is the only source that stays pinned to the cartridge. This applies to cartridge data only, not to libpksave's own API design or v1 scoping decisions (those stay where the project docs put them).
+
 ## libpksave Implementation Rules
 
 - C99 only. No dynamic allocation (`malloc`/`free`). No platform SDK headers.
