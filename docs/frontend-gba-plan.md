@@ -468,20 +468,38 @@ harness, every frontend change ships unverified at the emulator level.
 
 ## Acceptance criteria (v1 complete)
 
+The maintainer doesn't run manual mGBA checks per merge, so criteria
+that rely on a human driving the emulator have been recast as
+machine-checkable equivalents (Unity for byte-level correctness; the
+mGBA Lua harness for scene-loop and save-flow).  The user-facing
+manual checklist in `frontend-gba/tests/checklist.md` stays in the
+repo but is not on this list.
+
 - [ ] `make gba` (no args) produces `pksave-gba.gba` with silhouettes only.
 - [ ] `make gba SPRITES_ROM=...` produces a ROM with real sprites.
 - [ ] `make test` green (libpksave Unity tests including all D-* and L-*
       helpers added during this work).
-- [ ] mGBA loads `pksave-gba.gba` with a symlinked RS / Emerald / FRLG
-      `.sav` and detects correctly; UNKNOWN content shows the error
-      scene.
-- [ ] Round-trip via Save & Exit: edits to Trainer / Party / Bag / Boxes
-      survive a power-cycle and load cleanly in the original Pokemon
-      game with no save-corruption warning.
-- [ ] Manual checklist in `frontend-gba/tests/checklist.md` passes for
-      all three variants.
+- [ ] `make test-gba` green — mGBA Lua harness covers:
+      - boot + variant detection on RS / Emerald / FRLG fixtures
+      - UNKNOWN-content fixture lands on the boot error scene
+      - SRAM-roundtrip after Save & Exit for at least one field per CP
+        (trainer name, party-slot species, bag item quantity,
+        box-slot species)
+      - dirty indicator appears after an edit and clears after save
+      - save scene blocks input while the FLASH write is in flight
 - [ ] `docs/frontend-gba-libpksave-gaps.md` reflects which gaps were
       filled, which were deferred, and why.
+
+**Out-of-scope for v1 acceptance** (filed for follow-up automation /
+end-user QA):
+- Loading the saved `.sav` back into an unmodified Pokémon ROM and
+  verifying the in-game trainer card / party menu renders the edit.
+  Requires running a second ROM under mGBA against the same FLASH
+  image — possible under the Lua harness but not in v1 scope.
+- Visual / palette / sprite-tearing regressions.  Out of reach for
+  SRAM-only assertions; future framebuffer-byte checks may cover the
+  load-bearing cases (Save screen visible, sprite present-or-silhouette
+  fallback).
 
 ---
 
