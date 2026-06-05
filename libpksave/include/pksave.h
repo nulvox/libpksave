@@ -149,6 +149,22 @@ const char *pksave_item_name(pksave_game_t game, uint16_t item_id);
 const char *pksave_ability_name(pksave_game_t game, uint8_t ability_id);
 const char *pksave_nature_name(uint8_t nature_id);
 
+/* ── Per-species lookups ─────────────────────────────────────────────────── */
+typedef struct {
+    uint8_t slot0;   /* ability ID for slot 0 (always non-zero for real species) */
+    uint8_t slot1;   /* ability ID for slot 1; 0 if the species has no slot-1 ability */
+} pksave_species_abilities_t;
+
+/* Returns the two ability IDs for a Gen 3 species.  Unknown species
+ * returns {0, 0}.  Use pksave_ability_name() to render the IDs. */
+pksave_species_abilities_t pksave_species_abilities(pksave_game_t game, uint16_t species_id);
+
+/* ── Per-move lookups ────────────────────────────────────────────────────── */
+/* Returns the base PP for a Gen 3 move (before PP Ups).  Unknown move
+ * returns 0.  Frontend caps the PP numeric field at base * 1.6 (rounded
+ * down) to allow PP-Up headroom — but that math is a frontend concern. */
+uint8_t pksave_move_base_pp(pksave_game_t game, uint16_t move_id);
+
 /* ── Gen III in-game name-length limits (excluding null terminator) ─────── */
 /* These are the character limits the Gen III name-entry screen enforces.
  * Per-gen equivalents (PKSAVE_GEN1_*, PKSAVE_GEN2_*, ...) will be added
