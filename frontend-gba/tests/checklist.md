@@ -58,7 +58,11 @@ the in-game menu.
 - [ ] `make gba` exits 0 and produces `bin/pksave-gba.gba`.
 - [ ] `make test` runs the Gen 3 charset round-trip test
       (`tests/test_gen3_charset`); all cases pass for every character
-      the keyboard exposes (A-Z, a-z, space).
+      the keyboard exposes (A-Z, a-z, 0-9, the eight punctuation marks
+      `! ? . - , / ' "`, and space).  Includes
+      `test_gen3_encoder_canonical_bytes` which proves the encoded
+      bytes match the pret-canonical Gen 3 charmap (not just that the
+      encoder is self-consistent with the decoder).
 
 ### Trainer screen — navigation
 

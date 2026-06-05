@@ -42,22 +42,53 @@ static const uint16_t g3_sec_sizes[14] = {
 
 /* ── Gen III charset ─────────────────────────────────────────────────────── */
 
+/* Gen III character map (per pret/pokeemerald charmap.txt):
+ *   0x00         = space
+ *   0xA1..0xAA   = '0'..'9'
+ *   0xAB..0xBA   = punctuation (! ? . - · … " " ' ' ♂ ♀ $ , × /)
+ *   0xBB..0xD4   = 'A'..'Z'
+ *   0xD5..0xEE   = 'a'..'z'
+ *   0xFF         = end-of-string terminator
+ * Bytes the cartridge maps to glyphs we don't surface decode to '?';
+ * ASCII the encoder can't represent maps to 0xFF (terminator). */
 static char gen3_decode_char(uint8_t b)
 {
     if (b == 0xFF) return '\0';
     if (b == 0x00) return ' ';
-    if (b >= 0xA1 && b <= 0xBA) return (char)('A' + (b - 0xA1));
-    if (b >= 0xBB && b <= 0xD4) return (char)('a' + (b - 0xBB));
-    return '?';
+    if (b >= 0xA1 && b <= 0xAA) return (char)('0' + (b - 0xA1));
+    if (b >= 0xBB && b <= 0xD4) return (char)('A' + (b - 0xBB));
+    if (b >= 0xD5 && b <= 0xEE) return (char)('a' + (b - 0xD5));
+    switch (b) {
+        case 0xAB: return '!';
+        case 0xAC: return '?';
+        case 0xAD: return '.';
+        case 0xAE: return '-';
+        case 0xB1: return '"';
+        case 0xB4: return '\'';
+        case 0xB8: return ',';
+        case 0xBA: return '/';
+        default:   return '?';
+    }
 }
 
 static uint8_t gen3_encode_char(char c)
 {
     if (c == '\0') return 0xFF;
     if (c == ' ')  return 0x00;
-    if (c >= 'A' && c <= 'Z') return (uint8_t)(0xA1 + (c - 'A'));
-    if (c >= 'a' && c <= 'z') return (uint8_t)(0xBB + (c - 'a'));
-    return 0xFF;
+    if (c >= '0' && c <= '9') return (uint8_t)(0xA1 + (c - '0'));
+    if (c >= 'A' && c <= 'Z') return (uint8_t)(0xBB + (c - 'A'));
+    if (c >= 'a' && c <= 'z') return (uint8_t)(0xD5 + (c - 'a'));
+    switch (c) {
+        case '!':  return 0xAB;
+        case '?':  return 0xAC;
+        case '.':  return 0xAD;
+        case '-':  return 0xAE;
+        case '"':  return 0xB1;
+        case '\'': return 0xB4;
+        case ',':  return 0xB8;
+        case '/':  return 0xBA;
+        default:   return 0xFF;
+    }
 }
 
 static void gen3_decode_name(const uint8_t *src, char *dst, int max_out, int src_len)

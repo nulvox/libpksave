@@ -60,17 +60,20 @@ def gen1_encode(s, length=11):
     return bytes(out[:length])
 
 # ── Gen III character encoding ────────────────────────────────────────────────
-# Uppercase A-Z: 0xA1-0xBA. Lowercase a-z: 0xBB-0xD4.
-# End-of-string: 0xFF. Space: 0x00.
+# Per pret/pokeemerald charmap.txt:
+#   Space: 0x00.  Uppercase A-Z: 0xBB-0xD4.  Lowercase a-z: 0xD5-0xEE.
+#   End-of-string: 0xFF.
+# Digits 0-9 (0xA1-0xAA) and punctuation (0xAB-0xBA) are unmapped here;
+# tests that need them write through the encoder in libpksave/src/gen3.c.
 
 def gen3_encode(s, length=7):
     """Encode ASCII string to Gen III charset."""
     out = []
     for c in s:
         if 'A' <= c <= 'Z':
-            out.append(0xA1 + ord(c) - ord('A'))
+            out.append(0xBB + ord(c) - ord('A'))
         elif 'a' <= c <= 'z':
-            out.append(0xBB + ord(c) - ord('a'))
+            out.append(0xD5 + ord(c) - ord('a'))
         elif c == ' ':
             out.append(0x00)
         else:

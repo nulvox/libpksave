@@ -38,14 +38,23 @@ critical path.
 | **L5** | `pksave_move_base_pp(game, move_id)` — for PP numeric field cap (×1.6 to allow PP-Up headroom) | Checkpoint #3 (Moves tab) | Small — parallel table in `names/gen3_moves.h` | Frontend hardcodes caps; drifts from format truth |
 | **L6** | `pksave_item_max_stack(game, item_id)` — for the slot_edit_scene qty field cap (HMs and key items return 1) | Checkpoint #4 (Bag) | Small — parallel `const uint16_t` table in `names/gen3_items.h` | Can't enforce per-item caps; user can set qty=99 on HM01 and corrupt save logic |
 | **L7** | `pksave_item_pocket(game, item_id)` — for cycler scoping inside slot_edit_scene | Checkpoint #4 (Bag) | Small — parallel table | Cycler walks all items; user can place Potion in Balls pocket; game may re-sort or misbehave on reload |
-| **L10** | `gen3_encode_char` / `gen3_decode_char` in `libpksave/src/gen3.c:45-61` round-trip only A-Z / a-z / space — digits 0-9 and Gen 3 punctuation silently become `0xFF` (string terminator), truncating names on save | Degrades CP#2 trainer name + CP#3 nicknames/OT names (keyboard's `sym` tab is currently stub-shaped; `text_input_charset.h` is the live source of truth) | Small — expand encoder/decoder lookup tables to the full Gen 3 in-game keyboard charset (0-9, `! ? . , ; : / - ' "` per pret references); extend `text_input_charset.h` so `tests/test_gen3_charset.c` round-trips the new chars | Players can't enter common trainer/Pokemon names like `MR-X` or `Lv99`; editor's text fields look half-built |
+| ~~**L10**~~ | ~~`gen3_encode_char` / `gen3_decode_char` in `libpksave/src/gen3.c:45-61` round-trip only A-Z / a-z / space — digits 0-9 and Gen 3 punctuation silently become `0xFF` (string terminator), truncating names on save~~ — **Resolved** 2026-06-04 in `libpksave/src/gen3.c` (encoder/decoder rewritten to the pret-canonical mapping), `libpksave/tests/fixtures/generate_fixtures.py` (matching gen3_encode + regenerated fixtures), and `frontend-gba/src/widgets/text_input_charset.h` (symbol tab widened to `0-9 ! ? . - , / ' " ` + space). Coverage in `libpksave/tests/test_gen3_charset.c` (canonical-bytes test + keyboard round-trip). | — | — | — |
 
 > IDs are non-contiguous on purpose: **L3** (`pksave_species_types`) was
 > dropped during planning because the editor does not surface type
 > badges — see the scoping principle above. **L10** was discovered
 > during Checkpoint #2 implementation (2026-06-04) when the text_input
 > keyboard's charset was gated against what libpksave's Gen 3 encoder
-> can round-trip.
+> can round-trip. Closing L10 surfaced a second, larger issue: the
+> encoder's pre-existing letter mapping (`A-Z` at 0xA1-0xBA, `a-z` at
+> 0xBB-0xD4) was off by 26 bytes vs. the pret-canonical mapping
+> (`0-9` at 0xA1-0xAA, punctuation at 0xAB-0xBA, `A-Z` at 0xBB-0xD4,
+> `a-z` at 0xD5-0xEE). Synthetic fixtures used the same wrong bytes so
+> the round-trip tests passed inside libpksave, but bytes written to
+> FLASH would not render correctly on a real Gen III cartridge. The L10
+> resolution rewrote the encoder/decoder to canonical and regenerated
+> all fixtures; the new `test_gen3_encoder_canonical_bytes` test guards
+> against silent regression.
 
 ---
 
@@ -135,7 +144,7 @@ pattern).
 - [ ] **L7** — `pksave_item_pocket` (CP#4 kickoff)
 - [ ] **L8** — `pksave_badge_name` (deferred; future consumer)
 - [ ] **L9** — `pksave_nature_modifiers` (deferred; future consumer)
-- [ ] **L10** — Gen 3 encoder/decoder full charset (recommended before CP#3 so nicknames/OT names aren't capped to A-Z/a-z/space; covered by `tests/test_gen3_charset.c` once `text_input_charset.h` is widened)
+- [x] **L10** — Gen 3 encoder/decoder full charset (resolved 2026-06-04; canonical mapping landed in `libpksave/src/gen3.c`, fixtures regenerated, keyboard `sym` tab widened to digits + 8 punctuation marks)
 
 ---
 

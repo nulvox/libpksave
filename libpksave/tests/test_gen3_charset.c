@@ -118,10 +118,61 @@ void test_charset_constants_non_empty(void)
     TEST_ASSERT_TRUE(PKSAVE_GEN3_CHARSET_SYMBOL[0] != '\0');
 }
 
+/* Encoder canonicality check.
+ *
+ * Self-consistent round-trip (the other charset test) only proves the
+ * encoder and decoder are inverses of each other.  It does NOT prove the
+ * bytes on disk are what an actual Pokemon Gen III cartridge would render.
+ * The cartridge's charmap (per pret/pokeemerald charmap.txt) is fixed:
+ *   'A' = 0xBB, 'b' = 0xD6, 'Y' = 0xD3, 'z' = 0xEE, terminator = 0xFF.
+ *
+ * This test writes a known trainer name through the public API and then
+ * scans the SRAM buffer for that canonical sequence.  If found, the
+ * encoder is shipping bytes the real game can read.  If not, names
+ * round-trip inside libpksave but render as gibberish on a real cart.
+ *
+ * The 5-byte sequence (0xBB 0xD6 0xD3 0xEE 0xFF) is distinctive enough
+ * that it won't collide with unrelated fixture data. */
+void test_gen3_encoder_canonical_bytes(void)
+{
+    if (!load_fixture("rs.sav")) return;
+
+    pksave_save_t *s = pksave_open(buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL_MESSAGE(s, "pksave_open failed");
+
+    pksave_trainer_t tr;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_trainer(s, &tr));
+
+    /* Four-char name with mixed case; the cartridge truncates at the
+     * first 0xFF so byte 5 should be the terminator. */
+    memset(tr.name, 0, sizeof(tr.name));
+    strcpy(tr.name, "AbYz");
+
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_trainer(s, &tr));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    /* Canonical Gen 3 (pret/pokeemerald charmap.txt):
+     *   'A' 0xBB, 'b' 0xD6, 'Y' 0xD3, 'z' 0xEE, end-of-string 0xFF. */
+    static const uint8_t canonical[] = { 0xBB, 0xD6, 0xD3, 0xEE, 0xFF };
+    int found = 0;
+    for (size_t i = 0; i + sizeof(canonical) <= SRAM_SIZE; i++) {
+        if (memcmp(buf + i, canonical, sizeof(canonical)) == 0) {
+            found = 1;
+            break;
+        }
+    }
+    TEST_ASSERT_TRUE_MESSAGE(found,
+        "encoded \"AbYz\" not present at canonical Gen 3 bytes "
+        "(BB D6 D3 EE FF) anywhere in SRAM — encoder is not "
+        "pret-canonical and saves won't render correctly on a real cart");
+}
+
 int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_charset_constants_non_empty);
     RUN_TEST(test_every_keyboard_char_round_trips);
+    RUN_TEST(test_gen3_encoder_canonical_bytes);
     return UNITY_END();
 }
