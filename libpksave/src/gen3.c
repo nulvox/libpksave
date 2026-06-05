@@ -350,65 +350,129 @@ int gen3_get_party(pksave_save_t *s, pksave_pokemon_t out[6], uint8_t *count)
  * contest stats, met data, etc.) survive the write.  Then overwrites the
  * fields exposed by pksave_pokemon_t, recomputes the checksum, and
  * re-encrypts. */
-static void g3_encode_mon(uint8_t *dst, const pksave_pokemon_t *mon,
-                          uint16_t trainer_tid, uint16_t trainer_sid)
+/* Walk PIDs in steps of 25 (preserves nature == pid % 25) starting from
+ * a hint, returning the first PID whose shininess matches target_shiny.
+ * Expected iterations: ~1 for non-shiny, ~8192 for shiny.  Caps at 100k
+ * for safety; on cap-hit returns -1 and caller keeps the old PID. */
+static int g3_find_pid(uint8_t target_nature, uint8_t target_shiny,
+                       uint16_t tid, uint16_t sid, uint32_t hint,
+                       uint32_t *out_pid)
+{
+    target_nature = (uint8_t)(target_nature % 25U);
+    target_shiny  = (uint8_t)(target_shiny & 1U);
+
+    /* Anchor base so base % 25 == target_nature. */
+    uint32_t base = hint - (hint % 25U) + target_nature;
+
+    for (uint32_t step = 0; step < 100000U; step++) {
+        uint32_t pid = base + step * 25U;
+        if (pid == 0) continue;  /* PID=0 is the box-decoder's empty sentinel */
+        uint8_t shiny = (uint8_t)(((((pid & 0xFFFFU) ^ (pid >> 16)) ^ tid ^ sid) < 8U) ? 1 : 0);
+        if (shiny == target_shiny) {
+            *out_pid = pid;
+            return 0;
+        }
+    }
+    return -1;
+}
+
+/* Encode the 80-byte encrypted block (PID/TID/SID, names, encrypted
+ * substructs, checksum).  Shared by g3_encode_mon (party) and
+ * g3_encode_box_mon (box); the party encoder calls it then writes its
+ * own level/stats extras at 0x50+.
+ *
+ * Handles PID recompute when caller's mon->nature / mon->is_shiny diverge
+ * from the existing on-disk PID — searches for a satisfying PID, then
+ * re-arranges the substructs in the cleartext block to match the new
+ * pid%24 ordering before encrypting.  Caller-supplied fields (species,
+ * EVs, IVs, moves, ability slot) overlay the existing substructs;
+ * unsurfaced bytes (contest stats, friendship, met data, etc.) survive. */
+static void g3_encode_encrypted_block(uint8_t *dst, const pksave_pokemon_t *mon,
+                                       uint16_t trainer_tid, uint16_t trainer_sid)
 {
     uint32_t pid; memcpy(&pid, dst, 4);
     uint16_t tid; memcpy(&tid, dst + 4, 2);
     uint16_t sid; memcpy(&sid, dst + 6, 2);
-    if (tid == 0 && sid == 0) {  /* fresh slot — inherit from trainer */
+
+    /* Fresh slot: inherit trainer IDs.  Box-fresh-slot (pid also 0)
+     * synthesizes a starter PID so the slot decodes as non-empty. */
+    if (tid == 0 && sid == 0) {
         tid = trainer_tid;
         sid = trainer_sid;
         memcpy(dst + 4, &tid, 2);
         memcpy(dst + 6, &sid, 2);
+        if (pid == 0) {
+            pid = 0x12345678u;
+            memcpy(dst, &pid, 4);
+        }
     }
 
+    /* Decrypt with the OLD pid-derived key, pull substructs out so we can
+     * lay them down in a new order if the PID changes. */
     uint32_t key = pid ^ ((uint32_t)tid | ((uint32_t)sid << 16));
-
     uint8_t dec[48];
     g3_crypt(dst + 0x20, key, dec);
 
-    const uint8_t *ord = g3_suborder[pid % 24];
-    int gp = 0, ap = 0, ep = 0, mp = 0;
-    for (int i = 0; i < 4; i++) {
-        if      (ord[i] == 0) gp = i * 12;
-        else if (ord[i] == 1) ap = i * 12;
-        else if (ord[i] == 2) ep = i * 12;
-        else                  mp = i * 12;
+    uint8_t subs[4][12];
+    const uint8_t *old_ord = g3_suborder[pid % 24];
+    for (int i = 0; i < 4; i++) memcpy(subs[old_ord[i]], dec + i*12, 12);
+
+    /* PID swap when caller asked for a nature/shiny that the current PID
+     * can't represent.  Re-derive the encryption key from the new PID. */
+    uint8_t curr_shiny  = (uint8_t)(((((pid & 0xFFFFU) ^ (pid >> 16)) ^ tid ^ sid) < 8U) ? 1 : 0);
+    uint8_t curr_nature = (uint8_t)(pid % 25U);
+    if ((mon->nature % 25U) != curr_nature || (mon->is_shiny & 1U) != curr_shiny) {
+        uint32_t new_pid;
+        if (g3_find_pid(mon->nature, mon->is_shiny, tid, sid, pid, &new_pid) == 0) {
+            pid = new_pid;
+            memcpy(dst, &pid, 4);
+            key = pid ^ ((uint32_t)tid | ((uint32_t)sid << 16));
+        }
+        /* Search failure (100k iterations without a match) leaves the old
+         * PID in place — caller's shiny/nature change is silently dropped
+         * rather than corrupting the slot.  In practice the cap is well
+         * beyond what's ever needed. */
     }
 
-    /* Growth: species(2), held_item(2) */
-    uint16_t sp = mon->species;     memcpy(dec + gp,     &sp, 2);
-    uint16_t it = mon->held_item;   memcpy(dec + gp + 2, &it, 2);
+    /* Overlay caller's fields onto the typed substructs.
+     * subs[0]=Growth, subs[1]=Attacks, subs[2]=EVs, subs[3]=Misc. */
+    uint8_t *g = subs[0], *a = subs[1], *e = subs[2], *m = subs[3];
 
-    /* Attacks: 4 moves (2 each), 4 PP (1 each) */
+    uint16_t sp = mon->species;   memcpy(g + 0, &sp, 2);
+    uint16_t it = mon->held_item; memcpy(g + 2, &it, 2);
+
     for (int i = 0; i < 4; i++) {
         uint16_t mv = mon->move_ids[i];
-        memcpy(dec + ap + i*2, &mv, 2);
-        dec[ap + 8 + i] = mon->move_pp[i];
+        memcpy(a + i*2, &mv, 2);
+        a[8 + i] = mon->move_pp[i];
     }
 
-    /* EVs at ep+0..5: HP,Atk,Def,Spd,SpA,SpD (1 each, Gen III capped at 255) */
-    dec[ep + 0] = (uint8_t)mon->evs[0];
-    dec[ep + 1] = (uint8_t)mon->evs[1];
-    dec[ep + 2] = (uint8_t)mon->evs[2];
-    dec[ep + 3] = (uint8_t)mon->evs[5];
-    dec[ep + 4] = (uint8_t)mon->evs[3];
-    dec[ep + 5] = (uint8_t)mon->evs[4];
+    /* EVs at e+0..5: on-disk order HP,Atk,Def,Spd,SpA,SpD; struct order
+     * HP,Atk,Def,SpA,SpD,Spe — so Spd<->SpA/SpD shuffle. */
+    e[0] = (uint8_t)mon->evs[0];
+    e[1] = (uint8_t)mon->evs[1];
+    e[2] = (uint8_t)mon->evs[2];
+    e[3] = (uint8_t)mon->evs[5];
+    e[4] = (uint8_t)mon->evs[3];
+    e[5] = (uint8_t)mon->evs[4];
 
-    /* Misc IVs: bits 0-4=HP, 5-9=Atk, 10-14=Def, 15-19=Spd, 20-24=SpA, 25-29=SpD;
-     * preserve bits 30-31 (egg/nicknamed flags). */
-    uint32_t iv;
-    memcpy(&iv, dec + mp, 4);
-    uint32_t preserved = iv & 0xC0000000u;
-    iv = preserved
+    /* IV word: bits 0-29 IVs, bit 30 egg flag (preserved), bit 31
+     * ability slot (now writable via mon->ability). */
+    uint32_t iv; memcpy(&iv, m, 4);
+    uint32_t egg = iv & 0x40000000u;
+    iv = egg
        | ((uint32_t)(mon->ivs[0] & 0x1F))
        | ((uint32_t)(mon->ivs[1] & 0x1F) << 5)
        | ((uint32_t)(mon->ivs[2] & 0x1F) << 10)
        | ((uint32_t)(mon->ivs[5] & 0x1F) << 15)
        | ((uint32_t)(mon->ivs[3] & 0x1F) << 20)
-       | ((uint32_t)(mon->ivs[4] & 0x1F) << 25);
-    memcpy(dec + mp, &iv, 4);
+       | ((uint32_t)(mon->ivs[4] & 0x1F) << 25)
+       | ((uint32_t)(mon->ability & 1U) << 31);
+    memcpy(m, &iv, 4);
+
+    /* Lay substructs down at the NEW pid's ordering. */
+    const uint8_t *new_ord = g3_suborder[pid % 24];
+    for (int i = 0; i < 4; i++) memcpy(dec + i*12, subs[new_ord[i]], 12);
 
     /* Checksum = 16-bit sum of uint16 words in unencrypted substructs */
     uint32_t sum = 0;
@@ -419,12 +483,16 @@ static void g3_encode_mon(uint8_t *dst, const pksave_pokemon_t *mon,
     uint16_t checksum = (uint16_t)sum;
     memcpy(dst + 0x1C, &checksum, 2);
 
-    /* Encrypt back into the slot */
     g3_crypt(dec, key, dst + 0x20);
 
-    /* OT name and nickname (raw byte writes; charset handled by gen3_encode_name) */
     gen3_encode_name(mon->ot_name,  dst + 0x14, 7);
     gen3_encode_name(mon->nickname, dst + 0x08, 10);
+}
+
+static void g3_encode_mon(uint8_t *dst, const pksave_pokemon_t *mon,
+                          uint16_t trainer_tid, uint16_t trainer_sid)
+{
+    g3_encode_encrypted_block(dst, mon, trainer_tid, trainer_sid);
 
     /* Party extras: status@0x50(4), level@0x52, mail@0x53, currentHP@0x54,
      * maxHP@0x56, Atk@0x58, Def@0x5A, Spd@0x5C, SpA@0x5E, SpD@0x60 */
@@ -617,80 +685,13 @@ static int g3_pc_write(uint8_t *sram, uint32_t slot_off,
     return PKSAVE_OK;
 }
 
-/* Encode a Pokemon into the 80-byte box-mon layout.
- * Mirrors g3_encode_mon but skips the party extras (level/stats at 0x50+). */
+/* Encode a Pokemon into the 80-byte box-mon layout (no party extras).
+ * Shares the encrypted-block encoder with g3_encode_mon, including the
+ * PID-recompute logic for shiny / nature changes. */
 static void g3_encode_box_mon(uint8_t *dst, const pksave_pokemon_t *mon,
                                uint16_t trainer_tid, uint16_t trainer_sid)
 {
-    uint32_t pid; memcpy(&pid, dst, 4);
-    uint16_t tid; memcpy(&tid, dst + 4, 2);
-    uint16_t sid; memcpy(&sid, dst + 6, 2);
-    if (pid == 0 && tid == 0 && sid == 0) {
-        /* fresh slot — synthesize a minimal PID and inherit trainer IDs.
-         * Real games derive PID from RNG state; for editor use any non-zero
-         * value works (encryption is symmetric and shininess uses PID^OT). */
-        pid = 0x12345678u;
-        memcpy(dst, &pid, 4);
-        tid = trainer_tid;
-        sid = trainer_sid;
-        memcpy(dst + 4, &tid, 2);
-        memcpy(dst + 6, &sid, 2);
-    }
-
-    uint32_t key = pid ^ ((uint32_t)tid | ((uint32_t)sid << 16));
-
-    uint8_t dec[48];
-    g3_crypt(dst + 0x20, key, dec);
-
-    const uint8_t *ord = g3_suborder[pid % 24];
-    int gp = 0, ap = 0, ep = 0, mp = 0;
-    for (int i = 0; i < 4; i++) {
-        if      (ord[i] == 0) gp = i * 12;
-        else if (ord[i] == 1) ap = i * 12;
-        else if (ord[i] == 2) ep = i * 12;
-        else                  mp = i * 12;
-    }
-
-    uint16_t sp = mon->species;   memcpy(dec + gp,     &sp, 2);
-    uint16_t it = mon->held_item; memcpy(dec + gp + 2, &it, 2);
-
-    for (int i = 0; i < 4; i++) {
-        uint16_t mv = mon->move_ids[i];
-        memcpy(dec + ap + i*2, &mv, 2);
-        dec[ap + 8 + i] = mon->move_pp[i];
-    }
-
-    dec[ep + 0] = (uint8_t)mon->evs[0];
-    dec[ep + 1] = (uint8_t)mon->evs[1];
-    dec[ep + 2] = (uint8_t)mon->evs[2];
-    dec[ep + 3] = (uint8_t)mon->evs[5];
-    dec[ep + 4] = (uint8_t)mon->evs[3];
-    dec[ep + 5] = (uint8_t)mon->evs[4];
-
-    uint32_t iv;
-    memcpy(&iv, dec + mp, 4);
-    uint32_t preserved = iv & 0xC0000000u;
-    iv = preserved
-       | ((uint32_t)(mon->ivs[0] & 0x1F))
-       | ((uint32_t)(mon->ivs[1] & 0x1F) << 5)
-       | ((uint32_t)(mon->ivs[2] & 0x1F) << 10)
-       | ((uint32_t)(mon->ivs[5] & 0x1F) << 15)
-       | ((uint32_t)(mon->ivs[3] & 0x1F) << 20)
-       | ((uint32_t)(mon->ivs[4] & 0x1F) << 25);
-    memcpy(dec + mp, &iv, 4);
-
-    uint32_t sum = 0;
-    for (int i = 0; i < 48; i += 2) {
-        uint16_t w; memcpy(&w, dec + i, 2);
-        sum += w;
-    }
-    uint16_t checksum = (uint16_t)sum;
-    memcpy(dst + 0x1C, &checksum, 2);
-
-    g3_crypt(dec, key, dst + 0x20);
-
-    gen3_encode_name(mon->ot_name,  dst + 0x14, 7);
-    gen3_encode_name(mon->nickname, dst + 0x08, 10);
+    g3_encode_encrypted_block(dst, mon, trainer_tid, trainer_sid);
 }
 
 int gen3_set_box_slot(pksave_save_t *s, uint8_t box, uint8_t slot,
