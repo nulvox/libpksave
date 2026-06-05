@@ -228,23 +228,34 @@ random binary shows the error screen.
 Closes the first real edit loop end-to-end: type a name, save, verify in
 the original game.
 
-- [ ] `widgets/list_view.{hpp,cpp}` — scrollable list, generic over
+- [x] `widgets/list_view.{hpp,cpp}` — scrollable list, generic over
       row-render callback. Used here for the Trainer field list.
-- [ ] `widgets/numeric_field.{hpp,cpp}` — hold-to-accelerate ±1 with
+- [x] `widgets/numeric_field.{hpp,cpp}` — hold-to-accelerate ±1 with
       D-pad up/down; D-pad left/right ±10; respects min/max passed in.
-- [ ] `widgets/text_input.{hpp,cpp}` — Pokemon-grid keyboard, SELECT
+- [x] `widgets/text_input.{hpp,cpp}` — Pokemon-grid keyboard, SELECT
       cycles charset tabs, START commits, B deletes. Takes
-      `(initial, max_len)` and returns the entered string.
-- [ ] `scenes/trainer_scene.{hpp,cpp}` — fields: name (drills into
+      `(initial, max_len)` and returns the entered string. Charset
+      widened to the full Gen 3 keyboard alphabet during L10.
+- [x] `scenes/trainer_scene.{hpp,cpp}` — fields: name (drills into
       `text_input`), TID (numeric), SID (numeric), money (numeric),
       badges 1–8 (8 toggles labeled `Badge 1`–`Badge 8` per the scoping
       principle).
-- [ ] `scenes/save_scene.{hpp,cpp}` — blocking "SAVING… DON'T TURN OFF
+- [x] `scenes/save_scene.{hpp,cpp}` — blocking "SAVING… DON'T TURN OFF
       THE POWER!" screen; calls `pksave_flush` then `flash_write_all`;
       returns to main menu when done.
-- [ ] Wire Save & Exit in main menu to `save_scene`.
-- [ ] Manual checklist entries: trainer name round-trip, TID round-trip,
-      money round-trip, save-blocks-input check.
+- [x] Wire Save & Exit in main menu to `save_scene`.
+- [x] Manual checklist entries: trainer name round-trip, TID round-trip,
+      money round-trip, save-blocks-input check. (Scaffolded in
+      `frontend-gba/tests/checklist.md` §CP#2; emulator-side verification
+      is the merge gate — see below.)
+
+**Code-complete** as of 2026-06-05 (commit 13beb9e). The CP#2 manual
+checklist in `frontend-gba/tests/checklist.md` is the merge gate: the
+maintainer runs `make gba` in the docker image, symlinks a real Gen III
+`.sav` into the cartridge slot, ticks each check on mGBA, then merges.
+Bundled into the CP#2 PR: the `.gitignore` fix + `git rm --cached` of
+the nine `libpksave/tests/test_*` binaries (clear miss surfaced while
+closing L1/L2 — clean to ship in the same PR).
 
 **Done when:** edit the trainer's name in fixture, choose Save & Exit,
 power-cycle the emulator, reload original Pokemon ROM → trainer name

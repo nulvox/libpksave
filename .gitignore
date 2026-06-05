@@ -28,9 +28,13 @@ frontend-nds/*.map
 frontend-gba/tests/fixtures/*.sav
 frontend-gba/tests/fixtures/*.bin
 
-# Test runner binaries and output
+# Test runner binaries and output.  Each tests/test_<name>.c builds into
+# a sibling tests/test_<name> ELF that gcc spits out into the source tree.
+# Ignore the binaries but keep the .c sources.
 libpksave/tests/*.out
 libpksave/tests/test_runner
+libpksave/tests/test_*
+!libpksave/tests/test_*.c
 
 # Editor / IDE
 .vscode/
