@@ -23,8 +23,8 @@ TARGET       :=  pksave-gba
 BUILD        :=  build
 LIBBUTANO    :=  $(BUTANO_HOME)/butano
 PYTHON       :=  python3
-SOURCES      :=  src src/scenes ../libpksave/src
-INCLUDES     :=  src ../libpksave/include ../libpksave/src
+SOURCES      :=  src src/scenes src/widgets ../libpksave/src
+INCLUDES     :=  src src/widgets ../libpksave/include ../libpksave/src
 DATA         :=
 # Pull only the bitmap fonts out of butano's common/.  Including
 # common/src would drag in demo helpers (info / stats screens) we

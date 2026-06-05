@@ -8,7 +8,10 @@
 CC      = gcc
 CFLAGS  = -std=c99 -Wall -Wextra -pedantic \
           -DPKSAVE_GEN1 -DPKSAVE_GEN2 -DPKSAVE_GEN3 -DPKSAVE_GEN4 -DPKSAVE_GEN5
-INCLUDE = -Iinclude -Isrc -I$(UNITY_DIR)
+# The Gen 3 charset round-trip test shares its character list with the
+# frontend-gba text_input widget — include path points at the widgets
+# directory so test_gen3_charset.c can #include "text_input_charset.h".
+INCLUDE = -Iinclude -Isrc -I$(UNITY_DIR) -I../frontend-gba/src/widgets
 
 SRC = src/detect.c \
       src/checksum.c \
@@ -28,6 +31,7 @@ TEST_BINS = \
     tests/test_gen1 \
     tests/test_gen2 \
     tests/test_gen3 \
+    tests/test_gen3_charset \
     tests/test_gen4 \
     tests/test_gen5 \
     tests/test_limits

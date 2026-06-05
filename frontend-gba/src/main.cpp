@@ -23,6 +23,9 @@
 #include "scenes/scene.hpp"
 #include "scenes/boot_error_scene.hpp"
 #include "scenes/main_menu_scene.hpp"
+#include "scenes/trainer_scene.hpp"
+#include "scenes/save_scene.hpp"
+#include "widgets/text_input.hpp"
 
 namespace {
 
@@ -59,18 +62,26 @@ bn::unique_ptr<pksave_gba::scene> make_scene(
             return bn::unique_ptr<pksave_gba::scene>(
                 new pksave_gba::boot_error_scene("Unhandled boot error"));
 
-        // Other kinds land in Checkpoint #2+.  Until then, fall back to
-        // the main menu so a stray transition can't strand the user.
         case scene_kind::TRAINER:
+            return bn::unique_ptr<pksave_gba::scene>(
+                new pksave_gba::trainer_scene(bridge));
+
+        case scene_kind::SAVE:
+            return bn::unique_ptr<pksave_gba::scene>(
+                new pksave_gba::save_scene(bridge));
+
+        case scene_kind::TEXT_INPUT:
+            return bn::unique_ptr<pksave_gba::scene>(
+                new pksave_gba::text_input_scene());
+
+        // Party / Bag / Boxes land in Checkpoint #3+.  Until then,
+        // fall back to the main menu so a stray transition can't
+        // strand the user.  `default` satisfies butano's
+        // -Wswitch-default warning.
         case scene_kind::PARTY:
         case scene_kind::BAG:
         case scene_kind::BOXES:
-        case scene_kind::SAVE:
         default:
-            // Other kinds land in Checkpoint #2+.  Until then, fall
-            // back to the main menu so a stray transition can't
-            // strand the user.  `default` satisfies butano's
-            // -Wswitch-default warning.
             return bn::unique_ptr<pksave_gba::scene>(
                 new pksave_gba::main_menu_scene(bridge));
     }

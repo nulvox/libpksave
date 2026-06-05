@@ -30,6 +30,7 @@ enum class scene_kind {
     BAG,
     BOXES,
     SAVE,
+    TEXT_INPUT,
 };
 
 class scene {

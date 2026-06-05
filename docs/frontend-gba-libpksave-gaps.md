@@ -38,10 +38,14 @@ critical path.
 | **L5** | `pksave_move_base_pp(game, move_id)` — for PP numeric field cap (×1.6 to allow PP-Up headroom) | Checkpoint #3 (Moves tab) | Small — parallel table in `names/gen3_moves.h` | Frontend hardcodes caps; drifts from format truth |
 | **L6** | `pksave_item_max_stack(game, item_id)` — for the slot_edit_scene qty field cap (HMs and key items return 1) | Checkpoint #4 (Bag) | Small — parallel `const uint16_t` table in `names/gen3_items.h` | Can't enforce per-item caps; user can set qty=99 on HM01 and corrupt save logic |
 | **L7** | `pksave_item_pocket(game, item_id)` — for cycler scoping inside slot_edit_scene | Checkpoint #4 (Bag) | Small — parallel table | Cycler walks all items; user can place Potion in Balls pocket; game may re-sort or misbehave on reload |
+| **L10** | `gen3_encode_char` / `gen3_decode_char` in `libpksave/src/gen3.c:45-61` round-trip only A-Z / a-z / space — digits 0-9 and Gen 3 punctuation silently become `0xFF` (string terminator), truncating names on save | Degrades CP#2 trainer name + CP#3 nicknames/OT names (keyboard's `sym` tab is currently stub-shaped; `text_input_charset.h` is the live source of truth) | Small — expand encoder/decoder lookup tables to the full Gen 3 in-game keyboard charset (0-9, `! ? . , ; : / - ' "` per pret references); extend `text_input_charset.h` so `tests/test_gen3_charset.c` round-trips the new chars | Players can't enter common trainer/Pokemon names like `MR-X` or `Lv99`; editor's text fields look half-built |
 
 > IDs are non-contiguous on purpose: **L3** (`pksave_species_types`) was
 > dropped during planning because the editor does not surface type
-> badges — see the scoping principle above.
+> badges — see the scoping principle above. **L10** was discovered
+> during Checkpoint #2 implementation (2026-06-04) when the text_input
+> keyboard's charset was gated against what libpksave's Gen 3 encoder
+> can round-trip.
 
 ---
 
@@ -115,6 +119,23 @@ Sequence:
    gaps as they go and file them against this matrix. The pre-UI sprint
    (D1–D3) means they inherit a coherent library surface; the lazy-load
    pattern is the precedent for how they extend it.
+
+### Open gap tracker
+
+Tick the box when the gap is resolved; on resolution, also strike
+through the row in the table above and add a **Resolved** YYYY-MM-DD
+note pointing at the file(s) where it landed (see D1–D3 for the
+pattern).
+
+- [ ] **L1** — `pksave_recalc_stats` (CP#3 kickoff)
+- [ ] **L2** — verify / fix `pksave_set_party_slot` shiny round-trip (CP#3 kickoff)
+- [ ] **L4** — `pksave_species_abilities` (CP#3 kickoff)
+- [ ] **L5** — `pksave_move_base_pp` (CP#3 kickoff)
+- [ ] **L6** — `pksave_item_max_stack` (CP#4 kickoff)
+- [ ] **L7** — `pksave_item_pocket` (CP#4 kickoff)
+- [ ] **L8** — `pksave_badge_name` (deferred; future consumer)
+- [ ] **L9** — `pksave_nature_modifiers` (deferred; future consumer)
+- [ ] **L10** — Gen 3 encoder/decoder full charset (recommended before CP#3 so nicknames/OT names aren't capped to A-Z/a-z/space; covered by `tests/test_gen3_charset.c` once `text_input_charset.h` is widened)
 
 ---
 

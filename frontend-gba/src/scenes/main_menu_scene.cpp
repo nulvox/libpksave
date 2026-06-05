@@ -90,11 +90,17 @@ bn::optional<scene_kind> main_menu_scene::update()
     if (bn::keypad::a_pressed())
     {
         const scene_kind target = ENTRY_TARGETS[cursor_];
-        // In Checkpoint #1 none of these scenes exist yet, so A is a
-        // no-op.  Suppress -Wunused-variable on `target` by referencing
-        // it in a static_cast<void>().  Checkpoint #2 replaces the
-        // body below with `return target;`.
-        static_cast<void>(target);
+        // Checkpoint #2: Trainer and Save & Exit are wired.  Party /
+        // Bag / Boxes still no-op until Checkpoint #3+.
+        switch (target)
+        {
+            case scene_kind::TRAINER:
+            case scene_kind::SAVE:
+                return target;
+            default:
+                // No-op for unimplemented entries.
+                break;
+        }
     }
 
     // L/R reserved for top-level page cycling once other scenes land.

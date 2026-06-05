@@ -47,7 +47,82 @@ Run `make gba` at the repo root.  Build artifact must land at
 
 ## Checkpoint #2 — Trainer screen + Save & Exit + text input
 
-To be filled in when Checkpoint #2 lands.
+Build artifact must land at `bin/pksave-gba.gba`.  The `*` dirty
+indicator on the main-menu header must appear after the first edit and
+clear after Save & Exit returns.  Round-trips are verified by loading
+the original Pokemon ROM with the edited save and reading the value in
+the in-game menu.
+
+### Build & charset
+
+- [ ] `make gba` exits 0 and produces `bin/pksave-gba.gba`.
+- [ ] `make test` runs the Gen 3 charset round-trip test
+      (`tests/test_gen3_charset`); all cases pass for every character
+      the keyboard exposes (A-Z, a-z, space).
+
+### Trainer screen — navigation
+
+- [ ] From the main menu, A on `Trainer` opens the Trainer screen.
+- [ ] B on the Trainer screen returns to the main menu (selection
+      cursor preserved).
+- [ ] D-pad up / down moves between rows: Name, TID, SID, Money,
+      Badge 1..Badge 8.  Selection wraps at top and bottom; the list
+      auto-scrolls so the focused row stays in the viewport.
+
+### Trainer name round-trip
+
+- [ ] On Trainer screen, focus `Name` and press A — the text-input
+      keyboard appears, pre-populated with the current name.
+- [ ] SELECT cycles tabs (UPPER / lower / sym); START commits;
+      B deletes last char; B on empty buffer cancels.
+- [ ] After committing a new name (e.g. `TESTER`), the Trainer screen
+      shows the new name and the main-menu `*` dirty indicator appears.
+- [ ] Choose `Save & Exit` from the main menu — the `SAVING... DON'T
+      TURN OFF THE POWER!` screen appears and ignores all input until
+      the FLASH write completes.
+- [ ] After save returns to the main menu the `*` dirty indicator is
+      gone.
+- [ ] Power-cycle the emulator, reload the original Pokemon ROM with
+      the same save — the trainer name in the in-game menu equals
+      `TESTER`.
+
+### TID round-trip
+
+- [ ] Focus TID row; D-pad right increments by 10 (with hold-to-accel),
+      left decrements by 10.  The value never exits `[0, 65535]`.
+- [ ] Edit, save, reload in the original game — TID matches.
+
+### Money round-trip
+
+- [ ] Focus Money row; D-pad right increments by 10 (with hold-to-accel
+      ramping noticeably faster after ~1s).
+- [ ] Set Money to a non-trivial value (e.g. 12345), save, reload in
+      the original game — money in the trainer card matches.
+- [ ] Money saturates at 999,999 (Gen 3 cap) when right is held with
+      max accel.
+
+### Badges round-trip
+
+- [ ] Focus a `Badge N` row; A toggles the row between `ON` and `off`.
+- [ ] Save, reload original game — the corresponding badge bit in the
+      trainer card matches.
+
+### Save scene blocks input
+
+- [ ] During the SAVING screen, holding any of SELECT / START / A / B /
+      D-pad has no observable effect (no scene transition, no UI
+      change beyond the success-then-return one).
+- [ ] If `flush_to_flash` fails, the scene shows `SAVE FAILED. Power
+      off and retry.` and stays there.  (No reliable way to force this
+      without a hardware fault; record `n/a` if unable to test.)
+
+### Dirty indicator
+
+- [ ] Fresh boot: main menu has no `*` on the header.
+- [ ] After any field edit (name, TID, SID, money, badge toggle):
+      `*` appears on the Trainer header and remains visible on the
+      main menu header after returning via B.
+- [ ] After a successful Save & Exit: `*` is gone from the main menu.
 
 ---
 
