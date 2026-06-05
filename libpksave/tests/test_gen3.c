@@ -648,6 +648,70 @@ void test_rs_box_pid_derived_fields(void)
     pksave_close(s);
 }
 
+/* ── Gen III shiny toggle via set_party_slot / set_box_slot ──
+ *
+ * Fixture party slot 0 has PID=0, TID=0x1234, SID=0x5678 — not shiny,
+ * Hardy nature.  Toggling is_shiny=1 must persist after flush+reload,
+ * and the nature must be preserved (a real save editor that changed
+ * nature as a side effect of a shiny toggle would surprise the user).
+ */
+void test_rs_party_shiny_toggle_round_trip(void)
+{
+    if (!load_fixture("rs.sav", rs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_pokemon_t party[6];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party(s, party, &count));
+    TEST_ASSERT_EQUAL_UINT8(0, party[0].is_shiny);
+    uint8_t original_nature = party[0].nature;
+
+    party[0].is_shiny = 1;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_party_slot(s, 0, &party[0]));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party(s, party, &count));
+    TEST_ASSERT_EQUAL_UINT8(1, party[0].is_shiny);
+    TEST_ASSERT_EQUAL_UINT8(original_nature, party[0].nature);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS));
+    pksave_close(s);
+}
+
+/* Reverse direction: box 1 slot 0 fixture is shiny (PID=0x12345678 gives
+ * XOR=0 < 8).  Toggle is_shiny=0 and require the underlying nature to
+ * stay Sassy (nature_id=21). */
+void test_rs_box_unshiny_toggle_round_trip(void)
+{
+    if (!load_fixture("rs.sav", rs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    TEST_ASSERT_EQUAL_UINT8(1, box[0].is_shiny);
+    TEST_ASSERT_EQUAL_UINT8(21, box[0].nature);
+
+    box[0].is_shiny = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_box_slot(s, 1, 0, &box[0]));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    TEST_ASSERT_EQUAL_UINT8(0,  box[0].is_shiny);
+    TEST_ASSERT_EQUAL_UINT8(21, box[0].nature);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS));
+    pksave_close(s);
+}
+
 /* ── Gen III pokerus ── */
 
 void test_rs_party_pokerus_round_trip(void)
@@ -765,6 +829,8 @@ int main(void)
     RUN_TEST(test_gen3_item_name_lookup);
     RUN_TEST(test_rs_party_slot0_pid_derived_fields);
     RUN_TEST(test_rs_box_pid_derived_fields);
+    RUN_TEST(test_rs_party_shiny_toggle_round_trip);
+    RUN_TEST(test_rs_box_unshiny_toggle_round_trip);
     RUN_TEST(test_rs_party_pokerus_round_trip);
     RUN_TEST(test_emerald_party_pokerus_round_trip);
     RUN_TEST(test_frlg_party_pokerus_round_trip);
