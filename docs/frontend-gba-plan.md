@@ -14,10 +14,58 @@ Companion docs:
 
 - `docs/frontend-gba-libpksave-gaps.md` — the library gaps surfaced by
   this plan and the rollout strategy for closing them.
+- `docs/frontend-gba-harness-plan.md` — mGBA-Lua automation harness
+  reference: what's shipped, the helper patterns, how to add a new test.
 - `PRD.md` / `SPEC.md` / `AGENT_PROMPT.md` — feature requirements,
   technical spec, and the original build order.
 
-Date produced: 2026-06-03.
+Date produced: 2026-06-03. Last status refresh: 2026-06-07.
+
+---
+
+## Where to pick up (status 2026-06-07)
+
+**Shipped:**
+
+- **Sprint 0 (library pre-UI)** — D1, D2, D3 closed.
+- **Checkpoint #1** — boot, detect, error scene, main-menu shell.
+- **Checkpoint #2** — trainer-screen edit + Save & Exit + text-input
+  keyboard.
+- **CP#3 library kickoff** — L1, L2, L4, L5 closed (recalc, shiny
+  round-trip via PID recompute, ability lookup, move PP). L10 (charset)
+  also closed mid-CP#2.
+- **mGBA-Lua automation harness** — POC + five hardening rounds
+  shipped. `make test-gba` is a hard merge gate covering 14 tests:
+  per-variant fixture round-trip (RS / Emerald / FRLG), trainer-name
+  round-trip per variant, TID numeric round-trip, main-menu cursor
+  wrap, boot rejects malformed save, plus the supporting smoke /
+  detect / dump / sidecar / key-input tests. See
+  `docs/frontend-gba-harness-plan.md`.
+
+**Next on your plate:** **Checkpoint #3 frontend work** — `widgets/cycler`,
+`scenes/party_scene`, `scenes/pokemon_edit_scene`. The library APIs you
+need (`pksave_recalc_stats`, `pksave_species_abilities`,
+`pksave_move_base_pp`, shiny PID-recompute) are all already public.
+
+**Open library gaps that block later checkpoints:** L6, L7 (Bag, CP#4).
+L8, L9 deferred indefinitely.
+
+**Before you write code, read in this order:**
+
+1. This document, top to bottom — the locked decisions in
+   §"Locked architectural decisions" are contracts.
+2. `docs/frontend-gba-harness-plan.md` — every CP#3 scene you ship
+   needs a `make test-gba` test, modeled after the patterns there.
+   Skim the "Patterns" section first; the rest is reference.
+3. `docs/frontend-gba-libpksave-gaps.md` — confirm the API you'll
+   consume is closed. If you need something new, file it there before
+   adding it.
+4. The §"Patterns and lessons" section at the bottom of this doc —
+   pitfalls and conventions discovered during CP#1, CP#2, and harness
+   work. The most load-bearing one is the **list_view edge-consumption
+   trap** (§"Pitfall — list_view consumes UP/DOWN edges"); your
+   cycler widget will hit it on day one if you don't apply the
+   pattern.
 
 ---
 
@@ -181,54 +229,34 @@ tools/
 
 ---
 
-## Sprint 0 — pre-UI library work
+## Sprint 0 — pre-UI library work — **shipped 2026-06-04**
 
 Land before any `frontend-gba` C++ code. See gaps matrix D1, D2, D3.
 
-- [ ] **D1** — `pksave_ev_max_per_stat(game)`, `pksave_ev_total_max(game)`
-      in `pksave.h`; tables in `gen3.c` (and Gen I/II/IV/V equivalents);
-      Unity tests in `tests/test_genN.c`.
-- [ ] **D2** — `pksave_iv_max(game)` in `pksave.h`; tables; Unity tests.
-- [ ] **D3** — `PKSAVE_GEN3_TRAINER_NAME_MAX`, `PKSAVE_GEN3_NICKNAME_MAX`,
-      `PKSAVE_GEN3_OT_NAME_MAX` as public `#define`s in `pksave.h`;
-      per-gen equivalents added when later frontends land.
-- [ ] Update `docs/frontend-gba-libpksave-gaps.md`: mark D1–D3 resolved.
-- [ ] `make test` green across all Gen flags.
+- [x] **D1** — `pksave_ev_max_per_stat(game)`, `pksave_ev_total_max(game)`.
+- [x] **D2** — `pksave_iv_max(game)`.
+- [x] **D3** — `PKSAVE_GEN3_TRAINER_NAME_MAX`, `PKSAVE_GEN3_NICKNAME_MAX`,
+      `PKSAVE_GEN3_OT_NAME_MAX` public `#define`s.
+- [x] Gaps matrix updated; `make test` green.
 
-**Done when:** `pksave.h` exposes the new helpers, all Unity tests pass,
-the gaps matrix is updated.
+Resolution notes live in `docs/frontend-gba-libpksave-gaps.md` §"Pre-UI
+library sprint".
 
 ---
 
-## Checkpoint #1 — boot, detect, error, main menu shell
+## Checkpoint #1 — boot, detect, error, main menu shell — **shipped**
 
 First mergeable PR. Proves the FLASH↔EWRAM plumbing, the scene loop, and
 the docker/gba build pipeline before any feature work.
 
-- [ ] `frontend-gba/Makefile` — invokes `docker/gba`, builds
-      `bin/pksave-gba.gba`, links a static `libpksave.a` built with
-      `-DPKSAVE_GEN3`.
-- [ ] butano config — declare cartridge save type as FLASH 128KB.
-- [ ] `flash_io.{hpp,cpp}` — `flash_read_all(uint8_t out[131072])` and
-      `flash_write_all(const uint8_t in[131072])` with bank switching.
-- [ ] `pksave_bridge.{hpp,cpp}` — RAII wrapper around `pksave_save_t *`;
-      owns the EWRAM `save_buf`; exposes `game()`, `is_dirty()`,
-      `mark_dirty()`, `flush_to_flash()`.
-- [ ] `scenes/scene.hpp` — base class, `scene_kind` enum.
-- [ ] `scenes/boot_error_scene.{hpp,cpp}` — halt with message.
-- [ ] `scenes/main_menu_scene.{hpp,cpp}` — five entries
-      (Trainer / Party / Bag / Boxes / Save & Exit), L/R cycles the
-      top-level pages (no-op until other scenes exist), header shows
-      detected game and the dirty `●`.
-- [ ] `main.cpp` — boot, copy FLASH→EWRAM, call `pksave_detect` and
-      `pksave_open`, route to `boot_error_scene` or `main_menu_scene`.
-- [ ] `tests/checklist.md` initial scaffold.
-- [ ] `tests/fixtures/` — one fixture each for RS, Emerald, FRLG
-      (synthetic if real saves unavailable; generator script committed).
+- [x] `frontend-gba/Makefile`, butano config (FLASH 128KB),
+      `flash_io.{hpp,cpp}`, `pksave_bridge.{hpp,cpp}`,
+      `scenes/scene.hpp`, `boot_error_scene`, `main_menu_scene`,
+      `main.cpp`, synthetic RS / Emerald / FRLG fixtures.
 
-**Done when:** `make gba` produces `pksave-gba.gba`; mGBA loads it with
-each fixture and the main menu shows the correct game name; loading a
-random binary shows the error screen.
+Done. Harness coverage: `test_editor_rom_loads.py`,
+`test_flash_detected.py`, `test_fixture_roundtrip.py` (3 variants),
+`test_boot_rejects_bad_save.py`, `test_main_menu_wrap.py`.
 
 ---
 
@@ -280,18 +308,25 @@ matches.
 
 ## Checkpoint #3 — Party + Pokemon editor (biggest checkpoint)
 
-**Library kickoff** — close gaps L1, L2, L4, L5 before UI work begins.
+**Library kickoff — all four landed 2026-06-04 / 2026-06-05.** Detail:
+`docs/frontend-gba-libpksave-gaps.md`.
 
-- [ ] **L1** — `pksave_recalc_stats(pkm, game)` with Gen III base-stats
-      table (387 species × 6 stats), nature multipliers, official
-      formula. Unity tests against known in-game values.
-- [ ] **L2** — verify `pksave_set_party_slot` round-trips `is_shiny` in
-      `gen3.c`. If yes, write a regression test. If no, add explicit
-      `pksave_set_pokemon_shiny` or PID-recompute support, with tests.
-- [ ] **L4** — `pksave_species_abilities(game, species_id)` table; tests.
-- [ ] **L5** — `pksave_move_base_pp(game, move_id)` table; tests.
+- [x] **L1** — `pksave_recalc_stats(pkm, game)` + 25-nature mod table +
+      413-entry base-stats table sourced from pret/pokeruby. Public in
+      `pksave.h`. Tests in `libpksave/tests/test_gen3_recalc.c`.
+- [x] **L2** — PID-recompute for `pksave_set_party_slot` /
+      `set_box_slot`; ability writable via `mon->ability` (bundled).
+- [x] **L4** — `pksave_species_abilities`. `gen3_base_stats_t` widened
+      with `ability1` / `ability2` columns from pret.
+- [x] **L5** — `pksave_move_base_pp` with 355-entry table from pret.
 
 **Frontend work** — Pokemon editor + Party screen.
+
+> When you ship each new scene/widget, also ship its `make test-gba`
+> companion. Use `frontend-gba/tests/automation/helpers.lua` for the
+> tap / dump primitives; pattern after `test_trainer_name_roundtrip.py`
+> for an edit-then-FLASH-roundtrip test or
+> `test_trainer_scene_nav.py` for a navigation no-mutation test.
 
 - [ ] `widgets/cycler.{hpp,cpp}` — generic name-cycler; takes
       `(current_id, max_id, lookup_fn, filter_pred)` and renders
@@ -400,69 +435,88 @@ species.
 
 ---
 
-## mGBA Lua automation — the only real frontend verification layer
+## mGBA Lua automation — **shipped 2026-06-06 / 07**
 
-Originally deferred to post-GBA work.  **Promoted to load-bearing**
-because manual emulator runs aren't happening per merge — without this
-harness, every frontend change ships unverified at the emulator level.
+The only real frontend verification layer. `make test-gba` is a hard
+merge gate. See `docs/frontend-gba-harness-plan.md` for the full
+reference (Dockerfile, mgba-lua.c quirks, helpers.lua API, per-test
+descriptions).
 
-### Why now
+### What's in the harness today
 
-- libpksave Unity covers byte-level correctness (encoder, PID-derive,
-  recalc, set/get round-trips).  It cannot catch scene-loop bugs,
-  FLASH bank-switch errors, save-blocks-input regressions, or the
-  trainer-name-round-trips-on-a-real-cart end-to-end check.
-- The CP#2 manual checklist already enumerates the scenarios that need
-  this coverage — those rows become Lua test cases one-to-one.
-- Building the harness during CP#3 (the largest UI checkpoint) doubles
-  as the moment the test surface is broadest and the regression risk
-  is highest.
+- **`docker/test-gba` container** — headless custom `mgba-lua` binary
+  embedding libmgba + the Lua engine (upstream SDL frontend doesn't
+  ship Lua bindings; we link them in via our own short C wrapper).
+  Pinned to `MGBA_TAG=0.10.5`.
+- **`mgba-lua` CLI** — `mgba-lua <rom> <script.lua> [frames] [--save <path>]`.
+  Sidecar save load uses `mCoreLoadSaveFile(core, savePath, true)`
+  (temporary mode; writes don't persist).
+- **Python harness** in `frontend-gba/tests/automation/` — each test
+  is a plain Python 3 script (no pytest) that subprocesses into
+  `docker run`, mounts a save and dump dir, and asserts on the SRAM
+  dump and on `console:log` markers from the Lua side.
+- **`libpksave.so`** — built by `make -C libpksave lib`; loaded via
+  ctypes wrapper at `frontend-gba/tests/automation/pksave_ctypes.py`.
+  Exposes `detect`, `open`, `get_trainer_name`, `get_trainer`, `close`.
+- **`helpers.lua`** — `M.at(frame, fn)`, `M.tap(key, frame, hold=3)`,
+  `M.sram_dump(path)`, `M.KEY.{A,B,SELECT,START,UP,DOWN,LEFT,RIGHT,L,R}`.
+  When butano debounce or mGBA frame timing changes, tune helpers, not
+  N test scripts.
 
-### Scope of the POC (timeboxed: 2 days)
+### Test inventory (14 tests, all green)
 
-- [ ] **`docker/test-gba` container** with headless mGBA built
-      `-DUSE_LUA=ON` (or Debian's `mgba-sdl` if it ships Lua).
-- [ ] **Python harness** in `frontend-gba/tests/automation/` that
-      spawns mGBA with `--script <test>.lua`, captures the SRAM dump
-      written by the Lua script, decodes via libpksave (`ctypes` over
-      the same `.a` Unity uses), and asserts.
-- [ ] **One end-to-end Lua test** proving the harness: boot ROM, drive
-      cursor to Trainer, enter a known name via text_input, Save & Exit,
-      dump SRAM, decode, assert trainer.name matches.  Per-variant
-      fixtures (RS / Emerald / FRLG) — same fixture story as the
-      libpksave Unity suite.
-- [ ] **`make test-gba` target** wired into the root Makefile alongside
-      `make test`.
+| Test                              | What it proves |
+|-----------------------------------|----------------|
+| `test_decode_fixture.py`          | ctypes decodes RS / Emerald / FRLG fixtures |
+| `test_mgba_harness_smoke.py`      | Python → docker → mgba-lua → stdout |
+| `test_editor_rom_loads.py`        | pksave-gba.gba loads as a GBA cartridge |
+| `test_sram_dump.py`               | 16-byte tracer through Lua → file → Python |
+| `test_sram_dump_full.py`          | full SRAM/FLASH region via mirror-probe |
+| `test_flash_detected.py`          | mGBA logs `Detected Flash savegame` after boot (FLASH 128 KiB) |
+| `test_key_input.py`               | A-tap flips KEYINPUT bit 0 (`0x03ff → 0x03fe`) |
+| `test_sidecar_save.py`            | `--save rs.sav` puts the fixture's first 16 bytes into SRAM |
+| `test_sram_dump_full.py`          | mirror-probe full dump |
+| `test_fixture_roundtrip.py`       | 3-variant boot-load → dump → decode (RS/Emerald/FRLG) |
+| `test_trainer_scene_nav.py`       | navigation (`A` from main menu) produces zero FLASH writes |
+| `test_trainer_name_roundtrip.py`  | 3-variant trainer-name edit RED → REDAAA through FLASH |
+| `test_boot_rejects_bad_save.py`   | malformed fixture → boot_error halt; no FLASH writes |
+| `test_tid_roundtrip.py`           | TID +30 through numeric_field; name preserved |
+| `test_main_menu_wrap.py`          | DOWN×5 wraps cursor back to Trainer |
 
-### Scope of full coverage (incremental, post-POC)
+### Coverage gaps (CP#3+ to-add as scenes land)
 
-- One Lua case per box ticked in `frontend-gba/tests/checklist.md`.
-- SRAM-roundtrip assertions cover any test that touches the save buffer
-  (trainer fields, party slot edits, bag changes, box edits — most of
-  the checklist).
-- A small number of tile-pattern / framebuffer-byte assertions cover
-  the cases SRAM can't reach: "dirty indicator appears", "save scene
-  blocks input", "cursor wraps at list ends".
-- Per-test wall time budget: <30s.  Full suite target: <10 min.
+- [ ] Party-slot species/level/move round-trip (after CP#3 ships)
+- [ ] Bag item/qty round-trip (after CP#4 ships)
+- [ ] Box-slot round-trip (after CP#5 ships)
+- [ ] Dirty-indicator visual — currently unreachable; needs
+      framebuffer-byte assertions (filed in harness plan)
+- [ ] Save-blocks-input check — currently inferred from Gate J's clean
+      completion, not directly asserted
 
-### Constraints / known risks
+### Pattern for adding a new test
 
-- mGBA Lua API is small and moderately stable; button-timing across
-  frame boundaries is the main source of script fragility.  Mitigate by
-  centralising `wait_frames(n)` and `tap(button)` helpers — when butano
-  debounce changes, you tune two helpers instead of N scripts.
-- Headless mGBA in docker needs explicit `--frameskip` / SDL-null;
-  verify in the POC before scaling out.
-- The harness should fail loudly if mGBA crashes mid-test (no silent
-  green-on-skipped).
+1. **One Lua drive script** in
+   `frontend-gba/tests/automation/drive_<feature>.lua`. Use
+   `dofile("/src/frontend-gba/tests/automation/helpers.lua")` at the
+   top. Schedule input with `h.tap(h.KEY.<X>, <frame>)`. Dump on
+   `shutdown` via `h.sram_dump("/dump/sram.bin")`. Generous inter-tap
+   gaps (~30 frames). Budget ~480 total frames for a "boot → drive →
+   save → dump" sequence.
+2. **One Python test** at
+   `frontend-gba/tests/automation/test_<feature>.py`. Mirror
+   `test_trainer_name_roundtrip.py` for "load fixture, drive, dump,
+   decode, assert" or `test_trainer_scene_nav.py` for
+   "no-fixture, drive, assert FLASH untouched".
+3. **One line in the root `Makefile`** appending to `GBA_TESTS`.
+4. Run from repo root: `python3 frontend-gba/tests/automation/test_<feature>.py`.
+   When green, run `make test-gba` to confirm no other tests broke.
 
 ### Relationship to the manual checklist
 
-- `frontend-gba/tests/checklist.md` stays in the repo as the
-  user-facing verification doc and as the wishlist of scenarios this
-  harness should eventually cover.  Each Lua test in
-  `frontend-gba/tests/automation/` should reference the checklist row
-  it discharges so the two stay synchronised.
+`frontend-gba/tests/checklist.md` stays as the user-facing verification
+doc and a wishlist of scenarios the harness should cover. Each new Lua
+test should reference the checklist row it discharges so the two stay
+synchronised.
 
 ---
 
@@ -475,19 +529,26 @@ mGBA Lua harness for scene-loop and save-flow).  The user-facing
 manual checklist in `frontend-gba/tests/checklist.md` stays in the
 repo but is not on this list.
 
-- [ ] `make gba` (no args) produces `pksave-gba.gba` with silhouettes only.
-- [ ] `make gba SPRITES_ROM=...` produces a ROM with real sprites.
-- [ ] `make test` green (libpksave Unity tests including all D-* and L-*
-      helpers added during this work).
+- [x] `make gba` (no args) produces `pksave-gba.gba` — currently with
+      silhouette pending CP#6 (no sprite rendering yet, so this is
+      trivially "no sprites" until CP#6).
+- [ ] `make gba SPRITES_ROM=...` produces a ROM with real sprites
+      *(CP#6)*.
+- [x] `make test` green — 22 Unity tests across all Gen flags.
 - [ ] `make test-gba` green — mGBA Lua harness covers:
-      - boot + variant detection on RS / Emerald / FRLG fixtures
-      - UNKNOWN-content fixture lands on the boot error scene
-      - SRAM-roundtrip after Save & Exit for at least one field per CP
-        (trainer name, party-slot species, bag item quantity,
-        box-slot species)
-      - dirty indicator appears after an edit and clears after save
-      - save scene blocks input while the FLASH write is in flight
-- [ ] `docs/frontend-gba-libpksave-gaps.md` reflects which gaps were
+      - [x] boot + variant detection on RS / Emerald / FRLG fixtures
+      - [x] UNKNOWN-content fixture lands on the boot error scene
+      - SRAM-roundtrip after Save & Exit for at least one field per CP:
+        - [x] trainer name (Gate J × 3 variants)
+        - [x] trainer TID (numeric_field exercise)
+        - [ ] party-slot species *(CP#3)*
+        - [ ] bag item quantity *(CP#4)*
+        - [ ] box-slot species *(CP#5)*
+      - [ ] dirty indicator appears after an edit and clears after save
+        *(needs framebuffer assertion infra)*
+      - [ ] save scene blocks input while the FLASH write is in flight
+        *(currently inferred from Gate J's clean completion)*
+- [x] `docs/frontend-gba-libpksave-gaps.md` reflects which gaps were
       filled, which were deferred, and why.
 
 **Out-of-scope for v1 acceptance** (filed for follow-up automation /
@@ -512,3 +573,128 @@ end-user QA):
   principle in the gaps matrix.
 - Does not fill L8 / L9 (badge names, nature modifiers). Filed as known
   library gaps for future consumers.
+
+---
+
+## Patterns and lessons (read before writing CP#3 code)
+
+Discoveries surfaced during CP#1, CP#2, and harness work. Each one is
+small in isolation; collectively they're the difference between a clean
+landing for CP#3 and a re-discovery loop.
+
+### Pitfall — `list_view` consumes UP/DOWN edges; level-triggered field widgets must arm-on-focus
+
+`widgets/list_view.cpp` reads `bn::keypad::up_pressed()` and
+`down_pressed()` — edge-triggered, one cursor step per press edge.
+`widgets/numeric_field.cpp` reads `up_held()` / `down_held()` and
+maintains its own per-axis hold-frame counter — level-triggered, with a
+"frame 1 always steps" rule for tap responsiveness.
+
+Both ticks run in the same frame from `trainer_scene::update`:
+
+```cpp
+const bool selection_changed = list_.tick();    // edge-consumed UP/DOWN
+const int sel = list_.selected();
+if (sel == ROW_TID) { tid_.tick(); }            // level-read sees STILL-held DOWN
+```
+
+So pressing DOWN to navigate from ROW_NAME to ROW_TID **also** debits
+TID by 1 (numeric_field reads down_held=true on the same frame and
+treats it as a fresh "frame 1" step). Symmetric for UP.
+
+**Fix — already applied** to `numeric_field` + `trainer_scene`:
+
+- `numeric_field` exposes `on_focus_acquired()`. It disarms any axis
+  currently held; tick() ignores disarmed axes until they're released.
+  Axes re-arm automatically when the user lifts the key.
+- `trainer_scene::update` calls `tid_.on_focus_acquired()` (and `sid_`,
+  `money_`) whenever `list_.tick()` returns true and the destination is
+  a numeric row.
+
+**You will hit this in CP#3** when you ship `widgets/cycler`: it
+probably reads L/R edges or held axes too. If it reads `*_held()` for
+hold-to-fast-cycle, give it the same `on_focus_acquired()` method and
+call it from `pokemon_edit_scene::update`. Pattern: anything that does
+level-triggered input inside a list_view-driven scene needs disarm-on-
+focus, or the navigation edge that lands focus on you also "uses" you.
+
+Regression test: `frontend-gba/tests/automation/test_tid_roundtrip.py`.
+Asserts a clean `+30` from three RIGHT taps; if a future widget change
+reintroduces the bug the test reports `+29` and tells the reader why.
+
+### Pitfall — the editor ROM is `.gitignore`-d; `make test-gba` will use a stale binary
+
+`frontend-gba/pksave-gba.gba` is **not in git** (matches the
+`.gitignore` pattern `frontend-gba/*.gba`). Each contributor has their
+own local copy. If you change editor source and run `make test-gba`
+without first running `make gba`, you are testing **the previous
+build**. The harness has no way to detect this; a "passing" test means
+"the binary you happen to have on disk passes," not "your changes
+pass."
+
+Gate J once spent ~hours chasing a "broken text_input tab=2" mystery
+that turned out to be a stale ROM committed for the wrong reason. Don't
+repeat it: **run `make gba && make test-gba` together** when you've
+changed anything in `frontend-gba/src/`.
+
+### Pattern — mGBA's save-type autodetect is *lazy*; wait for boot before asserting
+
+mGBA picks SRAM vs. FLASH based on the **first cartridge-memory access**.
+A read at `0x0E000000` ⇒ SRAM. A write to `0x0E005555` (the FLASH
+unlock magic) ⇒ FLASH. The editor's `bn::core::init` →
+`flash_read_all` writes the unlock command during early boot (frames
+~15). Any harness probe that touches FLASH/SRAM at frame 0 will lock
+mGBA to SRAM 32 KiB before the editor gets to fire FLASH unlock.
+
+**In test code**: do your SRAM dump in the `shutdown` callback (after
+all N frames have advanced) or wait ≥60 frames in a `frame` callback.
+See `dump_after_boot.lua` for the canonical pattern.
+
+### Pattern — mGBA Lua's `emu.memory.<region>` is lazy-registered
+
+Per-region accessors (`emu.memory.sram`, `emu.memory.ewram`) only
+populate once the region has been accessed. Lua's `emu.memory.sram` is
+`nil` until something reads or writes the SRAM range. Workaround in
+`helpers.lua`'s `sram_read_all`: warm-up `emu:read8(0x0E000000)` first,
+then dump via byte loop. Alternative: write a marker, find the lowest
+power-of-2 offset whose readback matches the marker — that's the
+address-mirror wrap point and equals region size. See
+`dump_sram_full.lua` for the mirror-probe pattern.
+
+### Pattern — drive script frame budget
+
+A typical "boot → drive UI → Save & Exit → FLASH write → dump" sequence
+needs ≥ ~480 frames at the default tap pacing:
+
+- ~30 frames for boot + main menu stabilisation
+- ~30 frames per cursor / scene transition (gates need this for the
+  edge-triggered keypad state to settle)
+- ~50 frames for the synchronous FLASH write inside `save_scene`
+
+Tests using `text_input` editing typically run 480 frames; the wrap
+test (`test_main_menu_wrap.py`) uses 600 because it also walks the cursor
+through 5+ extra DOWNs.
+
+### Pattern — `tap` is the universal input primitive
+
+`h.tap(KEY, frame, hold=3)` schedules a press at `frame` and a release
+at `frame + hold`. 3-frame hold clears the butano debounce on
+edge-triggered inputs (A, B, START, SELECT, list-view UP/DOWN) and
+produces exactly one step in `numeric_field` (since
+`should_step_this_frame(1)` returns true and frames 2-9 are the dead
+zone). If you ever need to test the hold-to-accelerate path, use
+`h.at(frame, fn)` directly to compose holds longer than the dead zone
+(≥ 10 frames).
+
+### Lesson — Track real artifacts vs. test artifacts in the fixture generator
+
+`libpksave/tests/fixtures/generate_fixtures.py` had a slice-assignment
+that silently grew Gen-3 fixtures from 131,072 to 278,520 bytes (Gen-3
+sections are 4,096 bytes; the bug used `GEN3_SIZE // GEN3_NUM_SECTIONS`
+which is 9,362 not 4,096). C tests `fread`-ed only 128 KiB so they
+passed; the harness tried to load the whole file and failed `pksave_detect`.
+
+The regression guard is now `libpksave/tests/test_fixtures.c` — opens
+each fixture and asserts its on-disk size matches the canonical value.
+**When you add a Gen IV/V fixture or change Gen 3 generation, add a row
+to `test_fixtures.c`'s expected-size table.**

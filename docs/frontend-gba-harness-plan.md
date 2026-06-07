@@ -3,36 +3,47 @@ SPDX-License-Identifier: MIT
 Copyright (c) 2026 gbsdk contributors
 -->
 
-# `frontend-gba` mGBA-Lua harness — gaps and parallel work plan
+# `frontend-gba` mGBA-Lua harness — reference and extension guide
 
-Captures the gaps surfaced while building the mGBA-Lua automation POC
-(2026-06-06) and lays the remaining work out as **parallel tracks** so
-multiple contributors / agents can pick pieces independently. The
-trainer-name SRAM round-trip — the original tracer-bullet target from
-`docs/frontend-gba-plan.md` §"mGBA Lua automation" — is the convergence
-point at the end.
+Originally drafted on 2026-06-06 as a parallel-work plan for the POC
+and its hardening rounds. All planned tracks shipped; this doc now lives
+as the **reference for the harness** — how the pieces fit together,
+which patterns to follow when adding a new test, and which gotchas are
+real. The CP#3 agent reads this *after* `docs/frontend-gba-plan.md`.
 
 Companion docs:
 
-- `docs/frontend-gba-plan.md` — the master execution plan; §"mGBA Lua
-  automation" defined the POC scope.
+- `docs/frontend-gba-plan.md` — master execution plan and the
+  CP#3-onward roadmap. **Read this first.**
 - `docs/frontend-gba-libpksave-gaps.md` — library-side gaps; the
-  fixture-generator bug (Track B below) belongs in that matrix too.
+  fixture-generator bug (Track B below) is also tracked there.
 
-Date produced: 2026-06-06.
+Date produced: 2026-06-06. Last refresh: 2026-06-07.
 
 ---
 
-## What landed (POC)
+## What landed
 
-`make test-gba` runs four passing tests on a clean checkout:
+`make test-gba` runs **14 passing tests** on a clean checkout. POC +
+five hardening rounds + a numeric_field bug fix surfaced by the TID
+round-trip test.
 
-| Test                                                | What it proves                                            |
-|-----------------------------------------------------|-----------------------------------------------------------|
-| `test_decode_fixture.py`                            | `libpksave.so` + Python ctypes decode RS / Emerald / FRLG |
-| `test_mgba_harness_smoke.py`                        | Python can subprocess into `docker run` → `mgba-lua` and observe `console:log` stdout |
-| `test_editor_rom_loads.py`                          | `frontend-gba/pksave-gba.gba` loads under the harness as a GBA cartridge |
-| `test_sram_dump.py`                                 | Lua reads SRAM via `emu:read8`, writes to a host-mounted file, Python reads it back |
+| Test                              | What it proves |
+|-----------------------------------|----------------|
+| `test_decode_fixture.py`          | ctypes decodes RS / Emerald / FRLG fixtures (no docker) |
+| `test_mgba_harness_smoke.py`      | Python → docker → mgba-lua → stdout marker |
+| `test_editor_rom_loads.py`        | pksave-gba.gba loads as a GBA cartridge |
+| `test_sram_dump.py`               | 16-byte tracer through Lua → file → Python |
+| `test_sram_dump_full.py`          | full SRAM/FLASH region via mirror-probe |
+| `test_flash_detected.py`          | mGBA logs `Detected Flash savegame` after boot |
+| `test_key_input.py`               | A-tap flips KEYINPUT bit 0 (`0x03ff → 0x03fe`) |
+| `test_sidecar_save.py`            | `--save rs.sav` injects fixture's first 16 bytes into SRAM |
+| `test_fixture_roundtrip.py`       | 3-variant boot → dump → decode (RS / Emerald / FRLG) |
+| `test_trainer_scene_nav.py`       | navigation produces zero FLASH writes |
+| `test_trainer_name_roundtrip.py`  | 3-variant trainer-name edit RED → REDAAA through FLASH |
+| `test_boot_rejects_bad_save.py`   | malformed fixture → boot_error halt; FLASH untouched |
+| `test_tid_roundtrip.py`           | TID +30 through numeric_field; name preserved |
+| `test_main_menu_wrap.py`          | DOWN×5 wraps cursor back to Trainer |
 
 Supporting infrastructure shipped alongside:
 
@@ -79,6 +90,38 @@ session. See `frontend-gba/tests/automation/test_flash_detected.py`.
 state (memory regions, save type, etc.) must run for enough frames that
 the boot code has issued its initialising memory accesses. Don't assert
 save-type or `emu.memory.<region>` membership at frame 0.
+
+### G3 — `list_view` consumes UP/DOWN edges the same frame `numeric_field` reads them
+
+**Surfaced 2026-06-07 by `test_tid_roundtrip.py`.**
+
+`widgets/list_view.cpp` uses edge-triggered `up_pressed()/down_pressed()`
+to move its cursor. `widgets/numeric_field.cpp` uses level-triggered
+`up_held()/down_held()` with a frame counter (so a single tap = "frame
+1" = one step). When `trainer_scene::update` runs both in the same
+frame, navigating DOWN onto a numeric row both moves the cursor AND
+debits the numeric value by 1, because the still-held DOWN edge is
+observed by both readers.
+
+**Fix landed 2026-06-07 in the same PR as the test that found it:**
+
+- `widgets/numeric_field` now exposes `on_focus_acquired()` and tracks
+  a per-axis `armed_` flag. Calling `on_focus_acquired()` disarms any
+  currently-held axis; tick() ignores disarmed axes until they're
+  released (each axis re-arms when the user lifts the key).
+- `scenes/trainer_scene::update` calls
+  `{tid_,sid_,money_}.on_focus_acquired()` when `list_.tick()` returns
+  true and the destination is the matching numeric row.
+
+`test_tid_roundtrip.py` now expects a clean `+30` from three RIGHT taps
+(was `+29` with the bug). The latent issue is documented thoroughly in
+the test docstring + the drive Lua header so a regression reads loudly.
+
+**General lesson for CP#3+ widgets:** any focusable widget that reads
+level-triggered hold state (`bn::keypad::*_held()`) inside a
+`list_view`-driven scene must apply the same pattern. Your cycler
+widget — if it does L/R hold-to-cycle — will hit the same trap on day
+one. Mirror `numeric_field`'s arming pattern.
 
 ### G2 — `generate_fixtures.py` emits oversized Gen-3 fixtures
 
