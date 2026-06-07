@@ -39,6 +39,15 @@ public:
     // responsible for redrawing.
     bool tick();
 
+    // Call when focus arrives at this field via list-view navigation.
+    // Any d-pad axis currently held (typically the one that just drove
+    // the navigation edge) is disarmed: it will be ignored by tick()
+    // until the user releases and re-presses it. Without this, the
+    // navigation edge would be re-interpreted as a fresh "frame 1"
+    // step and bump the value once on arrival.
+    // Bug discovered by frontend-gba/tests/automation/test_tid_roundtrip.py.
+    void on_focus_acquired();
+
     int  value() const { return value_; }
     void set_value(int v);
 
@@ -58,6 +67,14 @@ private:
     int down_frames_;
     int left_frames_;
     int right_frames_;
+
+    // Per-axis arming. An axis disarmed by on_focus_acquired() ignores
+    // hold input until the user releases the key (axis re-arms on
+    // observing a not-held frame inside tick()).
+    bool up_armed_;
+    bool down_armed_;
+    bool left_armed_;
+    bool right_armed_;
 };
 
 }  // namespace pksave_gba

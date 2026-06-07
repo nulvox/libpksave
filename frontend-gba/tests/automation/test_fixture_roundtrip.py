@@ -41,9 +41,16 @@ DUMP_LUA_CONTAINER = "/src/frontend-gba/tests/automation/dump_after_boot.lua"
 FRAMES = "120"
 TIMEOUT_SECONDS = 120
 
-FIXTURE_NAME = "rs.sav"
-EXPECTED_GAME = pk.Game.RS
+# All three Gen-3 fixtures encode the same canonical trainer name "RED" per
+# libpksave/tests/fixtures/generate_fixtures.py.  Per-variant testing catches
+# variant-specific section-layout / checksum bugs that the single-fixture
+# tracer can't.
 EXPECTED_TRAINER_NAME = "RED"
+CASES = [
+    ("rs.sav",      pk.Game.RS),
+    ("emerald.sav", pk.Game.EMERALD),
+    ("frlg.sav",    pk.Game.FRLG),
+]
 
 
 def fail(msg, result=None):
@@ -54,18 +61,18 @@ def fail(msg, result=None):
     sys.exit(1)
 
 
-def main():
-    fixture_src = os.path.join(REPO_ROOT, "libpksave", "tests", "fixtures", FIXTURE_NAME)
+def run_case(fixture_name, expected_game, lib):
+    fixture_src = os.path.join(REPO_ROOT, "libpksave", "tests", "fixtures", fixture_name)
     if not os.path.isfile(fixture_src):
         fail(f"fixture missing: {fixture_src}")
 
-    with tempfile.TemporaryDirectory(prefix="pksave-roundtrip-") as workdir:
+    with tempfile.TemporaryDirectory(prefix=f"pksave-rt-{fixture_name}-") as workdir:
         dump_dir = os.path.join(workdir, "dump")
         save_dir = os.path.join(workdir, "save")
         os.makedirs(dump_dir)
         os.makedirs(save_dir)
 
-        save_path = os.path.join(save_dir, FIXTURE_NAME)
+        save_path = os.path.join(save_dir, fixture_name)
         shutil.copy2(fixture_src, save_path)
 
         try:
@@ -77,39 +84,34 @@ def main():
                  DOCKER_IMAGE,
                  "mgba-lua",
                  EDITOR_ROM_CONTAINER, DUMP_LUA_CONTAINER, FRAMES,
-                 "--save", f"/save/{FIXTURE_NAME}"],
+                 "--save", f"/save/{fixture_name}"],
                 capture_output=True, text=True, timeout=TIMEOUT_SECONDS,
             )
         except FileNotFoundError:
             fail("docker not found on PATH")
         except subprocess.TimeoutExpired:
-            fail(f"mgba-lua did not exit within {TIMEOUT_SECONDS}s")
+            fail(f"{fixture_name}: mgba-lua did not exit within {TIMEOUT_SECONDS}s")
 
         if result.returncode != 0:
-            fail(f"mgba-lua exited {result.returncode}", result)
+            fail(f"{fixture_name}: mgba-lua exited {result.returncode}", result)
         if "dump_after_boot: OK" not in result.stdout:
-            fail("'dump_after_boot: OK' marker not found", result)
+            fail(f"{fixture_name}: 'dump_after_boot: OK' marker not found", result)
 
         dump_path = os.path.join(dump_dir, "sram.bin")
         if not os.path.isfile(dump_path):
-            fail(f"dump not produced: {dump_path}", result)
+            fail(f"{fixture_name}: dump not produced: {dump_path}", result)
 
         with open(dump_path, "rb") as f:
             sram = f.read()
 
-        print(f"  dump size:    {len(sram)} bytes")
-
         if len(sram) != 131072:
-            fail(f"expected 128 KiB FLASH dump, got {len(sram)} bytes "
+            fail(f"{fixture_name}: expected 128 KiB FLASH dump, got {len(sram)} bytes "
                  f"(boot-time FLASH detect did not fire — check frame count "
                  f"and editor flash_unlock_prefix)", result)
 
-        # Decode via the ctypes wrapper.
-        lib = pk.load_library()
         detected = pk.detect(sram, lib=lib)
-        print(f"  pksave_detect: {detected.name}")
-        if detected != EXPECTED_GAME:
-            fail(f"expected {EXPECTED_GAME.name}, got {detected.name}", result)
+        if detected != expected_game:
+            fail(f"{fixture_name}: expected {expected_game.name}, got {detected.name}", result)
 
         save = pk.open(sram, detected, lib=lib)
         try:
@@ -117,11 +119,18 @@ def main():
         finally:
             pk.close(save)
 
-        print(f"  trainer name:  {name!r}")
         if name != EXPECTED_TRAINER_NAME:
-            fail(f"trainer name {name!r} != expected {EXPECTED_TRAINER_NAME!r}", result)
+            fail(f"{fixture_name}: trainer name {name!r} != expected {EXPECTED_TRAINER_NAME!r}", result)
 
-    print(f"PASS: rs.sav round-trip — sidecar load → 128 KiB FLASH dump → ctypes decode → trainer='{name}'")
+        print(f"  OK  {fixture_name:12s} detect={detected.name:7s} name={name!r}")
+
+
+def main():
+    lib = pk.load_library()
+    print(f"running {len(CASES)} Gen-3 fixture round-trip cases:")
+    for fixture_name, expected_game in CASES:
+        run_case(fixture_name, expected_game, lib)
+    print(f"PASS: {len(CASES)}/{len(CASES)} fixtures round-tripped — sidecar load → 128 KiB FLASH dump → ctypes decode")
     return 0
 
 

@@ -171,12 +171,24 @@ bn::optional<scene_kind> trainer_scene::update()
     }
 
     // List navigation (up/down).
-    if (list_.tick())
-    {
-        // selection changed — no save mutation, just visual.
-    }
-
+    const bool selection_changed = list_.tick();
     const int sel = list_.selected();
+
+    if (selection_changed)
+    {
+        // If we just landed on a numeric_field row, the d-pad edge that
+        // drove the navigation is still being held. Disarm the field so
+        // it doesn't reinterpret that hold as a fresh "frame 1" step.
+        // See numeric_field::on_focus_acquired() + test_tid_roundtrip.py.
+        switch (sel)
+        {
+            case ROW_TID:   tid_.on_focus_acquired();   break;
+            case ROW_SID:   sid_.on_focus_acquired();   break;
+            case ROW_MONEY: money_.on_focus_acquired(); break;
+            default: break;
+        }
+        need_list_redraw = true;
+    }
 
     // Per-field input handling.
     if (sel == ROW_NAME)

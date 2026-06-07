@@ -28,8 +28,25 @@ numeric_field::numeric_field(int initial, int min, int max)
     , down_frames_(0)
     , left_frames_(0)
     , right_frames_(0)
+    , up_armed_(true)
+    , down_armed_(true)
+    , left_armed_(true)
+    , right_armed_(true)
 {
     set_value(initial);
+}
+
+void numeric_field::on_focus_acquired()
+{
+    // Any axis currently held is the one (or one of the ones) that just
+    // drove the list_view edge to land focus here. Disarm it so tick()
+    // ignores it until released; once the user lifts the key, the next
+    // press becomes a clean +1/-1/etc. edge.
+    up_armed_    = !bn::keypad::up_held();
+    down_armed_  = !bn::keypad::down_held();
+    left_armed_  = !bn::keypad::left_held();
+    right_armed_ = !bn::keypad::right_held();
+    up_frames_ = down_frames_ = left_frames_ = right_frames_ = 0;
 }
 
 void numeric_field::set_value(int v)
@@ -54,11 +71,18 @@ bool numeric_field::should_step_this_frame(int hold_frames) const
 
 bool numeric_field::tick()
 {
-    // Increment hold counters on currently-held axes; reset others.
-    up_frames_    = bn::keypad::up_held()    ? (up_frames_    + 1) : 0;
-    down_frames_  = bn::keypad::down_held()  ? (down_frames_  + 1) : 0;
-    left_frames_  = bn::keypad::left_held()  ? (left_frames_  + 1) : 0;
-    right_frames_ = bn::keypad::right_held() ? (right_frames_ + 1) : 0;
+    // Re-arm any axis whose key has been released. A disarmed axis only
+    // counts as "fresh" once the user actually lifts it.
+    if (!bn::keypad::up_held())    up_armed_    = true;
+    if (!bn::keypad::down_held())  down_armed_  = true;
+    if (!bn::keypad::left_held())  left_armed_  = true;
+    if (!bn::keypad::right_held()) right_armed_ = true;
+
+    // Increment hold counters on currently-held armed axes; otherwise reset.
+    up_frames_    = (up_armed_    && bn::keypad::up_held())    ? (up_frames_    + 1) : 0;
+    down_frames_  = (down_armed_  && bn::keypad::down_held())  ? (down_frames_  + 1) : 0;
+    left_frames_  = (left_armed_  && bn::keypad::left_held())  ? (left_frames_  + 1) : 0;
+    right_frames_ = (right_armed_ && bn::keypad::right_held()) ? (right_frames_ + 1) : 0;
 
     int delta = 0;
     if (up_frames_    && should_step_this_frame(up_frames_))    delta += 1;
