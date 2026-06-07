@@ -183,17 +183,19 @@ void text_input_scene::backspace()
 void text_input_scene::commit()
 {
     auto& mbx = text_input_state();
-    mbx.result.value     = buffer_;
-    mbx.result.cancelled = false;
-    mbx.result.valid     = true;
+    mbx.result.value      = buffer_;
+    mbx.result.cancelled  = false;
+    mbx.result.valid      = true;
+    mbx.result.caller_tag = mbx.request.caller_tag;
 }
 
 void text_input_scene::cancel()
 {
     auto& mbx = text_input_state();
-    mbx.result.value     = buffer_;
-    mbx.result.cancelled = true;
-    mbx.result.valid     = true;
+    mbx.result.value      = buffer_;
+    mbx.result.cancelled  = true;
+    mbx.result.valid      = true;
+    mbx.result.caller_tag = mbx.request.caller_tag;
 }
 
 bn::optional<scene_kind> text_input_scene::update()

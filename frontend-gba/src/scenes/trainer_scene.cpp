@@ -205,9 +205,10 @@ bn::optional<scene_kind> trainer_scene::update()
             {
                 mbx.request.initial.append(trainer_.name[i]);
             }
-            mbx.request.max_len   = PKSAVE_GEN3_TRAINER_NAME_MAX;
-            mbx.request.return_to = scene_kind::TRAINER;
-            mbx.result.valid      = false;
+            mbx.request.max_len    = PKSAVE_GEN3_TRAINER_NAME_MAX;
+            mbx.request.return_to  = scene_kind::TRAINER;
+            mbx.request.caller_tag = 0;
+            mbx.result.valid       = false;
             return scene_kind::TEXT_INPUT;
         }
     }

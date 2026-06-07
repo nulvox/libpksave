@@ -36,7 +36,7 @@ import pksave_ctypes as pk  # noqa: E402
 DOCKER_IMAGE = "pksave-test-gba"
 EDITOR_ROM_CONTAINER = "/src/frontend-gba/pksave-gba.gba"
 DRIVE_LUA_CONTAINER = "/src/frontend-gba/tests/automation/drive_party_species_edit_save.lua"
-FRAMES = "540"
+FRAMES = "600"
 TIMEOUT_SECONDS = 180
 
 FIXTURE_NAME = "rs.sav"

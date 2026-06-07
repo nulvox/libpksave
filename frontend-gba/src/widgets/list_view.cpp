@@ -35,6 +35,25 @@ void list_view::set_row_provider(row_provider_fn fn, void* ctx)
     redraw();
 }
 
+void list_view::set_row_count(int row_count)
+{
+    row_count_ = row_count;
+    if (row_count_ <= 0)
+    {
+        selected_ = 0;
+        top_row_  = 0;
+    }
+    else
+    {
+        if (selected_ >= row_count_) selected_ = row_count_ - 1;
+        if (selected_ < 0)           selected_ = 0;
+        const int max_top = bn::max(0, row_count_ - viewport_rows_);
+        if (top_row_ > max_top) top_row_ = max_top;
+        if (top_row_ < 0)       top_row_ = 0;
+    }
+    redraw();
+}
+
 void list_view::redraw()
 {
     sprites_.clear();

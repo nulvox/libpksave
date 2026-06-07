@@ -37,6 +37,12 @@ namespace pksave_gba {
 // The caller writes `request`, returns scene_kind::TEXT_INPUT, and on
 // re-entry to the caller scene reads `result`.  Only one keyboard is
 // active at a time so a single static slot is sufficient.
+//
+// `caller_tag` is opaque to text_input_scene — callers use it to
+// remember WHICH of several fields drove the drill (e.g.
+// pokemon_edit_scene's nickname vs OT row).  The scene re-entry on
+// return is a fresh ctor on the unique_ptr, so member fields don't
+// survive; the mailbox is the only stable channel.
 struct text_input_mailbox {
     struct request_t {
         bn::string<16> initial;
@@ -44,11 +50,16 @@ struct text_input_mailbox {
         // Caller hint to map "what scene returns when the keyboard
         // closes".  Set by the requester before returning TEXT_INPUT.
         scene_kind     return_to;
+        // Caller-defined tag (which field, which slot, etc).
+        int            caller_tag;
     };
     struct result_t {
         bn::string<16> value;     // committed or partial-at-cancel
         bool           cancelled;
         bool           valid;     // true after text_input_scene populates it
+        // Echoed from request.caller_tag so the caller can route the
+        // result without keeping its own state.
+        int            caller_tag;
     };
     request_t request;
     result_t  result;

@@ -61,6 +61,11 @@ public:
     // affects row text).
     void redraw();
 
+    // Replace the row count (e.g. when the owning scene switches to a
+    // different tab whose field list is shorter or empty).  Clamps
+    // `selected_` and `top_row_` into the new range and redraws.
+    void set_row_count(int row_count);
+
     int selected() const { return selected_; }
     int row_count() const { return row_count_; }
 
