@@ -77,6 +77,25 @@ class PksaveTrainer(Structure):
     ]
 
 
+class PksavePokerus(Structure):
+    """Mirror of pksave_pokerus_t from pksave.h.
+
+    `status` is the decoded enum value (NEVER=0, ACTIVE=1, CURED=2);
+    strain/days are the raw 4-bit nibbles.
+    """
+    _fields_ = [
+        ("strain", c_uint8),
+        ("days",   c_uint8),
+        ("status", c_int),
+    ]
+
+
+class PokerusStatus(enum.IntEnum):
+    NEVER  = 0
+    ACTIVE = 1
+    CURED  = 2
+
+
 class PksavePokemon(Structure):
     """Mirror of pksave_pokemon_t from pksave.h.
 
@@ -178,6 +197,11 @@ def _bind(lib: CDLL) -> None:
     lib.pksave_get_party.argtypes = [c_void_p, POINTER(PksavePokemon), POINTER(c_uint8)]
     lib.pksave_get_party.restype = c_int
 
+    # int pksave_get_party_pokerus(pksave_save_t *save, uint8_t slot,
+    #                              pksave_pokerus_t *out);
+    lib.pksave_get_party_pokerus.argtypes = [c_void_p, c_uint8, POINTER(PksavePokerus)]
+    lib.pksave_get_party_pokerus.restype = c_int
+
 
 # ── Pythonic wrappers ────────────────────────────────────────────────────────
 
@@ -270,6 +294,17 @@ def get_trainer(save: Save) -> PksaveTrainer:
     return tr
 
 
+def get_party_pokerus(save: Save, slot: int) -> PksavePokerus:
+    """Return the Pokerus state of a party slot."""
+    if not save:
+        raise ValueError("save is closed or invalid")
+    pkrs = PksavePokerus()
+    rc = save._lib.pksave_get_party_pokerus(save._handle, slot, ctypes.byref(pkrs))
+    if rc != PKSAVE_OK:
+        raise RuntimeError(f"pksave_get_party_pokerus(slot={slot}) rc={rc}")
+    return pkrs
+
+
 def get_party(save: Save) -> tuple[list[PksavePokemon], int]:
     """Return (party_array, count).  party_array always has 6 entries; only
     the first `count` are meaningful (filled slots).  Each entry is a
@@ -296,6 +331,8 @@ __all__ = [
     "Game",
     "PksaveTrainer",
     "PksavePokemon",
+    "PksavePokerus",
+    "PokerusStatus",
     "Save",
     "load_library",
     "detect",
@@ -303,6 +340,7 @@ __all__ = [
     "get_trainer_name",
     "get_trainer",
     "get_party",
+    "get_party_pokerus",
     "close",
     "PKSAVE_OK",
     "PKSAVE_ERR_NULL",

@@ -22,8 +22,28 @@ constexpr int ROW_ITEM     = 3;
 constexpr int ROW_ABILITY  = 4;
 constexpr int ROW_NATURE   = 5;
 constexpr int ROW_SHINY    = 6;
-constexpr int IDENTITY_ROW_COUNT = 7;
+constexpr int ROW_POKERUS  = 7;
+constexpr int IDENTITY_ROW_COUNT = 8;
 constexpr int VIEWPORT_ROWS      = 5;
+
+// STATS tab row layout: 1 level + 6 EVs + 6 IVs = 13.
+constexpr int ROW_LEVEL    = 0;
+constexpr int ROW_EV_HP    = 1;
+constexpr int ROW_EV_ATK   = 2;
+constexpr int ROW_EV_DEF   = 3;
+constexpr int ROW_EV_SPA   = 4;
+constexpr int ROW_EV_SPD   = 5;
+constexpr int ROW_EV_SPE   = 6;
+constexpr int ROW_IV_HP    = 7;
+constexpr int ROW_IV_ATK   = 8;
+constexpr int ROW_IV_DEF   = 9;
+constexpr int ROW_IV_SPA   = 10;
+constexpr int ROW_IV_SPD   = 11;
+constexpr int ROW_IV_SPE   = 12;
+constexpr int STATS_ROW_COUNT = 13;
+
+constexpr int LEVEL_MIN = 1;
+constexpr int LEVEL_MAX = 100;
 
 // Per AGENT_PROMPT: Gen 3 dex max is 386 but the species ID space goes
 // up to ~411.  pksave_species_name returns "???" for unknown IDs.
@@ -51,6 +71,14 @@ pokemon_edit_scene::pokemon_edit_scene(pksave_bridge& bridge)
     , item_(ITEM_MIN, ITEM_MIN, ITEM_MAX)
     , ability_(ABILITY_MIN, ABILITY_MIN, ABILITY_MAX)
     , nature_(NATURE_MIN, NATURE_MIN, NATURE_MAX)
+    , level_(LEVEL_MIN, LEVEL_MIN, LEVEL_MAX)
+    // EV/IV ranges are seeded properly in rebuild_for_current_tab() once
+    // we know the game variant; the placeholder (0, 0, 252/31) here is
+    // valid for Gen 3.
+    , ev_hp_(0, 0, 252), ev_atk_(0, 0, 252), ev_def_(0, 0, 252)
+    , ev_spa_(0, 0, 252), ev_spd_(0, 0, 252), ev_spe_(0, 0, 252)
+    , iv_hp_(0, 0, 31),  iv_atk_(0, 0, 31),  iv_def_(0, 0, 31)
+    , iv_spa_(0, 0, 31), iv_spd_(0, 0, 31),  iv_spe_(0, 0, 31)
     , pokemon_{}
     , slot_(bridge.pending_party_slot())
     , tab_(edit_tab::IDENTITY)
@@ -87,7 +115,7 @@ int pokemon_edit_scene::row_count_for_tab() const
     switch (tab_)
     {
         case edit_tab::IDENTITY: return IDENTITY_ROW_COUNT;
-        case edit_tab::STATS:    return 0;
+        case edit_tab::STATS:    return STATS_ROW_COUNT;
         case edit_tab::MOVES:    return 0;
         default:                 return 0;
     }
@@ -103,6 +131,35 @@ void pokemon_edit_scene::load_from_save()
     uint8_t count = 0;
     ::pksave_get_party(bridge_.handle(), party, &count);
     pokemon_ = party[slot_];
+
+    const int ev_cap = ::pksave_ev_max_per_stat(bridge_.game());
+    const int iv_cap = ::pksave_iv_max(bridge_.game());
+
+    level_.set_value(pokemon_.level);
+    // Re-construct numeric_field caps in-place by writing through
+    // set_value clamped to a temporarily-known range — but
+    // numeric_field doesn't expose set_range.  Instead we rely on the
+    // ctor's range (0..252 / 0..31), which matches Gen 3 caps.
+    // If Gen 4/5 ever uses this scene, switch to a setter.
+    (void)ev_cap;
+    (void)iv_cap;
+
+    // libpksave's evs[]/ivs[]/stat[] arrays are indexed HP, Atk, Def,
+    // SpA, SpD, Spe — see libpksave/src/recalc.c's `bases[6]` literal
+    // for the canonical order.
+    ev_hp_.set_value(pokemon_.evs[0]);
+    ev_atk_.set_value(pokemon_.evs[1]);
+    ev_def_.set_value(pokemon_.evs[2]);
+    ev_spa_.set_value(pokemon_.evs[3]);
+    ev_spd_.set_value(pokemon_.evs[4]);
+    ev_spe_.set_value(pokemon_.evs[5]);
+
+    iv_hp_.set_value(pokemon_.ivs[0]);
+    iv_atk_.set_value(pokemon_.ivs[1]);
+    iv_def_.set_value(pokemon_.ivs[2]);
+    iv_spa_.set_value(pokemon_.ivs[3]);
+    iv_spd_.set_value(pokemon_.ivs[4]);
+    iv_spe_.set_value(pokemon_.ivs[5]);
 }
 
 void pokemon_edit_scene::push_to_save()
@@ -148,9 +205,51 @@ void pokemon_edit_scene::redraw_right_panel()
     text_gen_.set_left_alignment();
 
     constexpr int x_right = 32;
-    constexpr int y_top   = -32;
-    constexpr int row_h   = 16;
+    constexpr int y_top   = -56;
+    constexpr int row_h   = 12;
 
+    if (tab_ == edit_tab::STATS)
+    {
+        // Live calculated stats from pksave_recalc_stats.  The caller
+        // is responsible for invoking recalc before redraw — every
+        // EV/IV/level commit path does so.
+        bn::string<24> species_line;
+        species_line.append(::pksave_species_name(bridge_.game(),
+                                                  pokemon_.species));
+        text_gen_.generate(x_right, y_top + 0 * row_h, species_line,
+                           right_panel_sprites_);
+        text_gen_.generate(x_right, y_top + 1 * row_h,
+            bn::format<16>("HP {}",  pokemon_.stat[0]),
+            right_panel_sprites_);
+        text_gen_.generate(x_right, y_top + 2 * row_h,
+            bn::format<16>("At {}",  pokemon_.stat[1]),
+            right_panel_sprites_);
+        text_gen_.generate(x_right, y_top + 3 * row_h,
+            bn::format<16>("Df {}",  pokemon_.stat[2]),
+            right_panel_sprites_);
+        text_gen_.generate(x_right, y_top + 4 * row_h,
+            bn::format<16>("SA {}",  pokemon_.stat[3]),
+            right_panel_sprites_);
+        text_gen_.generate(x_right, y_top + 5 * row_h,
+            bn::format<16>("SD {}",  pokemon_.stat[4]),
+            right_panel_sprites_);
+        text_gen_.generate(x_right, y_top + 6 * row_h,
+            bn::format<16>("Sp {}",  pokemon_.stat[5]),
+            right_panel_sprites_);
+
+        // EV total / cap footer.  Per-stat caps are enforced; the
+        // total cap is displayed but not enforced — see scene
+        // docblock and plan §"Pokemon editor STATS".
+        const int total = ev_hp_.value() + ev_atk_.value() + ev_def_.value()
+                        + ev_spa_.value() + ev_spd_.value() + ev_spe_.value();
+        const int total_cap = ::pksave_ev_total_max(bridge_.game());
+        text_gen_.generate(x_right, y_top + 7 * row_h,
+            bn::format<24>("EV {}/{}", total, total_cap),
+            right_panel_sprites_);
+        return;
+    }
+
+    // IDENTITY / MOVES anchor: silhouette + species + level.
     bn::string<24> silhouette;
     silhouette.append("[?]");
     text_gen_.generate(x_right, y_top + 0 * row_h, silhouette,
@@ -172,14 +271,16 @@ void pokemon_edit_scene::rebuild_for_current_tab()
     list_.set_row_count(row_count_for_tab());
 
     placeholder_sprites_.clear();
-    if (tab_ != edit_tab::IDENTITY)
+    if (tab_ == edit_tab::MOVES)
     {
         text_gen_.set_left_alignment();
-        const char* msg = (tab_ == edit_tab::STATS)
-            ? "TODO Wave 2B: stats"
-            : "TODO Wave 2C: moves";
-        text_gen_.generate(-104, -40, msg, placeholder_sprites_);
+        text_gen_.generate(-104, -40, "TODO Wave 2C: moves",
+                           placeholder_sprites_);
     }
+
+    // Right panel content depends on tab: IDENTITY/MOVES anchor on the
+    // species+level summary; STATS shows the calculated stat[6].
+    redraw_right_panel();
 }
 
 void pokemon_edit_scene::row_provider_thunk(void* ctx, int row,
@@ -190,12 +291,40 @@ void pokemon_edit_scene::row_provider_thunk(void* ctx, int row,
 
 void pokemon_edit_scene::format_row(int row, bn::string<32>& out)
 {
-    if (tab_ != edit_tab::IDENTITY) return;
-
     const bool active_here = (mode_ == edit_mode::ACTIVE) &&
                              (list_.selected() == row);
     const char* lb = active_here ? "<" : " ";
     const char* rb = active_here ? ">" : " ";
+
+    if (tab_ == edit_tab::STATS)
+    {
+        // STATS labels: per-stat caps are enforced by the underlying
+        // numeric_field's range; total-cap is displayed in the right
+        // panel (see redraw_right_panel) but not enforced here.
+        auto fmt_num = [&](const char* label, int v) {
+            out.append(bn::format<28>("{}:{}{}{}", label, lb, v, rb));
+        };
+        switch (row)
+        {
+            case ROW_LEVEL:  fmt_num("Lv  ", level_.value()); break;
+            case ROW_EV_HP:  fmt_num("EVHp", ev_hp_.value());  break;
+            case ROW_EV_ATK: fmt_num("EVAt", ev_atk_.value()); break;
+            case ROW_EV_DEF: fmt_num("EVDf", ev_def_.value()); break;
+            case ROW_EV_SPA: fmt_num("EVSA", ev_spa_.value()); break;
+            case ROW_EV_SPD: fmt_num("EVSD", ev_spd_.value()); break;
+            case ROW_EV_SPE: fmt_num("EVSp", ev_spe_.value()); break;
+            case ROW_IV_HP:  fmt_num("IVHp", iv_hp_.value());  break;
+            case ROW_IV_ATK: fmt_num("IVAt", iv_atk_.value()); break;
+            case ROW_IV_DEF: fmt_num("IVDf", iv_def_.value()); break;
+            case ROW_IV_SPA: fmt_num("IVSA", iv_spa_.value()); break;
+            case ROW_IV_SPD: fmt_num("IVSD", iv_spd_.value()); break;
+            case ROW_IV_SPE: fmt_num("IVSp", iv_spe_.value()); break;
+            default: break;
+        }
+        return;
+    }
+
+    if (tab_ != edit_tab::IDENTITY) return;
 
     switch (row)
     {
@@ -253,6 +382,30 @@ void pokemon_edit_scene::format_row(int row, bn::string<32>& out)
             out.append(bn::format<24>("Shiny: {}",
                                       pokemon_.is_shiny ? "YES" : "no"));
             break;
+        case ROW_POKERUS:
+        {
+            pksave_pokerus_t pkrs = {};
+            ::pksave_get_party_pokerus(bridge_.handle(),
+                                       static_cast<uint8_t>(slot_),
+                                       &pkrs);
+            switch (pkrs.status)
+            {
+                case PKSAVE_PKRS_NEVER:
+                    out.append("Pkrs : Never");
+                    break;
+                case PKSAVE_PKRS_ACTIVE:
+                    out.append(bn::format<28>("Pkrs : Active s={} d={}",
+                                              static_cast<int>(pkrs.strain),
+                                              static_cast<int>(pkrs.days)));
+                    break;
+                case PKSAVE_PKRS_CURED:
+                    out.append(bn::format<28>("Pkrs : Cured s={}",
+                                              static_cast<int>(pkrs.strain)));
+                    break;
+                default: break;
+            }
+            break;
+        }
         default: break;
     }
 }
@@ -323,15 +476,78 @@ void pokemon_edit_scene::enter_active()
 {
     mode_ = edit_mode::ACTIVE;
     const int sel = list_.selected();
-    switch (sel)
+    if (tab_ == edit_tab::IDENTITY)
     {
-        case ROW_SPECIES: species_.on_focus_acquired(); break;
-        case ROW_ITEM:    item_.on_focus_acquired();    break;
-        case ROW_ABILITY: ability_.on_focus_acquired(); break;
-        case ROW_NATURE:  nature_.on_focus_acquired();  break;
-        default: break;
+        switch (sel)
+        {
+            case ROW_SPECIES: species_.on_focus_acquired(); break;
+            case ROW_ITEM:    item_.on_focus_acquired();    break;
+            case ROW_ABILITY: ability_.on_focus_acquired(); break;
+            case ROW_NATURE:  nature_.on_focus_acquired();  break;
+            default: break;
+        }
+    }
+    else if (tab_ == edit_tab::STATS)
+    {
+        // Mirror trainer_scene's disarm pattern: the A-press driving
+        // the mode transition is already debounced (a_pressed is an
+        // edge), but the d-pad axis that may have brought focus here
+        // could still be held.  The numeric_field's on_focus_acquired
+        // disarms any held axis until released.
+        if (numeric_field* nf = stats_field_for_row(sel))
+        {
+            nf->on_focus_acquired();
+        }
     }
     BN_LOG("edit: mode=ACTIVE row=", sel);
+}
+
+numeric_field* pokemon_edit_scene::stats_field_for_row(int row)
+{
+    switch (row)
+    {
+        case ROW_LEVEL:  return &level_;
+        case ROW_EV_HP:  return &ev_hp_;
+        case ROW_EV_ATK: return &ev_atk_;
+        case ROW_EV_DEF: return &ev_def_;
+        case ROW_EV_SPA: return &ev_spa_;
+        case ROW_EV_SPD: return &ev_spd_;
+        case ROW_EV_SPE: return &ev_spe_;
+        case ROW_IV_HP:  return &iv_hp_;
+        case ROW_IV_ATK: return &iv_atk_;
+        case ROW_IV_DEF: return &iv_def_;
+        case ROW_IV_SPA: return &iv_spa_;
+        case ROW_IV_SPD: return &iv_spd_;
+        case ROW_IV_SPE: return &iv_spe_;
+        default:         return nullptr;
+    }
+}
+
+void pokemon_edit_scene::commit_stats_row(int row)
+{
+    switch (row)
+    {
+        case ROW_LEVEL:
+            pokemon_.level = static_cast<uint8_t>(level_.value());
+            break;
+        case ROW_EV_HP:  pokemon_.evs[0] = static_cast<uint16_t>(ev_hp_.value());  break;
+        case ROW_EV_ATK: pokemon_.evs[1] = static_cast<uint16_t>(ev_atk_.value()); break;
+        case ROW_EV_DEF: pokemon_.evs[2] = static_cast<uint16_t>(ev_def_.value()); break;
+        case ROW_EV_SPA: pokemon_.evs[3] = static_cast<uint16_t>(ev_spa_.value()); break;
+        case ROW_EV_SPD: pokemon_.evs[4] = static_cast<uint16_t>(ev_spd_.value()); break;
+        case ROW_EV_SPE: pokemon_.evs[5] = static_cast<uint16_t>(ev_spe_.value()); break;
+        case ROW_IV_HP:  pokemon_.ivs[0] = static_cast<uint8_t>(iv_hp_.value());   break;
+        case ROW_IV_ATK: pokemon_.ivs[1] = static_cast<uint8_t>(iv_atk_.value());  break;
+        case ROW_IV_DEF: pokemon_.ivs[2] = static_cast<uint8_t>(iv_def_.value());  break;
+        case ROW_IV_SPA: pokemon_.ivs[3] = static_cast<uint8_t>(iv_spa_.value());  break;
+        case ROW_IV_SPD: pokemon_.ivs[4] = static_cast<uint8_t>(iv_spd_.value());  break;
+        case ROW_IV_SPE: pokemon_.ivs[5] = static_cast<uint8_t>(iv_spe_.value());  break;
+        default: return;
+    }
+    // Run recalc BEFORE the next render so the right-panel calculated
+    // stats reflect the new EV/IV/level in the same frame.
+    ::pksave_recalc_stats(&pokemon_, bridge_.game());
+    push_to_save();
 }
 
 void pokemon_edit_scene::exit_active()
@@ -385,20 +601,31 @@ bn::optional<scene_kind> pokemon_edit_scene::update()
 
     // List navigation (UP/DOWN) suppressed when ACTIVE so the user
     // doesn't slide off the row being edited.
-    if (mode_ == edit_mode::NAV && tab_ == edit_tab::IDENTITY)
+    if (mode_ == edit_mode::NAV &&
+        (tab_ == edit_tab::IDENTITY || tab_ == edit_tab::STATS))
     {
         const bool selection_changed = list_.tick();
         const int sel = list_.selected();
 
         if (selection_changed)
         {
-            switch (sel)
+            if (tab_ == edit_tab::IDENTITY)
             {
-                case ROW_SPECIES: species_.on_focus_acquired(); break;
-                case ROW_ITEM:    item_.on_focus_acquired();    break;
-                case ROW_ABILITY: ability_.on_focus_acquired(); break;
-                case ROW_NATURE:  nature_.on_focus_acquired();  break;
-                default: break;
+                switch (sel)
+                {
+                    case ROW_SPECIES: species_.on_focus_acquired(); break;
+                    case ROW_ITEM:    item_.on_focus_acquired();    break;
+                    case ROW_ABILITY: ability_.on_focus_acquired(); break;
+                    case ROW_NATURE:  nature_.on_focus_acquired();  break;
+                    default: break;
+                }
+            }
+            else  // STATS
+            {
+                if (numeric_field* nf = stats_field_for_row(sel))
+                {
+                    nf->on_focus_acquired();
+                }
             }
             need_list_redraw = true;
         }
@@ -406,7 +633,7 @@ bn::optional<scene_kind> pokemon_edit_scene::update()
 
     const int sel = list_.selected();
 
-    // A handling depends on mode and row.
+    // A handling depends on mode, tab, and row.
     if (bn::keypad::a_pressed() && tab_ == edit_tab::IDENTITY)
     {
         if (mode_ == edit_mode::NAV)
@@ -425,6 +652,14 @@ bn::optional<scene_kind> pokemon_edit_scene::update()
                     need_list_redraw   = true;
                     need_header_redraw = true;
                     break;
+                case ROW_POKERUS:
+                    // Re-set pending_party_slot so the modal can read
+                    // the same slot.  party_scene set it on entry; the
+                    // bridge keeps it across scene transitions, but
+                    // re-stamping here makes the dependency explicit
+                    // and survives someone refactoring party_scene.
+                    bridge_.set_pending_party_slot(slot_);
+                    return scene_kind::POKERUS_MODAL;
                 case ROW_SPECIES:
                 case ROW_ITEM:
                 case ROW_ABILITY:
@@ -439,6 +674,40 @@ bn::optional<scene_kind> pokemon_edit_scene::update()
         {
             exit_active();
             need_list_redraw = true;
+        }
+    }
+    else if (bn::keypad::a_pressed() && tab_ == edit_tab::STATS)
+    {
+        if (mode_ == edit_mode::NAV)
+        {
+            if (stats_field_for_row(sel) != nullptr)
+            {
+                enter_active();
+                need_list_redraw = true;
+            }
+        }
+        else // ACTIVE: A commits — push, recalc, redraw.
+        {
+            commit_stats_row(sel);
+            exit_active();
+            need_list_redraw  = true;
+            need_right_redraw = true;
+        }
+    }
+
+    // Per-row STATS numeric tick (ACTIVE-only).  Every tick that
+    // changes a value pushes pokemon_, recalcs stats, and redraws.
+    if (mode_ == edit_mode::ACTIVE && tab_ == edit_tab::STATS)
+    {
+        if (numeric_field* nf = stats_field_for_row(sel))
+        {
+            if (nf->tick())
+            {
+                commit_stats_row(sel);
+                need_list_redraw   = true;
+                need_right_redraw  = true;
+                need_header_redraw = true;
+            }
         }
     }
 

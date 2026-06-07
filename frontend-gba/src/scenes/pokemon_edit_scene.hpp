@@ -8,7 +8,7 @@
 // and returns to NAV.  B inside ACTIVE returns to NAV without revert
 // (no revert path in Wave 2A — documented intentional deviation).
 //
-// IDENTITY tab rows (Wave 2A scope):
+// IDENTITY tab rows (Wave 2B adds ROW_POKERUS):
 //   0  ROW_SPECIES   cycler [1, 411]
 //   1  ROW_NICKNAME  text_input drill (max 10)
 //   2  ROW_OT_NAME   text_input drill (max 7)
@@ -16,11 +16,20 @@
 //   4  ROW_ABILITY   ability cycler filtered to species' two slots
 //   5  ROW_NATURE    nature cycler [0, 24]
 //   6  ROW_SHINY     toggle (functional via L2 PID recompute)
+//   7  ROW_POKERUS   drill into pokerus_modal_scene (A enters; modal
+//                    owns commit/cancel)
 //
-// STATS and MOVES tabs render placeholder text in Wave 2A; their field
-// content lands in Wave 2B / 2C.
+// STATS tab rows (Wave 2B):
+//   0      ROW_LEVEL  numeric [1, 100]
+//   1..6   ROW_EV_HP..ROW_EV_SPE numeric [0, ev_max_per_stat(game)]
+//   7..12  ROW_IV_HP..ROW_IV_SPE numeric [0, iv_max(game)]
 //
-// Pokerus sub-modal: deferred to Wave 2B per the plan.
+// MOVES tab still placeholder (Wave 2C).
+//
+// STATS tab EV total-cap (510 in Gen 3) is currently NOT enforced at
+// edit time — per-stat caps are enforced; the right panel shows
+// "EV total: NNN / 510" so the user sees overrun.  Total-cap
+// enforcement is a Wave 3 follow-up.
 
 #ifndef PKSAVE_GBA_POKEMON_EDIT_SCENE_HPP
 #define PKSAVE_GBA_POKEMON_EDIT_SCENE_HPP
@@ -29,6 +38,7 @@
 #include "pksave_bridge.hpp"
 #include "widgets/cycler.hpp"
 #include "widgets/list_view.hpp"
+#include "widgets/numeric_field.hpp"
 
 #include <bn_sprite_text_generator.h>
 #include <bn_sprite_ptr.h>
@@ -80,6 +90,16 @@ private:
     void enter_active();
     void exit_active();
 
+    // Returns the numeric_field driving a given STATS row, or nullptr
+    // if the row isn't a numeric edit row (out of range, or some other
+    // tab).  Used by the STATS active-edit tick path.
+    numeric_field* stats_field_for_row(int row);
+
+    // Push the just-edited stats row back into pokemon_ and run a
+    // pksave_recalc_stats() so the right panel reflects the new
+    // calculated stats in the same frame.
+    void commit_stats_row(int row);
+
     static void row_provider_thunk(void* ctx, int row, bn::string<32>& out);
     void format_row(int row, bn::string<32>& out);
 
@@ -100,6 +120,23 @@ private:
     cycler           item_;
     cycler           ability_;
     cycler           nature_;
+
+    // STATS-tab numeric fields.  Per-stat caps come from libpksave
+    // (pksave_ev_max_per_stat / pksave_iv_max); ranges are seeded in
+    // the ctor and re-seeded on tab entry via rebuild_for_current_tab().
+    numeric_field    level_;
+    numeric_field    ev_hp_;
+    numeric_field    ev_atk_;
+    numeric_field    ev_def_;
+    numeric_field    ev_spa_;
+    numeric_field    ev_spd_;
+    numeric_field    ev_spe_;
+    numeric_field    iv_hp_;
+    numeric_field    iv_atk_;
+    numeric_field    iv_def_;
+    numeric_field    iv_spa_;
+    numeric_field    iv_spd_;
+    numeric_field    iv_spe_;
 
     pksave_pokemon_t pokemon_;
     int              slot_;

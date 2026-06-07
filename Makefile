@@ -37,7 +37,11 @@ GBA_TESTS := \
     frontend-gba/tests/automation/test_party_scene_nav.py \
     frontend-gba/tests/automation/test_party_species_roundtrip.py \
     frontend-gba/tests/automation/test_pokemon_edit_tab_nav.py \
-    frontend-gba/tests/automation/test_party_nickname_roundtrip.py
+    frontend-gba/tests/automation/test_party_nickname_roundtrip.py \
+    frontend-gba/tests/automation/test_pokerus_modal_cancel.py \
+    frontend-gba/tests/automation/test_pokerus_modal_commit.py \
+    frontend-gba/tests/automation/test_stats_level_roundtrip.py \
+    frontend-gba/tests/automation/test_stats_ev_roundtrip.py
 
 .PHONY: test test-gba gbc gba nds all clean \
         _build_test _build_test_gba _build_gbc _build_gba _build_nds

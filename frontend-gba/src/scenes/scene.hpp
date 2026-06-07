@@ -28,6 +28,7 @@ enum class scene_kind {
     TRAINER,
     PARTY,
     POKEMON_EDIT,
+    POKERUS_MODAL,
     BAG,
     BOXES,
     SAVE,
