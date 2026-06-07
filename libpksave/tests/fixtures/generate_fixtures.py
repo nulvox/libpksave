@@ -694,7 +694,11 @@ GEN3_NUM_SECTIONS = 14
 
 def gen3_make_section(section_id, data, save_count):
     """Build a 4096-byte Gen III section."""
-    sec = bytearray(GEN3_SIZE // GEN3_NUM_SECTIONS)  # 4096 bytes
+    # GEN3_SECTION_SIZE (0x1000 = 4096) is the canonical per-section size.
+    # NOTE: do NOT use GEN3_SIZE // GEN3_NUM_SECTIONS — that's 9362, which
+    # then overflows the [i*4096 : (i+1)*4096] slice-assign below and
+    # silently grows the 128 KiB save buffer to ~272 KiB.
+    sec = bytearray(GEN3_SECTION_SIZE)  # 4096 bytes
     data_size = GEN3_SECTION_SIZES.get(section_id, 3968)
     sec[:len(data)] = data[:data_size]
     # Footer
@@ -1082,6 +1086,24 @@ def make_gen5_bw():  return make_gen5('bw')
 def make_gen5_bw2(): return make_gen5('bw2')
 
 # ── main ──────────────────────────────────────────────────────────────────────
+# Canonical on-disk size each fixture must match. Any deviation is treated as
+# a generator bug (e.g. a slice-assign with a mismatched RHS length silently
+# growing a bytearray) and aborts generation BEFORE we write the bad file out.
+FIXTURE_EXPECTED_SIZE = {
+    "rb.sav":       GEN1_SIZE,
+    "yellow.sav":   GEN1_SIZE,
+    "gs.sav":       GEN2_SIZE,
+    "crystal.sav":  GEN2_SIZE,
+    "rs.sav":       GEN3_SIZE,
+    "emerald.sav":  GEN3_SIZE,
+    "frlg.sav":     GEN3_SIZE,
+    "dp.sav":       GEN4_SIZE,
+    "platinum.sav": GEN4_SIZE,
+    "hgss.sav":     GEN4_SIZE,
+    "bw.sav":       GEN5_SIZE,
+    "bw2.sav":      GEN5_SIZE,
+}
+
 FIXTURES = {
     "rb.sav":       make_gen1_rb,
     "yellow.sav":   make_gen1_yellow,
@@ -1102,6 +1124,12 @@ def main():
     for name, fn in FIXTURES.items():
         path = os.path.join(OUT_DIR, name)
         data = fn()
+        expected = FIXTURE_EXPECTED_SIZE[name]
+        if len(data) != expected:
+            raise SystemExit(
+                f"generator bug: {name} produced {len(data)} bytes, "
+                f"expected {expected}. Refusing to write a malformed fixture."
+            )
         with open(path, "wb") as f:
             f.write(data)
         print(f"  wrote {path} ({len(data)//1024}KB)")

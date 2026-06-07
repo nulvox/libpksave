@@ -36,6 +36,17 @@ libpksave/tests/test_runner
 libpksave/tests/test_*
 !libpksave/tests/test_*.c
 
+# Claude Code agent scratch (temporary worktrees + per-session state — never
+# meant to be tracked).  Subagent isolation worktrees land under
+# .claude/worktrees/ and are scrubbed at session end; the dir as a whole is
+# harness state, not project state.
+.claude/
+
+# Python bytecode (test harness uses python3; no virtualenv, so pyc lands
+# wherever the scripts run).
+__pycache__/
+*.pyc
+
 # Editor / IDE
 .vscode/
 .idea/

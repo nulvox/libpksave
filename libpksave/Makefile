@@ -38,9 +38,10 @@ TEST_BINS = \
     tests/test_gen3_recalc \
     tests/test_gen4 \
     tests/test_gen5 \
-    tests/test_limits
+    tests/test_limits \
+    tests/test_fixtures
 
-.PHONY: test fixtures clean
+.PHONY: test fixtures clean lib
 
 fixtures:
 	python3 tests/fixtures/generate_fixtures.py tests/fixtures
@@ -59,5 +60,18 @@ test: fixtures $(TEST_BINS)
 $(TEST_BINS): %: %.c $(SRC) $(UNITY_SRC)
 	$(CC) $(CFLAGS) $(INCLUDE) -o $@ $^
 
+# ── Shared-library build for the Python ctypes wrapper ─────────────────────
+# Built with -fPIC -shared and only the libpksave headers/sources (no Unity).
+# The frontend-gba widget include path is also added for parity with the test
+# build, even though the SO doesn't actually pull anything from there.
+LIB_CFLAGS = -std=c99 -Wall -Wextra -pedantic -fPIC -shared \
+             -DPKSAVE_GEN1 -DPKSAVE_GEN2 -DPKSAVE_GEN3 -DPKSAVE_GEN4 -DPKSAVE_GEN5
+LIB_INCLUDE = -Iinclude -Isrc
+
+libpksave.so: $(SRC)
+	$(CC) $(LIB_CFLAGS) $(LIB_INCLUDE) -o $@ $^
+
+lib: libpksave.so
+
 clean:
-	rm -f $(TEST_BINS)
+	rm -f $(TEST_BINS) libpksave.so
