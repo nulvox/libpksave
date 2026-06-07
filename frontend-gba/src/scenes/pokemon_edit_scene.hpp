@@ -24,7 +24,22 @@
 //   1..6   ROW_EV_HP..ROW_EV_SPE numeric [0, ev_max_per_stat(game)]
 //   7..12  ROW_IV_HP..ROW_IV_SPE numeric [0, iv_max(game)]
 //
-// MOVES tab still placeholder (Wave 2C).
+// MOVES tab rows (Wave 2C): 4 (move, PP) pairs = 8 rows.
+//   0  ROW_MOVE_0   cycler [0, 354]   (id 0 = empty slot)
+//   1  ROW_PP_0     numeric [0, floor(base_pp(move_ids[0]) * 1.6)]
+//   2  ROW_MOVE_1   cycler
+//   3  ROW_PP_1     numeric
+//   4  ROW_MOVE_2   cycler
+//   5  ROW_PP_2     numeric
+//   6  ROW_MOVE_3   cycler
+//   7  ROW_PP_3     numeric
+//
+// Move id 0 renders as "(empty)" and the paired PP row renders as
+// "PP N: -/-".  When the move cycles from 0 → non-zero, PP is seeded
+// to its new max.  When it cycles to 0, PP is zeroed.  Otherwise the
+// PP cap is reseated via numeric_field::set_max() and current PP is
+// clamped down if it exceeds the new cap (Hyper Beam → Tackle leaves
+// PP alone; Tackle → Hyper Beam clamps it).
 //
 // STATS tab EV total-cap (510 in Gen 3) is currently NOT enforced at
 // edit time — per-stat caps are enforced; the right panel shows
@@ -100,6 +115,15 @@ private:
     // calculated stats in the same frame.
     void commit_stats_row(int row);
 
+    // MOVES tab helpers.  Slot is the 0..3 move-slot index.
+    int            move_slot_for_row(int row) const;     // -1 if PP row
+    int            pp_slot_for_row(int row) const;       // -1 if move row
+    int            pp_cap_for_slot(int slot) const;      // floor(base*1.6)
+    cycler*        move_cycler_for_slot(int slot);
+    numeric_field* pp_field_for_slot(int slot);
+    void           commit_move_slot(int slot);
+    void           commit_pp_slot(int slot);
+
     static void row_provider_thunk(void* ctx, int row, bn::string<32>& out);
     void format_row(int row, bn::string<32>& out);
 
@@ -137,6 +161,17 @@ private:
     numeric_field    iv_spa_;
     numeric_field    iv_spd_;
     numeric_field    iv_spe_;
+
+    // MOVES-tab widgets — one cycler per move slot, one numeric per PP.
+    // PP cap is reseated on move id changes via numeric_field::set_max.
+    cycler           move_0_;
+    cycler           move_1_;
+    cycler           move_2_;
+    cycler           move_3_;
+    numeric_field    pp_0_;
+    numeric_field    pp_1_;
+    numeric_field    pp_2_;
+    numeric_field    pp_3_;
 
     pksave_pokemon_t pokemon_;
     int              slot_;

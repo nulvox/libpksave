@@ -60,6 +60,24 @@ constexpr int ABILITY_MAX = 77;
 constexpr int NATURE_MIN = 0;
 constexpr int NATURE_MAX = 24;
 
+// MOVES tab: 4 (move, PP) pairs.
+constexpr int ROW_MOVE_0 = 0;
+constexpr int ROW_PP_0   = 1;
+constexpr int ROW_MOVE_1 = 2;
+constexpr int ROW_PP_1   = 3;
+constexpr int ROW_MOVE_2 = 4;
+constexpr int ROW_PP_2   = 5;
+constexpr int ROW_MOVE_3 = 6;
+constexpr int ROW_PP_3   = 7;
+constexpr int MOVES_ROW_COUNT = 8;
+
+// Gen 3 move ID space: 0 (empty slot) .. 354 (Psycho Boost).
+constexpr int MOVE_MIN = 0;
+constexpr int MOVE_MAX = 354;
+
+constexpr int PP_UP_NUMERATOR   = 8;
+constexpr int PP_UP_DENOMINATOR = 5;
+
 }  // namespace
 
 pokemon_edit_scene::pokemon_edit_scene(pksave_bridge& bridge)
@@ -79,6 +97,13 @@ pokemon_edit_scene::pokemon_edit_scene(pksave_bridge& bridge)
     , ev_spa_(0, 0, 252), ev_spd_(0, 0, 252), ev_spe_(0, 0, 252)
     , iv_hp_(0, 0, 31),  iv_atk_(0, 0, 31),  iv_def_(0, 0, 31)
     , iv_spa_(0, 0, 31), iv_spd_(0, 0, 31),  iv_spe_(0, 0, 31)
+    , move_0_(MOVE_MIN, MOVE_MIN, MOVE_MAX)
+    , move_1_(MOVE_MIN, MOVE_MIN, MOVE_MAX)
+    , move_2_(MOVE_MIN, MOVE_MIN, MOVE_MAX)
+    , move_3_(MOVE_MIN, MOVE_MIN, MOVE_MAX)
+    // PP caps are reseated per slot in load_from_save() based on the
+    // current move id; the ctor seeds them to 0/0/0 (empty slot).
+    , pp_0_(0, 0, 0), pp_1_(0, 0, 0), pp_2_(0, 0, 0), pp_3_(0, 0, 0)
     , pokemon_{}
     , slot_(bridge.pending_party_slot())
     , tab_(edit_tab::IDENTITY)
@@ -116,7 +141,7 @@ int pokemon_edit_scene::row_count_for_tab() const
     {
         case edit_tab::IDENTITY: return IDENTITY_ROW_COUNT;
         case edit_tab::STATS:    return STATS_ROW_COUNT;
-        case edit_tab::MOVES:    return 0;
+        case edit_tab::MOVES:    return MOVES_ROW_COUNT;
         default:                 return 0;
     }
 }
@@ -160,6 +185,19 @@ void pokemon_edit_scene::load_from_save()
     iv_spa_.set_value(pokemon_.ivs[3]);
     iv_spd_.set_value(pokemon_.ivs[4]);
     iv_spe_.set_value(pokemon_.ivs[5]);
+
+    for (int slot = 0; slot < 4; ++slot)
+    {
+        const int id = pokemon_.move_ids[slot];
+        cycler* mc = move_cycler_for_slot(slot);
+        numeric_field* nf = pp_field_for_slot(slot);
+        if (mc != nullptr) mc->set_id(id);
+        if (nf != nullptr)
+        {
+            nf->set_max(pp_cap_for_slot(slot));
+            nf->set_value(pokemon_.move_pp[slot]);
+        }
+    }
 }
 
 void pokemon_edit_scene::push_to_save()
@@ -271,12 +309,6 @@ void pokemon_edit_scene::rebuild_for_current_tab()
     list_.set_row_count(row_count_for_tab());
 
     placeholder_sprites_.clear();
-    if (tab_ == edit_tab::MOVES)
-    {
-        text_gen_.set_left_alignment();
-        text_gen_.generate(-104, -40, "TODO Wave 2C: moves",
-                           placeholder_sprites_);
-    }
 
     // Right panel content depends on tab: IDENTITY/MOVES anchor on the
     // species+level summary; STATS shows the calculated stat[6].
@@ -320,6 +352,40 @@ void pokemon_edit_scene::format_row(int row, bn::string<32>& out)
             case ROW_IV_SPD: fmt_num("IVSD", iv_spd_.value()); break;
             case ROW_IV_SPE: fmt_num("IVSp", iv_spe_.value()); break;
             default: break;
+        }
+        return;
+    }
+
+    if (tab_ == edit_tab::MOVES)
+    {
+        const int move_slot = move_slot_for_row(row);
+        if (move_slot >= 0)
+        {
+            const int id = pokemon_.move_ids[move_slot];
+            const char* name = (id == 0)
+                ? "(empty)"
+                : ::pksave_move_name(bridge_.game(),
+                                     static_cast<uint16_t>(id));
+            out.append(bn::format<28>("M{}  :{}{}{}",
+                                      move_slot + 1, lb, name, rb));
+            return;
+        }
+        const int pp_slot = pp_slot_for_row(row);
+        if (pp_slot >= 0)
+        {
+            const int id = pokemon_.move_ids[pp_slot];
+            if (id == 0)
+            {
+                out.append(bn::format<24>("PP{} : -/-", pp_slot + 1));
+            }
+            else
+            {
+                const int cap = pp_cap_for_slot(pp_slot);
+                out.append(bn::format<28>("PP{} :{}{}{}/{}",
+                                          pp_slot + 1, lb,
+                                          static_cast<int>(pokemon_.move_pp[pp_slot]),
+                                          rb, cap));
+            }
         }
         return;
     }
@@ -499,6 +565,28 @@ void pokemon_edit_scene::enter_active()
             nf->on_focus_acquired();
         }
     }
+    else if (tab_ == edit_tab::MOVES)
+    {
+        const int move_slot = move_slot_for_row(sel);
+        if (move_slot >= 0)
+        {
+            if (cycler* mc = move_cycler_for_slot(move_slot))
+            {
+                mc->on_focus_acquired();
+            }
+        }
+        else
+        {
+            const int pp_slot = pp_slot_for_row(sel);
+            if (pp_slot >= 0)
+            {
+                if (numeric_field* nf = pp_field_for_slot(pp_slot))
+                {
+                    nf->on_focus_acquired();
+                }
+            }
+        }
+    }
     BN_LOG("edit: mode=ACTIVE row=", sel);
 }
 
@@ -521,6 +609,101 @@ numeric_field* pokemon_edit_scene::stats_field_for_row(int row)
         case ROW_IV_SPE: return &iv_spe_;
         default:         return nullptr;
     }
+}
+
+int pokemon_edit_scene::move_slot_for_row(int row) const
+{
+    switch (row)
+    {
+        case ROW_MOVE_0: return 0;
+        case ROW_MOVE_1: return 1;
+        case ROW_MOVE_2: return 2;
+        case ROW_MOVE_3: return 3;
+        default:         return -1;
+    }
+}
+
+int pokemon_edit_scene::pp_slot_for_row(int row) const
+{
+    switch (row)
+    {
+        case ROW_PP_0: return 0;
+        case ROW_PP_1: return 1;
+        case ROW_PP_2: return 2;
+        case ROW_PP_3: return 3;
+        default:       return -1;
+    }
+}
+
+int pokemon_edit_scene::pp_cap_for_slot(int slot) const
+{
+    const int id = pokemon_.move_ids[slot];
+    if (id == 0) return 0;
+    const int base = ::pksave_move_base_pp(bridge_.game(),
+                                           static_cast<uint16_t>(id));
+    return (base * PP_UP_NUMERATOR) / PP_UP_DENOMINATOR;
+}
+
+cycler* pokemon_edit_scene::move_cycler_for_slot(int slot)
+{
+    switch (slot)
+    {
+        case 0: return &move_0_;
+        case 1: return &move_1_;
+        case 2: return &move_2_;
+        case 3: return &move_3_;
+        default: return nullptr;
+    }
+}
+
+numeric_field* pokemon_edit_scene::pp_field_for_slot(int slot)
+{
+    switch (slot)
+    {
+        case 0: return &pp_0_;
+        case 1: return &pp_1_;
+        case 2: return &pp_2_;
+        case 3: return &pp_3_;
+        default: return nullptr;
+    }
+}
+
+void pokemon_edit_scene::commit_move_slot(int slot)
+{
+    cycler* mc = move_cycler_for_slot(slot);
+    if (mc == nullptr) return;
+    const int old_id = pokemon_.move_ids[slot];
+    const int new_id = mc->id();
+    pokemon_.move_ids[slot] = static_cast<uint8_t>(new_id);
+
+    numeric_field* nf = pp_field_for_slot(slot);
+    if (nf != nullptr)
+    {
+        const int new_cap = pp_cap_for_slot(slot);
+        nf->set_max(new_cap);
+        if (new_id == 0)
+        {
+            nf->set_value(0);
+        }
+        else if (old_id == 0)
+        {
+            nf->set_value(new_cap);
+        }
+        else if (nf->value() > new_cap)
+        {
+            nf->set_value(new_cap);
+        }
+        pokemon_.move_pp[slot] = static_cast<uint8_t>(nf->value());
+    }
+    push_to_save();
+}
+
+void pokemon_edit_scene::commit_pp_slot(int slot)
+{
+    numeric_field* nf = pp_field_for_slot(slot);
+    if (nf == nullptr) return;
+    pokemon_.move_pp[slot] = static_cast<uint8_t>(nf->value());
+    push_to_save();
 }
 
 void pokemon_edit_scene::commit_stats_row(int row)
@@ -601,8 +784,7 @@ bn::optional<scene_kind> pokemon_edit_scene::update()
 
     // List navigation (UP/DOWN) suppressed when ACTIVE so the user
     // doesn't slide off the row being edited.
-    if (mode_ == edit_mode::NAV &&
-        (tab_ == edit_tab::IDENTITY || tab_ == edit_tab::STATS))
+    if (mode_ == edit_mode::NAV)
     {
         const bool selection_changed = list_.tick();
         const int sel = list_.selected();
@@ -620,11 +802,29 @@ bn::optional<scene_kind> pokemon_edit_scene::update()
                     default: break;
                 }
             }
-            else  // STATS
+            else if (tab_ == edit_tab::STATS)
             {
                 if (numeric_field* nf = stats_field_for_row(sel))
                 {
                     nf->on_focus_acquired();
+                }
+            }
+            else  // MOVES
+            {
+                const int move_slot = move_slot_for_row(sel);
+                if (move_slot >= 0)
+                {
+                    if (cycler* mc = move_cycler_for_slot(move_slot))
+                        mc->on_focus_acquired();
+                }
+                else
+                {
+                    const int pp_slot = pp_slot_for_row(sel);
+                    if (pp_slot >= 0)
+                    {
+                        if (numeric_field* nf = pp_field_for_slot(pp_slot))
+                            nf->on_focus_acquired();
+                    }
                 }
             }
             need_list_redraw = true;
@@ -694,6 +894,42 @@ bn::optional<scene_kind> pokemon_edit_scene::update()
             need_right_redraw = true;
         }
     }
+    else if (bn::keypad::a_pressed() && tab_ == edit_tab::MOVES)
+    {
+        if (mode_ == edit_mode::NAV)
+        {
+            const int move_slot = move_slot_for_row(sel);
+            const int pp_slot   = pp_slot_for_row(sel);
+            if (move_slot >= 0)
+            {
+                enter_active();
+                need_list_redraw = true;
+            }
+            else if (pp_slot >= 0 && pokemon_.move_ids[pp_slot] != 0)
+            {
+                // Empty-move PP is non-editable; A on an empty PP row
+                // is a no-op (visually rendered as -/-).
+                enter_active();
+                need_list_redraw = true;
+            }
+        }
+        else // ACTIVE: A commits.
+        {
+            const int move_slot = move_slot_for_row(sel);
+            const int pp_slot   = pp_slot_for_row(sel);
+            if (move_slot >= 0)
+            {
+                commit_move_slot(move_slot);
+            }
+            else if (pp_slot >= 0)
+            {
+                commit_pp_slot(pp_slot);
+            }
+            exit_active();
+            need_list_redraw  = true;
+            need_right_redraw = true;
+        }
+    }
 
     // Per-row STATS numeric tick (ACTIVE-only).  Every tick that
     // changes a value pushes pokemon_, recalcs stats, and redraws.
@@ -707,6 +943,36 @@ bn::optional<scene_kind> pokemon_edit_scene::update()
                 need_list_redraw   = true;
                 need_right_redraw  = true;
                 need_header_redraw = true;
+            }
+        }
+    }
+
+    // Per-row MOVES tick (ACTIVE-only).  Move cyclers update id only;
+    // the move row commits on A-press (handled above) — this keeps the
+    // cycle preview live but doesn't flash-write per tick.  The PP
+    // numeric tick updates value live; commit on A.
+    if (mode_ == edit_mode::ACTIVE && tab_ == edit_tab::MOVES)
+    {
+        const int move_slot = move_slot_for_row(sel);
+        const int pp_slot   = pp_slot_for_row(sel);
+        if (move_slot >= 0)
+        {
+            if (cycler* mc = move_cycler_for_slot(move_slot))
+            {
+                if (mc->tick())
+                {
+                    need_list_redraw = true;
+                }
+            }
+        }
+        else if (pp_slot >= 0 && pokemon_.move_ids[pp_slot] != 0)
+        {
+            if (numeric_field* nf = pp_field_for_slot(pp_slot))
+            {
+                if (nf->tick())
+                {
+                    need_list_redraw = true;
+                }
             }
         }
     }

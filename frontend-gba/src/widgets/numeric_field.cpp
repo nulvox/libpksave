@@ -56,6 +56,13 @@ void numeric_field::set_value(int v)
     value_ = v;
 }
 
+void numeric_field::set_max(int new_max)
+{
+    if (new_max < min_) new_max = min_;
+    max_ = new_max;
+    if (value_ > max_) value_ = max_;
+}
+
 bool numeric_field::should_step_this_frame(int hold_frames) const
 {
     if (hold_frames == 1) return true;                 // tap / first press

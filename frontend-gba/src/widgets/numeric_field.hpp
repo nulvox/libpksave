@@ -54,6 +54,12 @@ public:
     int  min() const { return min_; }
     int  max() const { return max_; }
 
+    // Reseat the upper bound and clamp the current value into the new
+    // range.  Used by callers whose max depends on another field (e.g.
+    // the MOVES tab's PP cap = floor(base_pp * 1.6), which changes when
+    // the move id changes).
+    void set_max(int new_max);
+
 private:
     // Compute the step magnitude this frame for a given hold counter
     // (0 = not held; 1 = first frame held; etc).
