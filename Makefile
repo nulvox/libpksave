@@ -33,7 +33,8 @@ GBA_TESTS := \
     frontend-gba/tests/automation/test_boot_rejects_bad_save.py \
     frontend-gba/tests/automation/test_tid_roundtrip.py \
     frontend-gba/tests/automation/test_main_menu_wrap.py \
-    frontend-gba/tests/automation/test_cycler_host.py
+    frontend-gba/tests/automation/test_cycler_host.py \
+    frontend-gba/tests/automation/test_party_scene_nav.py
 
 .PHONY: test test-gba gbc gba nds all clean \
         _build_test _build_test_gba _build_gbc _build_gba _build_nds

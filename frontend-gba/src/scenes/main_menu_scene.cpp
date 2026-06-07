@@ -90,11 +90,12 @@ bn::optional<scene_kind> main_menu_scene::update()
     if (bn::keypad::a_pressed())
     {
         const scene_kind target = ENTRY_TARGETS[cursor_];
-        // Checkpoint #2: Trainer and Save & Exit are wired.  Party /
-        // Bag / Boxes still no-op until Checkpoint #3+.
+        // CP#2 wired Trainer + Save & Exit; CP#3-B adds Party.
+        // Bag / Boxes still no-op until CP#4 / CP#5.
         switch (target)
         {
             case scene_kind::TRAINER:
+            case scene_kind::PARTY:
             case scene_kind::SAVE:
                 return target;
             default:

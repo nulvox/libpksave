@@ -69,11 +69,20 @@ public:
     // libpksave APIs (trainer/party/box/bag getters and setters).
     pksave_save_t* handle() const { return handle_; }
 
+    // CP#3-B → CP#3-C handoff: party_scene records the slot the user
+    // pressed A on; pokemon_edit_scene (CP#3-C) will read it from its
+    // ctor to know which party slot to edit.  Until CP#3-C lands the
+    // edit scene, this field is set but never consumed.  -1 means "no
+    // selection pending".
+    int  pending_party_slot() const { return pending_party_slot_; }
+    void set_pending_party_slot(int slot) { pending_party_slot_ = slot; }
+
 private:
     pksave_save_t* handle_;
     pksave_game_t  game_;
     const char*    reason_;
     bool           dirty_;
+    int            pending_party_slot_ = -1;
 };
 
 // Friendly display name for the detected game variant — Checkpoint #1

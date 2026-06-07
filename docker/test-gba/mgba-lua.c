@@ -109,11 +109,18 @@ int main(int argc, char** argv) {
 	 *    cause a SEGV on the `logFile->write(...)` virtual call otherwise.
 	 *  - mStandardLoggerInit allocates a filter with defaultLevels=0 (would
 	 *    block everything); widen it to mLOG_ALL so console:log lines reach
-	 *    stdout without needing a full mCoreConfig round-trip. */
+	 *    stdout without needing a full mCoreConfig round-trip.
+	 *  - mGBA's "GBA Debug" category (where butano's BN_LOG and any direct
+	 *    writes to the mGBA debug-print MMIO surface) has its filter level
+	 *    set per-category and is NOT promoted by defaultLevels alone — by
+	 *    default it sits at mLOG_FATAL only.  Editor scenes drop "scene: OK"
+	 *    breadcrumbs through BN_LOG so the lua tests can grep them; without
+	 *    bumping gba.debug to mLOG_ALL those lines never reach stdout. */
 	struct mStandardLogger logger = {0};
 	mStandardLoggerInit(&logger);
 	logger.logToStdout = true;
 	logger.d.filter->defaultLevels = mLOG_ALL;
+	mLogFilterSet(logger.d.filter, "gba.debug", mLOG_ALL);
 	mLogSetDefaultLogger(&logger.d);
 
 	/* Build a core from the ROM and initialise it. */
