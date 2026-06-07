@@ -25,6 +25,7 @@
 #include "scenes/main_menu_scene.hpp"
 #include "scenes/trainer_scene.hpp"
 #include "scenes/party_scene.hpp"
+#include "scenes/pokemon_edit_scene.hpp"
 #include "scenes/save_scene.hpp"
 #include "widgets/text_input.hpp"
 
@@ -70,6 +71,10 @@ bn::unique_ptr<pksave_gba::scene> make_scene(
         case scene_kind::PARTY:
             return bn::unique_ptr<pksave_gba::scene>(
                 new pksave_gba::party_scene(bridge));
+
+        case scene_kind::POKEMON_EDIT:
+            return bn::unique_ptr<pksave_gba::scene>(
+                new pksave_gba::pokemon_edit_scene(bridge));
 
         case scene_kind::SAVE:
             return bn::unique_ptr<pksave_gba::scene>(

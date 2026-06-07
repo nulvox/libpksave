@@ -27,6 +27,7 @@ enum class scene_kind {
     MAIN_MENU,
     TRAINER,
     PARTY,
+    POKEMON_EDIT,
     BAG,
     BOXES,
     SAVE,

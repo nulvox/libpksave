@@ -5,6 +5,8 @@
 
 #include "common_variable_8x16_sprite_font.h"
 
+#include <bn_log.h>
+
 namespace pksave_gba {
 
 save_scene::save_scene(pksave_bridge& bridge)
@@ -31,7 +33,9 @@ bn::optional<scene_kind> save_scene::update()
 
     if (phase_ == 1)
     {
+        BN_LOG("save: flush start");
         flush_ok_ = bridge_.flush_to_flash();
+        BN_LOG("save: flush done ok=", flush_ok_);
         phase_ = flush_ok_ ? 3 : 2;
         if (!flush_ok_)
         {

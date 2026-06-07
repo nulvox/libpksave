@@ -107,9 +107,7 @@ bn::optional<scene_kind> party_scene::update()
     if (bn::keypad::a_pressed())
     {
         bridge_.set_pending_party_slot(list_.selected());
-        // CP#3-C wires this to scene_kind::POKEMON_EDIT.
-        // For CP#3-B the drill is a no-op transition (stay on PARTY).
-        return bn::nullopt;
+        return scene_kind::POKEMON_EDIT;
     }
 
     return bn::nullopt;

@@ -77,6 +77,29 @@ class PksaveTrainer(Structure):
     ]
 
 
+class PksavePokemon(Structure):
+    """Mirror of pksave_pokemon_t from pksave.h.
+
+    Field order and sizing verified against a host gcc sizeof/offsetof
+    probe (sizeof = 72 bytes).
+    """
+    _fields_ = [
+        ("species",   c_uint16),
+        ("held_item", c_uint16),
+        ("level",     c_uint8),
+        ("nature",    c_uint8),
+        ("ability",   c_uint8),
+        ("is_shiny",  c_uint8),
+        ("move_ids",  c_uint8 * 4),
+        ("move_pp",   c_uint8 * 4),
+        ("evs",       c_uint16 * 6),
+        ("ivs",       c_uint8 * 6),
+        ("nickname",  c_char * 13),
+        ("ot_name",   c_char * 13),
+        ("stat",      c_uint16 * 6),
+    ]
+
+
 # ── loader ───────────────────────────────────────────────────────────────────
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -150,6 +173,10 @@ def _bind(lib: CDLL) -> None:
     # int pksave_get_trainer(pksave_save_t *save, pksave_trainer_t *out);
     lib.pksave_get_trainer.argtypes = [c_void_p, POINTER(PksaveTrainer)]
     lib.pksave_get_trainer.restype = c_int
+
+    # int pksave_get_party(pksave_save_t *save, pksave_pokemon_t out[6], uint8_t *count);
+    lib.pksave_get_party.argtypes = [c_void_p, POINTER(PksavePokemon), POINTER(c_uint8)]
+    lib.pksave_get_party.restype = c_int
 
 
 # ── Pythonic wrappers ────────────────────────────────────────────────────────
@@ -243,6 +270,21 @@ def get_trainer(save: Save) -> PksaveTrainer:
     return tr
 
 
+def get_party(save: Save) -> tuple[list[PksavePokemon], int]:
+    """Return (party_array, count).  party_array always has 6 entries; only
+    the first `count` are meaningful (filled slots).  Each entry is a
+    PksavePokemon struct with the standard fields decoded for the game
+    variant the save was opened as."""
+    if not save:
+        raise ValueError("save is closed or invalid")
+    arr = (PksavePokemon * 6)()
+    count = c_uint8(0)
+    rc = save._lib.pksave_get_party(save._handle, arr, ctypes.byref(count))
+    if rc != PKSAVE_OK:
+        raise RuntimeError(f"pksave_get_party rc={rc}")
+    return list(arr), int(count.value)
+
+
 def close(save: Save) -> None:
     """Close a Save handle.  Idempotent."""
     if save and not save._closed:
@@ -253,12 +295,14 @@ def close(save: Save) -> None:
 __all__ = [
     "Game",
     "PksaveTrainer",
+    "PksavePokemon",
     "Save",
     "load_library",
     "detect",
     "open",
     "get_trainer_name",
     "get_trainer",
+    "get_party",
     "close",
     "PKSAVE_OK",
     "PKSAVE_ERR_NULL",
