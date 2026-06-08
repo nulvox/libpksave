@@ -2,15 +2,17 @@
  * SPDX-License-Identifier: MIT
  * Copyright (c) 2026 gbsdk contributors
  *
- * Tests for Gen 3 per-species and per-move lookups
- * (pksave_species_abilities, pksave_move_base_pp).
+ * Tests for Gen 3 per-species, per-move, and per-item lookups
+ * (pksave_species_abilities, pksave_move_base_pp,
+ *  pksave_item_max_stack, pksave_item_pocket).
  *
  * Source of truth: pret/pokeruby src/data/pokemon/base_stats.h
  *                  + pret/pokeruby include/constants/abilities.h
- *                  + pret/pokeemerald src/data/battle_moves.h.
+ *                  + pret/pokeemerald src/data/battle_moves.h
+ *                  + pret/pokeemerald src/data/items.h.
  *
  * Numeric IDs (not names) are asserted directly so the tests stay
- * stable if the ability/move name tables are later regenerated.
+ * stable if the ability/move/item name tables are later regenerated.
  */
 #include "unity.h"
 #include "pksave.h"
@@ -23,6 +25,16 @@
 #define ABILITY_RUN_AWAY     50
 #define ABILITY_GUTS         62
 #define ABILITY_OVERGROW     65
+
+/* ── Gen 3 item IDs from pret/pokeemerald include/constants/items.h ──── */
+#define ITEM_NONE           0
+#define ITEM_MASTER_BALL    1
+#define ITEM_POTION         13
+#define ITEM_CHERI_BERRY    133
+#define ITEM_TM01           289
+#define ITEM_HM01           339
+#define ITEM_COIN_CASE      260
+#define ITEM_BICYCLE        360
 
 void setUp(void)    {}
 void tearDown(void) {}
@@ -144,6 +156,152 @@ void test_move_base_pp_non_gen3_game_returns_zero(void)
     TEST_ASSERT_EQUAL_UINT8(0, pksave_move_base_pp(PKSAVE_GAME_DP, 1));
 }
 
+/* ── pksave_item_max_stack ───────────────────────────────────────────── */
+
+void test_item_max_stack_master_ball(void)
+{
+    /* Balls have no .importance in pret, so cap is the default 99. */
+    TEST_ASSERT_EQUAL_UINT16(99, pksave_item_max_stack(PKSAVE_GAME_RS,      ITEM_MASTER_BALL));
+    TEST_ASSERT_EQUAL_UINT16(99, pksave_item_max_stack(PKSAVE_GAME_EMERALD, ITEM_MASTER_BALL));
+    TEST_ASSERT_EQUAL_UINT16(99, pksave_item_max_stack(PKSAVE_GAME_FRLG,    ITEM_MASTER_BALL));
+}
+
+void test_item_max_stack_potion(void)
+{
+    /* Ordinary stackable item. */
+    TEST_ASSERT_EQUAL_UINT16(99, pksave_item_max_stack(PKSAVE_GAME_EMERALD, ITEM_POTION));
+}
+
+void test_item_max_stack_hm01_locked_at_one(void)
+{
+    /* HMs have .importance = 1 in pret -> cap 1. */
+    TEST_ASSERT_EQUAL_UINT16(1, pksave_item_max_stack(PKSAVE_GAME_RS,   ITEM_HM01));
+    TEST_ASSERT_EQUAL_UINT16(1, pksave_item_max_stack(PKSAVE_GAME_FRLG, ITEM_HM01));
+}
+
+void test_item_max_stack_tm01_stacks_to_99(void)
+{
+    /* TMs have no .importance in pret -> default 99, even though they're
+     * in POCKET_TM_HM alongside HMs. */
+    TEST_ASSERT_EQUAL_UINT16(99, pksave_item_max_stack(PKSAVE_GAME_EMERALD, ITEM_TM01));
+}
+
+void test_item_max_stack_berry_caps_at_999(void)
+{
+    /* Cheri Berry -> .pocket = POCKET_BERRIES -> 999. */
+    TEST_ASSERT_EQUAL_UINT16(999, pksave_item_max_stack(PKSAVE_GAME_RS,   ITEM_CHERI_BERRY));
+    TEST_ASSERT_EQUAL_UINT16(999, pksave_item_max_stack(PKSAVE_GAME_FRLG, ITEM_CHERI_BERRY));
+}
+
+void test_item_max_stack_key_item_locked_at_one(void)
+{
+    /* Coin Case (RSE key item) and Bicycle (FRLG key item) both have
+     * .importance = 1 -> cap 1.  Reads the pokeemerald table for both
+     * games (RSE and FRLG agree on these). */
+    TEST_ASSERT_EQUAL_UINT16(1, pksave_item_max_stack(PKSAVE_GAME_RS,   ITEM_COIN_CASE));
+    TEST_ASSERT_EQUAL_UINT16(1, pksave_item_max_stack(PKSAVE_GAME_FRLG, ITEM_BICYCLE));
+}
+
+void test_item_max_stack_item_none_returns_zero(void)
+{
+    /* ID 0 is the "empty slot" sentinel for the editor — no real max. */
+    TEST_ASSERT_EQUAL_UINT16(0, pksave_item_max_stack(PKSAVE_GAME_RS, ITEM_NONE));
+}
+
+void test_item_max_stack_unknown_id_returns_zero(void)
+{
+    TEST_ASSERT_EQUAL_UINT16(0, pksave_item_max_stack(PKSAVE_GAME_RS, 500));
+    TEST_ASSERT_EQUAL_UINT16(0, pksave_item_max_stack(PKSAVE_GAME_RS, 65535));
+}
+
+void test_item_max_stack_placeholder_id_returns_zero(void)
+{
+    /* IDs like 52 are "????????" placeholders in the libpksave name table
+     * and have no pret entry — they fall through to the 0 sentinel. */
+    TEST_ASSERT_EQUAL_UINT16(0, pksave_item_max_stack(PKSAVE_GAME_RS, 52));
+}
+
+void test_item_max_stack_non_gen3_game_returns_zero(void)
+{
+    TEST_ASSERT_EQUAL_UINT16(0, pksave_item_max_stack(PKSAVE_GAME_RB, ITEM_POTION));
+    TEST_ASSERT_EQUAL_UINT16(0, pksave_item_max_stack(PKSAVE_GAME_DP, ITEM_POTION));
+}
+
+/* ── pksave_item_pocket ──────────────────────────────────────────────── */
+
+void test_item_pocket_master_ball_is_balls(void)
+{
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_BALLS,
+        pksave_item_pocket(PKSAVE_GAME_RS,      ITEM_MASTER_BALL));
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_BALLS,
+        pksave_item_pocket(PKSAVE_GAME_EMERALD, ITEM_MASTER_BALL));
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_BALLS,
+        pksave_item_pocket(PKSAVE_GAME_FRLG,    ITEM_MASTER_BALL));
+}
+
+void test_item_pocket_potion_is_items(void)
+{
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_ITEMS,
+        pksave_item_pocket(PKSAVE_GAME_EMERALD, ITEM_POTION));
+}
+
+void test_item_pocket_tm01_is_tmhm(void)
+{
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_TM_HM,
+        pksave_item_pocket(PKSAVE_GAME_RS, ITEM_TM01));
+}
+
+void test_item_pocket_hm01_is_tmhm(void)
+{
+    /* HMs share the TM/HM pocket with TMs — distinct only by .importance,
+     * which max_stack is responsible for surfacing. */
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_TM_HM,
+        pksave_item_pocket(PKSAVE_GAME_FRLG, ITEM_HM01));
+}
+
+void test_item_pocket_berry_is_berries(void)
+{
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_BERRIES,
+        pksave_item_pocket(PKSAVE_GAME_RS, ITEM_CHERI_BERRY));
+}
+
+void test_item_pocket_key_item_is_key(void)
+{
+    /* Both an RSE-only key item (Coin Case) and a FRLG-only key item
+     * (Bicycle) report POCKET_KEY when queried under any Gen 3 variant —
+     * RSE and FRLG agree on the pocket assignment for every shared ID. */
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_KEY,
+        pksave_item_pocket(PKSAVE_GAME_RS,   ITEM_COIN_CASE));
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_KEY,
+        pksave_item_pocket(PKSAVE_GAME_FRLG, ITEM_BICYCLE));
+    /* Cross-check: Bicycle queried under RSE still returns POCKET_KEY (the
+     * table is per-ID, not per-game; pocket assignment doesn't shift). */
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_KEY,
+        pksave_item_pocket(PKSAVE_GAME_RS, ITEM_BICYCLE));
+}
+
+void test_item_pocket_item_none_is_none(void)
+{
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_NONE,
+        pksave_item_pocket(PKSAVE_GAME_RS, ITEM_NONE));
+}
+
+void test_item_pocket_unknown_id_is_none(void)
+{
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_NONE,
+        pksave_item_pocket(PKSAVE_GAME_RS, 500));
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_NONE,
+        pksave_item_pocket(PKSAVE_GAME_RS, 65535));
+}
+
+void test_item_pocket_non_gen3_game_is_none(void)
+{
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_NONE,
+        pksave_item_pocket(PKSAVE_GAME_RB, ITEM_POTION));
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_NONE,
+        pksave_item_pocket(PKSAVE_GAME_DP, ITEM_POTION));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -162,5 +320,24 @@ int main(void)
     RUN_TEST(test_move_base_pp_unknown_move_returns_zero);
     RUN_TEST(test_move_base_pp_move_zero_returns_zero);
     RUN_TEST(test_move_base_pp_non_gen3_game_returns_zero);
+    RUN_TEST(test_item_max_stack_master_ball);
+    RUN_TEST(test_item_max_stack_potion);
+    RUN_TEST(test_item_max_stack_hm01_locked_at_one);
+    RUN_TEST(test_item_max_stack_tm01_stacks_to_99);
+    RUN_TEST(test_item_max_stack_berry_caps_at_999);
+    RUN_TEST(test_item_max_stack_key_item_locked_at_one);
+    RUN_TEST(test_item_max_stack_item_none_returns_zero);
+    RUN_TEST(test_item_max_stack_unknown_id_returns_zero);
+    RUN_TEST(test_item_max_stack_placeholder_id_returns_zero);
+    RUN_TEST(test_item_max_stack_non_gen3_game_returns_zero);
+    RUN_TEST(test_item_pocket_master_ball_is_balls);
+    RUN_TEST(test_item_pocket_potion_is_items);
+    RUN_TEST(test_item_pocket_tm01_is_tmhm);
+    RUN_TEST(test_item_pocket_hm01_is_tmhm);
+    RUN_TEST(test_item_pocket_berry_is_berries);
+    RUN_TEST(test_item_pocket_key_item_is_key);
+    RUN_TEST(test_item_pocket_item_none_is_none);
+    RUN_TEST(test_item_pocket_unknown_id_is_none);
+    RUN_TEST(test_item_pocket_non_gen3_game_is_none);
     return UNITY_END();
 }

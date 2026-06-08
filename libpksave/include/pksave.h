@@ -33,6 +33,9 @@ typedef enum {
 } pksave_game_t;
 
 /* ── Bag pockets ─────────────────────────────────────────────────────────── */
+/* Valid pocket IDs are contiguous in [0, PKSAVE_POCKET_COUNT).  NONE is an
+ * out-of-band sentinel returned by per-item lookups for ITEM_NONE / unknown
+ * IDs; consumers iterating over pockets should stop at COUNT. */
 typedef enum {
     PKSAVE_POCKET_ITEMS = 0,
     PKSAVE_POCKET_BALLS,
@@ -40,6 +43,7 @@ typedef enum {
     PKSAVE_POCKET_KEY,
     PKSAVE_POCKET_BERRIES,
     PKSAVE_POCKET_COUNT,
+    PKSAVE_POCKET_NONE = 0xFF,
 } pksave_pocket_t;
 
 /* ── Core data types ─────────────────────────────────────────────────────── */
@@ -164,6 +168,19 @@ pksave_species_abilities_t pksave_species_abilities(pksave_game_t game, uint16_t
  * returns 0.  Frontend caps the PP numeric field at base * 1.6 (rounded
  * down) to allow PP-Up headroom — but that math is a frontend concern. */
 uint8_t pksave_move_base_pp(pksave_game_t game, uint16_t move_id);
+
+/* ── Per-item lookups ────────────────────────────────────────────────────── */
+/* Max stack size for one slot of a Gen 3 item.  Berries cap at 999, key
+ * items + HMs cap at 1, ordinary items + balls + TMs cap at 99.  Returns 0
+ * as a sentinel for ITEM_NONE (id 0), unknown IDs, or non-Gen-3 games. */
+uint16_t pksave_item_max_stack(pksave_game_t game, uint16_t item_id);
+
+/* Pocket category for a Gen 3 item.  Returns PKSAVE_POCKET_NONE for
+ * ITEM_NONE (id 0), unknown IDs, or non-Gen-3 games.  Both RSE and FRLG
+ * agree on the per-item pocket assignment for every shared ID, so a
+ * single canonical table sourced from pret/pokeemerald covers all three
+ * variants. */
+pksave_pocket_t pksave_item_pocket(pksave_game_t game, uint16_t item_id);
 
 /* ── Gen III in-game name-length limits (excluding null terminator) ─────── */
 /* These are the character limits the Gen III name-entry screen enforces.

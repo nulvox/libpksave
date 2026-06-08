@@ -77,12 +77,32 @@ public:
     int  pending_party_slot() const { return pending_party_slot_; }
     void set_pending_party_slot(int slot) { pending_party_slot_ = slot; }
 
+    // CP#4: bag_scene → slot_edit_scene handoff.  bag_scene records the
+    // pocket and slot the user pressed A on; slot_edit_scene reads them
+    // from its ctor to know what to edit.  Default -1 / NONE means "no
+    // selection pending".  slot_edit_scene clears them on return so a
+    // re-entry to bag_scene doesn't immediately re-drill.
+    pksave_pocket_t pending_bag_pocket() const { return pending_bag_pocket_; }
+    int             pending_bag_slot()   const { return pending_bag_slot_; }
+    void set_pending_bag(pksave_pocket_t pocket, int slot)
+    {
+        pending_bag_pocket_ = pocket;
+        pending_bag_slot_   = slot;
+    }
+    void clear_pending_bag()
+    {
+        pending_bag_pocket_ = PKSAVE_POCKET_NONE;
+        pending_bag_slot_   = -1;
+    }
+
 private:
     pksave_save_t* handle_;
     pksave_game_t  game_;
     const char*    reason_;
     bool           dirty_;
     int            pending_party_slot_ = -1;
+    pksave_pocket_t pending_bag_pocket_ = PKSAVE_POCKET_NONE;
+    int             pending_bag_slot_   = -1;
 };
 
 // Friendly display name for the detected game variant — Checkpoint #1

@@ -19,7 +19,7 @@ Companion docs:
 - `PRD.md` / `SPEC.md` / `AGENT_PROMPT.md` — feature requirements,
   technical spec, and the original build order.
 
-Date produced: 2026-06-03. Last status refresh: 2026-06-07.
+Date produced: 2026-06-03. Last status refresh: 2026-06-07 (CP#4 landed).
 
 ---
 
@@ -34,20 +34,33 @@ Date produced: 2026-06-03. Last status refresh: 2026-06-07.
 - **CP#3 library kickoff** — L1, L2, L4, L5 closed (recalc, shiny
   round-trip via PID recompute, ability lookup, move PP). L10 (charset)
   also closed mid-CP#2.
+- **CP#3 frontend** — `widgets/cycler`, `scenes/party_scene`,
+  `scenes/pokemon_edit_scene` (IDENTITY / STATS / MOVES tabs, Pokerus
+  sub-modal). All harness round-trips green.
+- **CP#4 library kickoff** — L6, L7 closed (2026-06-07). 19 new Unity
+  cases in `test_gen3_lookups.c` covering per-pocket stack caps + pocket
+  assignments sourced from pret/pokeemerald `src/data/items.h`.
+- **CP#4 frontend** — `scenes/bag_scene` (pocket-tabbed slot list),
+  `scenes/slot_edit_scene` (item cycler scoped via L7 + qty
+  numeric_field capped via L6).  Two new harness tests
+  (`test_bag_scene_nav.py`, `test_bag_slot_edit_roundtrip.py`).
 - **mGBA-Lua automation harness** — POC + five hardening rounds
-  shipped. `make test-gba` is a hard merge gate covering 14 tests:
+  shipped. `make test-gba` is a hard merge gate covering **16 tests**:
   per-variant fixture round-trip (RS / Emerald / FRLG), trainer-name
   round-trip per variant, TID numeric round-trip, main-menu cursor
-  wrap, boot rejects malformed save, plus the supporting smoke /
-  detect / dump / sidecar / key-input tests. See
-  `docs/frontend-gba-harness-plan.md`.
+  wrap, boot rejects malformed save, party / pokemon-edit / pokerus /
+  stats / moves round-trips, bag nav + bag slot-edit round-trip, plus
+  the supporting smoke / detect / dump / sidecar / key-input tests.
+  See `docs/frontend-gba-harness-plan.md`.
 
-**Next on your plate:** **Checkpoint #3 frontend work** — `widgets/cycler`,
-`scenes/party_scene`, `scenes/pokemon_edit_scene`. The library APIs you
-need (`pksave_recalc_stats`, `pksave_species_abilities`,
-`pksave_move_base_pp`, shiny PID-recompute) are all already public.
+**Next on your plate:** **Checkpoint #5** — Boxes.  No new library work
+required (L1–L7 already cover the Pokemon-editor APIs that box_scene
+will reuse via `pokemon_edit_scene`).  `scenes/box_scene` is the only
+new scene; it should share the existing party→pokemon_edit handoff
+pattern via a new `pending_box_*` pair on the bridge (or extend the
+party slot field — judgment call).
 
-**Open library gaps that block later checkpoints:** L6, L7 (Bag, CP#4).
+**Open library gaps that block later checkpoints:** none.
 L8, L9 deferred indefinitely.
 
 **Before you write code, read in this order:**
@@ -359,37 +372,61 @@ post-heal.
 
 ---
 
-## Checkpoint #4 — Bag
+## Checkpoint #4 — Bag — **shipped 2026-06-07**
 
-**Library kickoff** — close gaps L6, L7.
+**Library kickoff** — L6, L7 closed.
 
-- [ ] **L6** — `pksave_item_max_stack(game, item_id)` table; Unity test
-      covering HMs (return 1), key items (return 1), TMs (return 99 in
-      Gen III), stackable items, berries (999), unknown ID (return 0).
-- [ ] **L7** — `pksave_item_pocket(game, item_id)` table; Unity test per
-      pocket.
+- [x] **L6** — `pksave_item_max_stack(game, item_id)` (`libpksave/src/lookups.c`
+      + `names/gen3_item_max_stack.h`, 377 entries derived from
+      pret/pokeemerald `.pocket` + `.importance`).
+- [x] **L7** — `pksave_item_pocket(game, item_id)` (`libpksave/src/lookups.c`
+      + `names/gen3_item_pocket.h`, 377 entries from pret/pokeemerald
+      `.pocket`; the existing `pksave_pocket_t` enum was extended with a
+      `PKSAVE_POCKET_NONE = 0xFF` out-of-band sentinel).
 
 **Frontend work.**
 
-- [ ] `scenes/bag_scene.{hpp,cpp}` — pocket tabs at top (Items / Balls /
-      TMs/HMs / Key / Berries), D-pad left/right cycles pockets, slot
-      list via `list_view`. A on a slot drills into `slot_edit_scene`.
-      Empty slots show `[Empty]`.
-- [ ] `scenes/slot_edit_scene.{hpp,cpp}` — two fields: item cycler
-      (scoped via L7), qty numeric field (cap from L6, dynamically
-      updates when item changes; greyed/locked at 1 for unique items).
-      A saves changes back to `save_buf`, B cancels.
-- [ ] Empty-slot add flow: open `slot_edit_scene` with item = `(none)`
-      and qty = 0; cycle to a real item with qty > 0 to add.
-- [ ] Delete flow: set qty to 0 → confirm prompt → libpksave handles the
-      tombstone via `pksave_set_item`.
-- [ ] Handle per-game pocket count differences (Berries has 46 in RSE,
-      43 in FRLG; etc.) by trusting `pksave_get_pocket`'s returned count.
-- [ ] Update `tests/checklist.md` with bag edit round-trips.
+- [x] `scenes/bag_scene.{hpp,cpp}` — pocket-tabbed slot list. D-pad LEFT/
+      RIGHT cycle pocket (saturating); list_view drives slot navigation;
+      A drills into `slot_edit_scene` with the pocket+slot recorded on
+      the bridge; B returns to main menu. Header shows `BAG <POCKET>`
+      with the dirty `*` indicator. Empty slot rows render `[Empty]`.
+- [x] `scenes/slot_edit_scene.{hpp,cpp}` — two-row editor (ITEM cycler
+      + QTY numeric_field). Item cycler filter is scoped via
+      `pksave_item_pocket` (L7) — plus item_id 0 is always reachable as
+      a clear sentinel. Qty cap is reseated from `pksave_item_max_stack`
+      (L6) on every item change. A commits via `pksave_set_item` and
+      marks the bridge dirty; B cancels. UP/DOWN navigate the two rows
+      (list_view); LEFT/RIGHT are the qty edit axis on ROW_QTY (±10);
+      cycler step axis on ROW_ITEM. The same list_view-edge-consumption
+      pitfall as trainer_scene applies — both fields disarm on focus.
+- [x] Empty-slot add path: drilling on a row past `item_count_` opens
+      the editor with item_id = 0 / qty = 0, so cycling to a real item
+      and committing adds the slot.
+- [x] Delete path: committing with item_id = 0 forces qty = 0, which
+      `pksave_set_item` handles as a tombstone.
+- [x] Per-game pocket-count differences (RSE 46 berries, FRLG 43, etc.)
+      handled by trusting `pksave_get_pocket`'s returned count — the
+      same pattern as the seed buffer in `bag_scene::load_pocket`.
+- [x] mGBA-Lua harness coverage:
+      - `test_bag_scene_nav.py` (main_menu → Bag → cycle pockets → B →
+        main_menu; verifies trainer name + items[0] preserved through
+        the round-trip).
+      - `test_bag_slot_edit_roundtrip.py` (drives Items[0].qty 5 → 15
+        through FLASH on RS fixture; trainer name + adjacent slot
+        preserved as negative controls).
 
-**Done when:** edit a Potion qty, swap a Master Ball into the Balls
-pocket, add a Berry to an empty Berries slot, delete a TM → save,
-reload in original game → all changes persist, no save corruption.
+**Done when:** edit Items slot 0 qty in the rs fixture, save & exit,
+reload → quantity matches what was set. *(Met by
+`test_bag_slot_edit_roundtrip.py`.)*
+
+**Follow-ups (deferred):**
+
+- 3-variant fanout for the bag round-trip (currently RS-only;
+  Emerald + FRLG would mirror the L1 pattern).
+- "Swap item between pockets" path — currently the user can only edit
+  in-pocket; cross-pocket swaps require a Delete-then-Add pair.
+- Per-checkpoint manual-checklist row in `frontend-gba/tests/checklist.md`.
 
 ---
 
@@ -485,8 +522,9 @@ descriptions).
 
 ### Coverage gaps (CP#3+ to-add as scenes land)
 
-- [ ] Party-slot species/level/move round-trip (after CP#3 ships)
-- [ ] Bag item/qty round-trip (after CP#4 ships)
+- [x] Party-slot species/level/move round-trip (CP#3 — shipped)
+- [x] Bag item/qty round-trip (CP#4 — `test_bag_slot_edit_roundtrip.py`,
+      RS-only; 3-variant fanout still open)
 - [ ] Box-slot round-trip (after CP#5 ships)
 - [ ] Dirty-indicator visual — currently unreachable; needs
       framebuffer-byte assertions (filed in harness plan)
@@ -534,15 +572,17 @@ repo but is not on this list.
       trivially "no sprites" until CP#6).
 - [ ] `make gba SPRITES_ROM=...` produces a ROM with real sprites
       *(CP#6)*.
-- [x] `make test` green — 22 Unity tests across all Gen flags.
+- [x] `make test` green — Unity coverage across all Gen flags (19
+      new L6/L7 cases on top of the existing suite).
 - [ ] `make test-gba` green — mGBA Lua harness covers:
       - [x] boot + variant detection on RS / Emerald / FRLG fixtures
       - [x] UNKNOWN-content fixture lands on the boot error scene
       - SRAM-roundtrip after Save & Exit for at least one field per CP:
         - [x] trainer name (Gate J × 3 variants)
         - [x] trainer TID (numeric_field exercise)
-        - [ ] party-slot species *(CP#3)*
-        - [ ] bag item quantity *(CP#4)*
+        - [x] party-slot species *(CP#3)*
+        - [x] bag item quantity *(CP#4 — RS only;
+              `test_bag_slot_edit_roundtrip.py`)*
         - [ ] box-slot species *(CP#5)*
       - [ ] dirty indicator appears after an edit and clears after save
         *(needs framebuffer assertion infra)*

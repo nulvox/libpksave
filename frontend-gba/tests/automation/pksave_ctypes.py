@@ -96,6 +96,29 @@ class PokerusStatus(enum.IntEnum):
     CURED  = 2
 
 
+class Pocket(enum.IntEnum):
+    ITEMS   = 0
+    BALLS   = 1
+    TM_HM   = 2
+    KEY     = 3
+    BERRIES = 4
+    NONE    = 0xFF
+
+
+class PksaveItem(Structure):
+    """Mirror of pksave_item_t from pksave.h."""
+    _fields_ = [
+        ("item_id",  c_uint16),
+        ("quantity", c_uint16),
+    ]
+
+
+# Worst-case Gen 3 pocket capacity: RSE TM/HM = 64 slots.  FRLG ITEMS = 42.
+# Size the read buffer to the max across all Gen 3 variants so we can
+# decode any pocket without overflow.
+POCKET_MAX_SLOTS = 64
+
+
 class PksavePokemon(Structure):
     """Mirror of pksave_pokemon_t from pksave.h.
 
@@ -201,6 +224,11 @@ def _bind(lib: CDLL) -> None:
     #                              pksave_pokerus_t *out);
     lib.pksave_get_party_pokerus.argtypes = [c_void_p, c_uint8, POINTER(PksavePokerus)]
     lib.pksave_get_party_pokerus.restype = c_int
+
+    # int pksave_get_pocket(pksave_save_t *save, pksave_pocket_t pocket,
+    #                       pksave_item_t *out, uint8_t *count);
+    lib.pksave_get_pocket.argtypes = [c_void_p, c_int, POINTER(PksaveItem), POINTER(c_uint8)]
+    lib.pksave_get_pocket.restype = c_int
 
 
 # ── Pythonic wrappers ────────────────────────────────────────────────────────
@@ -325,6 +353,22 @@ def close(save: Save) -> None:
     if save and not save._closed:
         save._lib.pksave_close(save._handle)
         save._closed = True
+
+
+def get_pocket(save: Save, pocket: Pocket) -> tuple[list[PksaveItem], int]:
+    """Return (slots_array, count) for the given bag pocket.
+
+    `slots_array` is sized to POCKET_MAX_SLOTS; only the first `count`
+    entries are filled (libpksave packs filled slots contiguously)."""
+    if not save:
+        raise ValueError("save is closed or invalid")
+    arr = (PksaveItem * POCKET_MAX_SLOTS)()
+    count = c_uint8(0)
+    rc = save._lib.pksave_get_pocket(
+        save._handle, int(pocket), arr, ctypes.byref(count))
+    if rc != PKSAVE_OK:
+        raise RuntimeError(f"pksave_get_pocket(pocket={pocket.name}) rc={rc}")
+    return list(arr), int(count.value)
 
 
 __all__ = [

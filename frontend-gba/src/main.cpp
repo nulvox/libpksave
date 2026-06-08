@@ -27,6 +27,8 @@
 #include "scenes/party_scene.hpp"
 #include "scenes/pokemon_edit_scene.hpp"
 #include "scenes/pokerus_modal_scene.hpp"
+#include "scenes/bag_scene.hpp"
+#include "scenes/slot_edit_scene.hpp"
 #include "scenes/save_scene.hpp"
 #include "widgets/text_input.hpp"
 
@@ -89,10 +91,17 @@ bn::unique_ptr<pksave_gba::scene> make_scene(
             return bn::unique_ptr<pksave_gba::scene>(
                 new pksave_gba::text_input_scene());
 
-        // Bag / Boxes land in Checkpoint #4 / #5.  Until then, fall
-        // back to the main menu so a stray transition can't strand the
-        // user.  `default` satisfies butano's -Wswitch-default warning.
         case scene_kind::BAG:
+            return bn::unique_ptr<pksave_gba::scene>(
+                new pksave_gba::bag_scene(bridge));
+
+        case scene_kind::SLOT_EDIT:
+            return bn::unique_ptr<pksave_gba::scene>(
+                new pksave_gba::slot_edit_scene(bridge));
+
+        // Boxes lands in Checkpoint #5.  Until then, fall back to the
+        // main menu so a stray transition can't strand the user.
+        // `default` satisfies butano's -Wswitch-default warning.
         case scene_kind::BOXES:
         default:
             return bn::unique_ptr<pksave_gba::scene>(

@@ -30,6 +30,7 @@ enum class scene_kind {
     POKEMON_EDIT,
     POKERUS_MODAL,
     BAG,
+    SLOT_EDIT,
     BOXES,
     SAVE,
     TEXT_INPUT,
