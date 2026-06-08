@@ -414,6 +414,91 @@ void test_frlg_set_box_slot_round_trip(void)
     pksave_close(s);
 }
 
+/* ── L11: box-mon level derived from XP ─────────────────────────────────── */
+/* g3_decode_box_mon now reads the 3-byte XP at Growth+4 and derives level
+ * via the species's growth-rate curve.  Fixture seeds box 1 slot 0 with
+ * Bulbasaur (MEDIUM_SLOW, growth rate 3) at level 5; MEDIUM_SLOW threshold
+ * for level 5 is 135 XP.  Before L11 this asserted level==0; the value now
+ * matching the party-side level 5 is the key acceptance signal. */
+void test_rs_get_box_level_from_xp(void)
+{
+    if (!load_fixture("rs.sav", rs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    TEST_ASSERT_EQUAL_UINT16(1, box[0].species);
+    TEST_ASSERT_EQUAL_UINT8(5,  box[0].level);   /* derived from XP */
+    pksave_close(s);
+}
+
+/* pksave_set_box_slot encodes XP from mon->level so a level change
+ * round-trips through pksave_get_box.  Test sets level 5 → 42, flushes,
+ * reopens, asserts.  Earlier libpksave silently dropped box-level edits
+ * (no XP write path); this case is the regression guard. */
+void test_rs_set_box_slot_level_round_trip(void)
+{
+    if (!load_fixture("rs.sav", rs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    TEST_ASSERT_EQUAL_UINT8(5, box[0].level);
+
+    box[0].level = 42;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_box_slot(s, 1, 0, &box[0]));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    TEST_ASSERT_EQUAL_UINT8(42, box[0].level);
+    /* Species + nickname still intact — XP rewrite must not clobber
+     * other Growth substruct bytes (item, pp_bonuses, friendship) nor
+     * the rest of the slot. */
+    TEST_ASSERT_EQUAL_UINT16(1, box[0].species);
+    pksave_close(s);
+}
+
+/* No-op edit preserves existing XP exactly (within-level XP progress is
+ * not lost).  Read the slot, write it back without changing level →
+ * the XP at Growth+4 should be byte-identical.  Without this guard, a
+ * naive encoder that always rewrites XP=threshold(level) would round
+ * sub-level progress down silently. */
+void test_rs_set_box_slot_no_op_preserves_xp(void)
+{
+    if (!load_fixture("rs.sav", rs_buf, SRAM_SIZE)) return;
+    /* Snapshot bytes before any edit. */
+    uint8_t before[SRAM_SIZE];
+    memcpy(before, rs_buf, SRAM_SIZE);
+
+    pksave_save_t *s = pksave_open(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL(s);
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    uint8_t snapped_level = box[0].level;
+
+    /* Write back unchanged. */
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_box_slot(s, 1, 0, &box[0]));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    /* Re-read and assert level survives byte-for-byte (a divergence here
+     * would mean the encoder rewrote XP and the new XP threshold maps to
+     * a different level than the original XP did). */
+    s = pksave_open(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    TEST_ASSERT_EQUAL_UINT8(snapped_level, box[0].level);
+    pksave_close(s);
+}
+
 void test_rs_set_box_slot_out_of_range(void)
 {
     if (!load_fixture("rs.sav", rs_buf, SRAM_SIZE)) return;
@@ -816,6 +901,9 @@ int main(void)
     RUN_TEST(test_rs_set_box_slot_round_trip);
     RUN_TEST(test_emerald_set_box_slot_round_trip);
     RUN_TEST(test_frlg_set_box_slot_round_trip);
+    RUN_TEST(test_rs_get_box_level_from_xp);
+    RUN_TEST(test_rs_set_box_slot_level_round_trip);
+    RUN_TEST(test_rs_set_box_slot_no_op_preserves_xp);
     RUN_TEST(test_rs_set_box_slot_out_of_range);
     RUN_TEST(test_rs_get_items_pocket);
     RUN_TEST(test_rs_get_balls_pocket);

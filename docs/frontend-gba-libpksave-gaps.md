@@ -70,6 +70,7 @@ because v1 didn't need them.
 |----|-----|-------------------------|------------------------|
 | **L8** | `pksave_badge_name(game, badge_index) → const char *` — per-game badge name lookup (Hoenn badges differ from Kanto FRLG badges) | Editor renders the badge bitfield as `Badge 1`–`Badge 8` toggles; players know which gym maps to which slot | Small — two parallel tables (Hoenn / Kanto) gated by `pksave_game_t` |
 | **L9** | `pksave_nature_modifiers(nature_id) → {boosted_stat, lowered_stat}` — nature's ±10% stat pair | Editor shows nature name only; players know "Adamant" means +Atk −SpA | Small — single 25-entry table; not game-dependent |
+| ~~**L11**~~ | ~~Box-mon level/XP: `g3_decode_box_mon` does not populate `mon->level`; `g3_encode_box_mon` does not write the XP offset~~ — **Resolved** 2026-06-07 in `libpksave/src/gen3.c` (XP↔level math via `g3_xp_for_level` / `g3_level_from_xp` using pret/pokeemerald `experience_tables.h` formulas; `g3_decode_box_mon` now derives level from the 4-byte XP at the Growth substruct's offset 4; `g3_encode_encrypted_block` writes XP from `mon->level` using the new species's growth-rate curve, preserving existing XP exactly when both species and level are unchanged so no-op edits don't lose within-level XP progress) and `libpksave/src/names/gen3_growth_rates.h` (413-entry per-species growth-rate table sourced from pret/pokeemerald `src/data/pokemon/species_info.h` `.growthRate` field).  `libpksave/tests/fixtures/generate_fixtures.py` updated to seed XP at the canonical threshold rather than `level * 10`.  Coverage: `test_rs_get_box_level_from_xp` (decode), `test_rs_set_box_slot_level_round_trip` (5→42 round-trip), `test_rs_set_box_slot_no_op_preserves_xp` (no-op idempotency) in `tests/test_gen3.c`, plus `frontend-gba/tests/automation/test_box_stats_level_roundtrip.py` (5→35 UI round-trip from box entry). | — | — |
 
 ---
 
@@ -145,6 +146,7 @@ pattern).
 - [ ] **L8** — `pksave_badge_name` (deferred; future consumer)
 - [ ] **L9** — `pksave_nature_modifiers` (deferred; future consumer)
 - [x] **L10** — Gen 3 encoder/decoder full charset (resolved 2026-06-04; canonical mapping landed in `libpksave/src/gen3.c`, fixtures regenerated, keyboard `sym` tab widened to digits + 8 punctuation marks)
+- [x] **L11** — Gen 3 box-mon level/XP decode + encode (resolved 2026-06-07; XP↔level math in `libpksave/src/gen3.c` with formulas from pret/pokeemerald `experience_tables.h`; 413-entry per-species growth-rate table in `names/gen3_growth_rates.h` from pret/pokeemerald `species_info.h`; fixture generator updated to seed canonical XP; 3 new Unity cases + 1 new harness test)
 
 ---
 

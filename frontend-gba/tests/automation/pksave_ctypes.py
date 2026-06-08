@@ -220,6 +220,15 @@ def _bind(lib: CDLL) -> None:
     lib.pksave_get_party.argtypes = [c_void_p, POINTER(PksavePokemon), POINTER(c_uint8)]
     lib.pksave_get_party.restype = c_int
 
+    # int pksave_get_box_count(pksave_save_t *save);
+    lib.pksave_get_box_count.argtypes = [c_void_p]
+    lib.pksave_get_box_count.restype = c_int
+
+    # int pksave_get_box(pksave_save_t *save, uint8_t box,
+    #                    pksave_pokemon_t out[30], uint8_t *count);
+    lib.pksave_get_box.argtypes = [c_void_p, c_uint8, POINTER(PksavePokemon), POINTER(c_uint8)]
+    lib.pksave_get_box.restype = c_int
+
     # int pksave_get_party_pokerus(pksave_save_t *save, uint8_t slot,
     #                              pksave_pokerus_t *out);
     lib.pksave_get_party_pokerus.argtypes = [c_void_p, c_uint8, POINTER(PksavePokerus)]
@@ -348,6 +357,27 @@ def get_party(save: Save) -> tuple[list[PksavePokemon], int]:
     return list(arr), int(count.value)
 
 
+def get_box_count(save: Save) -> int:
+    """Return the number of Pokemon storage boxes for this save's game."""
+    if not save:
+        raise ValueError("save is closed or invalid")
+    return int(save._lib.pksave_get_box_count(save._handle))
+
+
+def get_box(save: Save, box: int) -> tuple[list[PksavePokemon], int]:
+    """Return (slots_array, count) for box `box`.  slots_array always has
+    30 entries; only the first `count` are filled.  Each entry is a
+    PksavePokemon struct."""
+    if not save:
+        raise ValueError("save is closed or invalid")
+    arr = (PksavePokemon * 30)()
+    count = c_uint8(0)
+    rc = save._lib.pksave_get_box(save._handle, box, arr, ctypes.byref(count))
+    if rc != PKSAVE_OK:
+        raise RuntimeError(f"pksave_get_box(box={box}) rc={rc}")
+    return list(arr), int(count.value)
+
+
 def close(save: Save) -> None:
     """Close a Save handle.  Idempotent."""
     if save and not save._closed:
@@ -385,6 +415,8 @@ __all__ = [
     "get_trainer",
     "get_party",
     "get_party_pokerus",
+    "get_box_count",
+    "get_box",
     "close",
     "PKSAVE_OK",
     "PKSAVE_ERR_NULL",

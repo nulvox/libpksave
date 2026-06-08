@@ -45,7 +45,10 @@ GBA_TESTS := \
     frontend-gba/tests/automation/test_moves_move_roundtrip.py \
     frontend-gba/tests/automation/test_moves_pp_roundtrip.py \
     frontend-gba/tests/automation/test_bag_scene_nav.py \
-    frontend-gba/tests/automation/test_bag_slot_edit_roundtrip.py
+    frontend-gba/tests/automation/test_bag_slot_edit_roundtrip.py \
+    frontend-gba/tests/automation/test_box_scene_nav.py \
+    frontend-gba/tests/automation/test_box_species_roundtrip.py \
+    frontend-gba/tests/automation/test_box_stats_level_roundtrip.py
 
 .PHONY: test test-gba gbc gba nds all clean \
         _build_test _build_test_gba _build_gbc _build_gba _build_nds

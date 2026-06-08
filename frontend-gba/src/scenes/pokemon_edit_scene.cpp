@@ -105,16 +105,32 @@ pokemon_edit_scene::pokemon_edit_scene(pksave_bridge& bridge)
     // current move id; the ctor seeds them to 0/0/0 (empty slot).
     , pp_0_(0, 0, 0), pp_1_(0, 0, 0), pp_2_(0, 0, 0), pp_3_(0, 0, 0)
     , pokemon_{}
-    , slot_(bridge.pending_party_slot())
+    // Source resolution: a non-default pending_box_* pair means we were
+    // entered from box_scene; otherwise fall back to party.  Matches the
+    // bag pattern (pending_bag_* defaults to NONE/-1 when stale).
+    , source_(bridge.pending_box_index() >= 0
+              ? edit_source::BOX
+              : edit_source::PARTY)
+    , slot_(source_ == edit_source::BOX
+            ? bridge.pending_box_slot()
+            : bridge.pending_party_slot())
+    , box_(source_ == edit_source::BOX
+           ? bridge.pending_box_index()
+           : 0)
     , tab_(edit_tab::IDENTITY)
     , mode_(edit_mode::NAV)
 {
-    // Defensive: party_scene is the only caller and always sets the
-    // slot before transitioning.  If the slot is unset (-1) we fall
-    // back to slot 0 so the scene still constructs cleanly.
-    if (slot_ < 0 || slot_ >= 6)
+    // Defensive: callers always set the right pending-* fields before
+    // transitioning here.  Clamp out-of-range so the scene still
+    // constructs cleanly.
+    if (source_ == edit_source::BOX)
     {
-        slot_ = 0;
+        if (slot_ < 0 || slot_ >= 30) slot_ = 0;
+        if (box_  < 0)                box_  = 0;
+    }
+    else
+    {
+        if (slot_ < 0 || slot_ >= 6) slot_ = 0;
     }
 
     load_from_save();
@@ -152,10 +168,22 @@ void pokemon_edit_scene::load_from_save()
     {
         return;
     }
-    pksave_pokemon_t party[6] = {};
-    uint8_t count = 0;
-    ::pksave_get_party(bridge_.handle(), party, &count);
-    pokemon_ = party[slot_];
+    if (source_ == edit_source::BOX)
+    {
+        pksave_pokemon_t box[30] = {};
+        uint8_t count = 0;
+        ::pksave_get_box(bridge_.handle(),
+                         static_cast<uint8_t>(box_),
+                         box, &count);
+        pokemon_ = box[slot_];
+    }
+    else
+    {
+        pksave_pokemon_t party[6] = {};
+        uint8_t count = 0;
+        ::pksave_get_party(bridge_.handle(), party, &count);
+        pokemon_ = party[slot_];
+    }
 
     const int ev_cap = ::pksave_ev_max_per_stat(bridge_.game());
     const int iv_cap = ::pksave_iv_max(bridge_.game());
@@ -206,16 +234,36 @@ void pokemon_edit_scene::push_to_save()
     {
         return;
     }
-    int rc = ::pksave_set_party_slot(bridge_.handle(),
-                                     static_cast<uint8_t>(slot_),
-                                     &pokemon_);
-    BN_LOG("edit: push slot=", slot_, " sp=", pokemon_.species, " rc=", rc);
-    bridge_.mark_dirty();
+    if (source_ == edit_source::BOX)
+    {
+        int rc = ::pksave_set_box_slot(bridge_.handle(),
+                                       static_cast<uint8_t>(box_),
+                                       static_cast<uint8_t>(slot_),
+                                       &pokemon_);
+        BN_LOG("edit: push box=", box_, " slot=", slot_,
+               " sp=", pokemon_.species, " rc=", rc);
+        bridge_.mark_dirty();
 
-    pksave_pokemon_t verify[6] = {};
-    uint8_t cnt = 0;
-    ::pksave_get_party(bridge_.handle(), verify, &cnt);
-    BN_LOG("edit: verify sp=", verify[slot_].species, " cnt=", cnt);
+        pksave_pokemon_t verify[30] = {};
+        uint8_t cnt = 0;
+        ::pksave_get_box(bridge_.handle(),
+                         static_cast<uint8_t>(box_),
+                         verify, &cnt);
+        BN_LOG("edit: verify sp=", verify[slot_].species, " cnt=", cnt);
+    }
+    else
+    {
+        int rc = ::pksave_set_party_slot(bridge_.handle(),
+                                         static_cast<uint8_t>(slot_),
+                                         &pokemon_);
+        BN_LOG("edit: push slot=", slot_, " sp=", pokemon_.species, " rc=", rc);
+        bridge_.mark_dirty();
+
+        pksave_pokemon_t verify[6] = {};
+        uint8_t cnt = 0;
+        ::pksave_get_party(bridge_.handle(), verify, &cnt);
+        BN_LOG("edit: verify sp=", verify[slot_].species, " cnt=", cnt);
+    }
 }
 
 void pokemon_edit_scene::redraw_header()
@@ -745,7 +793,8 @@ bn::optional<scene_kind> pokemon_edit_scene::update()
     bool need_list_redraw   = false;
     bool need_right_redraw  = false;
 
-    // B handling: in ACTIVE, exit ACTIVE (no revert); in NAV, return PARTY.
+    // B handling: in ACTIVE, exit ACTIVE (no revert); in NAV, return to
+    // the entry-source scene (PARTY or BOXES).
     if (bn::keypad::b_pressed())
     {
         if (mode_ == edit_mode::ACTIVE)
@@ -754,7 +803,9 @@ bn::optional<scene_kind> pokemon_edit_scene::update()
             list_.redraw();
             return bn::nullopt;
         }
-        return scene_kind::PARTY;
+        return source_ == edit_source::BOX
+               ? scene_kind::BOXES
+               : scene_kind::PARTY;
     }
 
     // D-pad LEFT/RIGHT in NAV mode: cycle tabs.
@@ -853,6 +904,17 @@ bn::optional<scene_kind> pokemon_edit_scene::update()
                     need_header_redraw = true;
                     break;
                 case ROW_POKERUS:
+                    // Pokerus from a box-resident Pokemon is a CP#5
+                    // deferred follow-up (pokerus_modal_scene currently
+                    // keys on pending_party_slot only; the
+                    // pksave_{get,set}_box_pokerus APIs exist, just need
+                    // wiring + 2 tests).  Treat as no-op here so the box
+                    // entry path doesn't crash or misdirect into a party
+                    // slot.
+                    if (source_ == edit_source::BOX)
+                    {
+                        break;
+                    }
                     // Re-set pending_party_slot so the modal can read
                     // the same slot.  party_scene set it on entry; the
                     // bridge keeps it across scene transitions, but

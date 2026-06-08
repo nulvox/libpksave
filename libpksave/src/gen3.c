@@ -26,6 +26,68 @@
 
 #ifdef PKSAVE_GEN3
 
+#include "names/gen3_growth_rates.h"
+
+/* ── Gen 3 experience curves (per pret/pokeemerald
+ *    src/data/pokemon/experience_tables.h) ───────────────────────────────── */
+/* Six growth-rate curves, indexed to match gen3_growth_rates[].
+ *   0 = MEDIUM_FAST   1 = ERRATIC     2 = FLUCTUATING
+ *   3 = MEDIUM_SLOW   4 = FAST        5 = SLOW
+ *
+ * Formulas computed at runtime (rather than precomputed 6×101 = 606-entry
+ * table) — the math is integer-only and called at most once per slot
+ * read/write.  Pokemon's "level 1" XP is canonically 1 in pret's tables,
+ * but the encoded formula at n=1 yields 0/1/<0> across the rates; we
+ * canonicalise: n<=1 → 0.  Decode treats both 0 and 1 as level 1. */
+static uint32_t g3_xp_for_level(uint8_t rate, uint8_t lvl)
+{
+    if (lvl <= 1) return 0;
+    uint32_t n  = (uint32_t)lvl;
+    uint32_t n2 = n * n;
+    uint32_t n3 = n2 * n;
+    switch (rate) {
+    case 0: /* MEDIUM_FAST */
+        return n3;
+    case 1: /* ERRATIC */
+        if (n <= 50) return ((100u - n) * n3) /  50u;
+        if (n <= 68) return ((150u - n) * n3) / 100u;
+        if (n <= 98) return (((1911u - 10u * n) / 3u) * n3) / 500u;
+        return ((160u - n) * n3) / 100u;
+    case 2: /* FLUCTUATING */
+        if (n <= 15) return ((((n + 1u) / 3u) + 24u) * n3) /  50u;
+        if (n <= 36) return ((n + 14u)                * n3) /  50u;
+        return (((n / 2u) + 32u)                      * n3) /  50u;
+    case 3: /* MEDIUM_SLOW */
+        /* (6n^3)/5 - 15n^2 + 100n - 140; positive for n >= 2. */
+        return (6u * n3) / 5u + 100u * n - 15u * n2 - 140u;
+    case 4: /* FAST */
+        return (4u * n3) / 5u;
+    case 5: /* SLOW */
+        return (5u * n3) / 4u;
+    default:
+        return n3;
+    }
+}
+
+static uint8_t g3_level_from_xp(uint8_t rate, uint32_t xp)
+{
+    /* Scan down from 100; first level whose threshold is <= xp wins.
+     * Capped at 100, floored at 1 — Gen 3 has no level 0. */
+    uint8_t lvl = 100;
+    while (lvl > 1 && g3_xp_for_level(rate, lvl) > xp) {
+        --lvl;
+    }
+    return lvl;
+}
+
+static uint8_t g3_growth_rate_for_species(uint16_t species_id)
+{
+    if (species_id < sizeof(gen3_growth_rates) / sizeof(gen3_growth_rates[0])) {
+        return gen3_growth_rates[species_id];
+    }
+    return 0; /* MEDIUM_FAST as a safe default */
+}
+
 /* ── section constants ───────────────────────────────────────────────────── */
 #define G3_SECTION_SIZE  0x1000U
 #define G3_NUM_SECTIONS  14U
@@ -438,8 +500,38 @@ static void g3_encode_encrypted_block(uint8_t *dst, const pksave_pokemon_t *mon,
      * subs[0]=Growth, subs[1]=Attacks, subs[2]=EVs, subs[3]=Misc. */
     uint8_t *g = subs[0], *a = subs[1], *e = subs[2], *m = subs[3];
 
+    /* Capture pre-overlay species + XP so the level↔XP encoder below can
+     * decide whether to preserve the existing XP (no-op edit) or rewrite
+     * it to the threshold for caller-supplied mon->level. */
+    uint16_t old_sp; memcpy(&old_sp, g + 0, 2);
+    uint32_t old_xp; memcpy(&old_xp, g + 4, 4);
+
     uint16_t sp = mon->species;   memcpy(g + 0, &sp, 2);
     uint16_t it = mon->held_item; memcpy(g + 2, &it, 2);
+
+    /* XP: Gen 3 stores experience (not level) in the Growth substruct at
+     * +4 (4 bytes LE; cartridge writes only the low 3 bytes, top byte
+     * canonically zero).  Level on read is derived from XP via the
+     * species's growth-rate curve, so an editor change to mon->level
+     * must round-trip into a corresponding XP write.
+     *
+     * Preserve XP exactly when both species and level are unchanged from
+     * what's currently encoded — that keeps within-level XP progress
+     * across no-op edits (e.g. user opened the slot, walked through
+     * tabs, hit Save without touching level).  When either changes,
+     * rewrite XP to the new species's growth-rate threshold for
+     * mon->level.  This loses sub-level progress but is the predictable
+     * editor semantic ("the level you typed is the level you get"). */
+    uint8_t old_level = g3_level_from_xp(g3_growth_rate_for_species(old_sp),
+                                          old_xp);
+    uint32_t new_xp;
+    if (mon->level == old_level && mon->species == old_sp) {
+        new_xp = old_xp;
+    } else {
+        new_xp = g3_xp_for_level(g3_growth_rate_for_species(mon->species),
+                                  mon->level);
+    }
+    memcpy(g + 4, &new_xp, 4);
 
     for (int i = 0; i < 4; i++) {
         uint16_t mv = mon->move_ids[i];
@@ -633,8 +725,16 @@ static void g3_decode_box_mon(const uint8_t *mon, pksave_pokemon_t *out)
 
     gen3_decode_name(mon + 0x14, out->ot_name,  sizeof(out->ot_name),  7);
     gen3_decode_name(mon + 0x08, out->nickname, sizeof(out->nickname), 10);
-    /* Level/stats are not stored in box mons; level is recomputed from exp
-     * at withdrawal time. Leave level=0 and stat[6]=0. */
+
+    /* Derive level from XP: box mons store experience (3 bytes LE at the
+     * Growth substruct + 4; the 4th byte is canonically zero and we
+     * tolerate non-zero by reading the full uint32) and the cartridge
+     * recomputes level from XP at withdrawal time using the species's
+     * growth-rate curve.  We do the same so the UI sees a meaningful
+     * level value rather than 0.  stat[6] stays zero (callers can
+     * recompute via pksave_recalc_stats if they need it). */
+    uint32_t xp; memcpy(&xp, dec + gp + 4, 4);
+    out->level = g3_level_from_xp(g3_growth_rate_for_species(out->species), xp);
 }
 
 int gen3_get_box(pksave_save_t *s, uint8_t box, pksave_pokemon_t out[30], uint8_t *cnt)

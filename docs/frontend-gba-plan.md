@@ -19,7 +19,7 @@ Companion docs:
 - `PRD.md` / `SPEC.md` / `AGENT_PROMPT.md` — feature requirements,
   technical spec, and the original build order.
 
-Date produced: 2026-06-03. Last status refresh: 2026-06-07 (CP#4 landed).
+Date produced: 2026-06-03. Last status refresh: 2026-06-07 (CP#5 landed).
 
 ---
 
@@ -44,21 +44,34 @@ Date produced: 2026-06-03. Last status refresh: 2026-06-07 (CP#4 landed).
   `scenes/slot_edit_scene` (item cycler scoped via L7 + qty
   numeric_field capped via L6).  Two new harness tests
   (`test_bag_scene_nav.py`, `test_bag_slot_edit_roundtrip.py`).
+- **CP#5 library** — L11 closed (Gen 3 box-mon level/XP decode +
+  encode); 413-entry per-species growth-rate table sourced from
+  pret/pokeemerald `species_info.h`; XP↔level math from pret's
+  `experience_tables.h` formulas.  Fixture generator updated to seed
+  canonical XP.
+- **CP#5 frontend** — `scenes/box_scene` (linear 30-slot list_view;
+  SELECT cycles boxes wrapping; A drills into pokemon_edit_scene via
+  new `pending_box_index` / `pending_box_slot` pair on the bridge,
+  mirroring the bag handoff pattern).  `pokemon_edit_scene` branches
+  `load_from_save` / `push_to_save` / B-return on a new `edit_source`
+  enum (PARTY vs BOX); ROW_POKERUS guarded as no-op when source==BOX
+  (deferred follow-up).  Three new harness tests
+  (`test_box_scene_nav.py`, `test_box_species_roundtrip.py`,
+  `test_box_stats_level_roundtrip.py`).
 - **mGBA-Lua automation harness** — POC + five hardening rounds
-  shipped. `make test-gba` is a hard merge gate covering **16 tests**:
+  shipped. `make test-gba` is a hard merge gate covering **29 tests**:
   per-variant fixture round-trip (RS / Emerald / FRLG), trainer-name
   round-trip per variant, TID numeric round-trip, main-menu cursor
   wrap, boot rejects malformed save, party / pokemon-edit / pokerus /
-  stats / moves round-trips, bag nav + bag slot-edit round-trip, plus
-  the supporting smoke / detect / dump / sidecar / key-input tests.
+  stats / moves round-trips, bag nav + bag slot-edit round-trip,
+  box-scene nav + box species round-trip, plus the supporting smoke /
+  detect / dump / sidecar / key-input tests.
   See `docs/frontend-gba-harness-plan.md`.
 
-**Next on your plate:** **Checkpoint #5** — Boxes.  No new library work
-required (L1–L7 already cover the Pokemon-editor APIs that box_scene
-will reuse via `pokemon_edit_scene`).  `scenes/box_scene` is the only
-new scene; it should share the existing party→pokemon_edit handoff
-pattern via a new `pending_box_*` pair on the bridge (or extend the
-party slot field — judgment call).
+**Next on your plate:** **Checkpoint #6** — Sprites (Option C).
+`assets/silhouette.png` + `tools/extract_sprites.py` + butano asset
+import for the silhouette on the Pokemon editor / Party / Box right
+panels.
 
 **Open library gaps that block later checkpoints:** none.
 L8, L9 deferred indefinitely.
@@ -430,23 +443,77 @@ reload → quantity matches what was set. *(Met by
 
 ---
 
-## Checkpoint #5 — Boxes
+## Checkpoint #5 — Boxes — **shipped 2026-06-07**
 
-No new library work (L1–L7 already cover what the Pokemon editor needs).
+One library gap discovered + closed (L11 — box-mon level/XP decode +
+encode); L1–L7 covered everything else for `pokemon_edit_scene` reuse.
 
-- [ ] `scenes/box_scene.{hpp,cpp}` — linear slot list of 30 slots,
-      reuses Party's `list_view` exactly. Header shows `BOX N` and the
-      box's filled count. A drills into `pokemon_edit_scene` with a
-      return-scene hint of box. SELECT cycles boxes; D-pad up/down
-      scrolls the slot list.
-- [ ] Verify `pokemon_edit_scene` works identically from Party and Box
-      entry points — one component, two callers, no per-caller logic.
-- [ ] Update `tests/checklist.md` with box edit round-trips, including
-      cross-box navigation and edit-then-back.
+**Library work.**
 
-**Done when:** edit a box-resident Pokemon's species, save, reload in
-original game → Pokemon matches; navigating boxes works in both
-directions.
+- [x] **L11** — XP↔level math in `libpksave/src/gen3.c` (formulas from
+      pret/pokeemerald `src/data/pokemon/experience_tables.h`, runtime
+      computation), plus a 413-entry per-species growth-rate lookup
+      in `libpksave/src/names/gen3_growth_rates.h` sourced from
+      pret/pokeemerald `src/data/pokemon/species_info.h`.
+      `g3_decode_box_mon` now derives `out->level` from the 4-byte XP
+      at the Growth substruct's offset 4; `g3_encode_encrypted_block`
+      writes XP from `mon->level` using the new species's growth-rate
+      curve, preserving existing XP exactly when both species and
+      level are unchanged (no-op edits don't lose within-level XP
+      progress).  Fixture generator updated to seed XP at the
+      canonical threshold rather than `level * 10`.
+
+**Frontend work.**
+
+- [x] `pksave_bridge` extended with `pending_box_index` /
+      `pending_box_slot` (defaults -1) and `set_pending_box` /
+      `clear_pending_box` — mirroring the bag handoff pattern.
+- [x] `scenes/box_scene.{hpp,cpp}` — linear 30-slot `list_view`.
+      Header renders `BOX N  filled/30` plus the dirty `*`.  SELECT
+      cycles boxes (wraps via `% box_total_`; `pksave_get_box_count`
+      returns 14 for Gen 3).  A records `(box_index_, list_.selected())`
+      on the bridge and returns `scene_kind::POKEMON_EDIT`.  B returns
+      to MAIN_MENU.  `clear_pending_box()` on ctor makes re-entry
+      idempotent (same pattern as `bag_scene`).
+- [x] `pokemon_edit_scene` branches on a new `edit_source` enum
+      (PARTY vs BOX), decided in the ctor by checking
+      `pending_box_index() >= 0` first then falling back to
+      `pending_party_slot()`.  Branches `load_from_save` (party vs box
+      get), `push_to_save` (party vs box set), and B-return (PARTY vs
+      BOXES).  ROW_POKERUS guarded as no-op when source==BOX (see L11).
+- [x] `main.cpp` and `main_menu_scene` wire `scene_kind::BOXES` to
+      `box_scene`.  Previously the BOXES menu entry fell back to
+      MAIN_MENU.
+- [x] mGBA-Lua harness coverage:
+      - `test_box_scene_nav.py` (main_menu → Boxes → SELECT×3 → B →
+        main_menu; verifies trainer name + box[1][0] preserved through
+        the round-trip — no spurious FLASH writes).
+      - `test_box_species_roundtrip.py` (drives box[1][0] Bulbasaur →
+        Ivysaur through FLASH on the RS fixture; trainer name, box[0]
+        empty, party[0] unchanged all serve as negative controls
+        against off-by-one box-index, wrong-source push, and
+        whole-save corruption).
+      - `test_box_stats_level_roundtrip.py` (drives box[1][0] level
+        5 → 35 through FLASH; proves L11 plumbing end-to-end from the
+        STATS-tab numeric_field through `pksave_set_box_slot`'s XP
+        write back to `pksave_get_box`'s XP-derived level decode).
+
+**Done when:** edit a box-resident Pokemon's species, save, reload →
+Pokemon matches. *(Met by `test_box_species_roundtrip.py`.)*
+
+**Follow-ups (deferred):**
+
+- **Pokerus from box source** — `pokerus_modal_scene` keys on
+  `pending_party_slot` only; entering it from a box drill would point
+  at the wrong slot.  The ROW_POKERUS branch in `pokemon_edit_scene`
+  is therefore guarded as a no-op when source==BOX.  Extending
+  `pokerus_modal_scene` to take `(source, box, slot)` and branching to
+  `pksave_{get,set}_box_pokerus` (both already in `pksave.h`) is the
+  follow-up; adds ~30 LOC + 2 harness tests.
+- 3-variant fanout for box species round-trip (currently RS-only;
+  Emerald + FRLG would mirror the L1 trainer-name fanout pattern).
+- Cross-box "move slot" path — currently only in-slot species/etc
+  edits; moving a mon between boxes requires Delete-then-Add.
 
 ---
 
@@ -500,7 +567,7 @@ descriptions).
   When butano debounce or mGBA frame timing changes, tune helpers, not
   N test scripts.
 
-### Test inventory (14 tests, all green)
+### Test inventory (29 tests, all green)
 
 | Test                              | What it proves |
 |-----------------------------------|----------------|
@@ -525,7 +592,8 @@ descriptions).
 - [x] Party-slot species/level/move round-trip (CP#3 — shipped)
 - [x] Bag item/qty round-trip (CP#4 — `test_bag_slot_edit_roundtrip.py`,
       RS-only; 3-variant fanout still open)
-- [ ] Box-slot round-trip (after CP#5 ships)
+- [x] Box-slot species round-trip (CP#5 — `test_box_species_roundtrip.py`,
+      RS-only; 3-variant fanout still open)
 - [ ] Dirty-indicator visual — currently unreachable; needs
       framebuffer-byte assertions (filed in harness plan)
 - [ ] Save-blocks-input check — currently inferred from Gate J's clean
@@ -583,7 +651,8 @@ repo but is not on this list.
         - [x] party-slot species *(CP#3)*
         - [x] bag item quantity *(CP#4 — RS only;
               `test_bag_slot_edit_roundtrip.py`)*
-        - [ ] box-slot species *(CP#5)*
+        - [x] box-slot species *(CP#5 — RS only;
+              `test_box_species_roundtrip.py`)*
       - [ ] dirty indicator appears after an edit and clears after save
         *(needs framebuffer assertion infra)*
       - [ ] save scene blocks input while the FLASH write is in flight

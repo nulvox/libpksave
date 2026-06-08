@@ -197,6 +197,40 @@ GEN3_SUBORDER = [
     [3,0,1,2],[3,0,2,1],[3,1,0,2],[3,1,2,0],[3,2,0,1],[3,2,1,0],
 ]
 
+# Gen 3 growth-rate-per-species map: only the species this generator
+# uses live here, since adding every Pokémon would just duplicate the
+# library's own gen3_growth_rates.h table.  Sourced from pret/pokeemerald
+# species_info.h .growthRate field.
+#   0 = MEDIUM_FAST   3 = MEDIUM_SLOW   (rest unused below)
+GEN3_GROWTH_RATE_BY_SPECIES = {
+    1: 3,   # Bulbasaur — MEDIUM_SLOW
+    2: 3,   # Ivysaur   — MEDIUM_SLOW
+}
+
+def gen3_xp_for_level(rate, level):
+    """Mirror of libpksave/src/gen3.c::g3_xp_for_level.  Required so the
+    fixture's encoded XP at Growth+4 matches what the library will derive
+    on read — without alignment, pksave_get_box would report a level that
+    disagrees with the level the fixture nominally seeds."""
+    if level <= 1: return 0
+    n = level
+    n2 = n * n
+    n3 = n2 * n
+    if rate == 0: return n3                                            # MEDIUM_FAST
+    if rate == 1:                                                      # ERRATIC
+        if n <= 50: return ((100 - n) * n3) // 50
+        if n <= 68: return ((150 - n) * n3) // 100
+        if n <= 98: return ((1911 - 10 * n) // 3) * n3 // 500
+        return ((160 - n) * n3) // 100
+    if rate == 2:                                                      # FLUCTUATING
+        if n <= 15: return (((n + 1) // 3 + 24) * n3) // 50
+        if n <= 36: return ((n + 14) * n3) // 50
+        return (((n // 2) + 32) * n3) // 50
+    if rate == 3: return (6 * n3) // 5 - 15 * n2 + 100 * n - 140       # MEDIUM_SLOW
+    if rate == 4: return (4 * n3) // 5                                 # FAST
+    if rate == 5: return (5 * n3) // 4                                 # SLOW
+    return n3
+
 def gen3_make_party_mon(species, level, move1, ot_tid, ot_sid, pid=0):
     """Build a 100-byte Gen III party Pokémon struct."""
     order = GEN3_SUBORDER[pid % 24]
@@ -206,7 +240,13 @@ def gen3_make_party_mon(species, level, move1, ot_tid, ot_sid, pid=0):
 
     # Substruct 0 (Growth): species(2), item(2), exp(4), pp_bonuses(1), friendship(1), _pad(2)
     struct.pack_into('<H', subs[0], 0, species)   # species
-    struct.pack_into('<I', subs[0], 4, level * 10) # rough exp
+    # Encode XP at the canonical threshold for `level` using the species's
+    # growth-rate curve — must match libpksave's decode formula or the
+    # decoded level diverges from the level the test "thinks" the slot
+    # has.  Defaults to MEDIUM_FAST if the species is missing from the
+    # local table (only relevant for tests that hardcode an obscure ID).
+    rate = GEN3_GROWTH_RATE_BY_SPECIES.get(species, 0)
+    struct.pack_into('<I', subs[0], 4, gen3_xp_for_level(rate, level))
 
     # Substruct 1 (Attacks): move1..4 (2 each), pp1..4 (1 each)
     struct.pack_into('<H', subs[1], 0, move1)  # move 1

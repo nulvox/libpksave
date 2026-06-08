@@ -29,6 +29,7 @@
 #include "scenes/pokerus_modal_scene.hpp"
 #include "scenes/bag_scene.hpp"
 #include "scenes/slot_edit_scene.hpp"
+#include "scenes/box_scene.hpp"
 #include "scenes/save_scene.hpp"
 #include "widgets/text_input.hpp"
 
@@ -99,10 +100,11 @@ bn::unique_ptr<pksave_gba::scene> make_scene(
             return bn::unique_ptr<pksave_gba::scene>(
                 new pksave_gba::slot_edit_scene(bridge));
 
-        // Boxes lands in Checkpoint #5.  Until then, fall back to the
-        // main menu so a stray transition can't strand the user.
-        // `default` satisfies butano's -Wswitch-default warning.
         case scene_kind::BOXES:
+            return bn::unique_ptr<pksave_gba::scene>(
+                new pksave_gba::box_scene(bridge));
+
+        // `default` satisfies butano's -Wswitch-default warning.
         default:
             return bn::unique_ptr<pksave_gba::scene>(
                 new pksave_gba::main_menu_scene(bridge));

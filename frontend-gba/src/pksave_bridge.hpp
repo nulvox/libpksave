@@ -77,6 +77,26 @@ public:
     int  pending_party_slot() const { return pending_party_slot_; }
     void set_pending_party_slot(int slot) { pending_party_slot_ = slot; }
 
+    // CP#5: box_scene → pokemon_edit_scene handoff.  Mirrors the bag
+    // pattern (pending_bag_pocket / pending_bag_slot).  box_scene
+    // records (box, slot) on A-press; pokemon_edit_scene checks
+    // pending_box_index() >= 0 first — if so it treats the edit as a
+    // box source, otherwise falls back to pending_party_slot().
+    // box_scene clears the pair when the user returns via B so re-entry
+    // doesn't accidentally drill again.
+    int  pending_box_index() const { return pending_box_index_; }
+    int  pending_box_slot()  const { return pending_box_slot_; }
+    void set_pending_box(int box, int slot)
+    {
+        pending_box_index_ = box;
+        pending_box_slot_  = slot;
+    }
+    void clear_pending_box()
+    {
+        pending_box_index_ = -1;
+        pending_box_slot_  = -1;
+    }
+
     // CP#4: bag_scene → slot_edit_scene handoff.  bag_scene records the
     // pocket and slot the user pressed A on; slot_edit_scene reads them
     // from its ctor to know what to edit.  Default -1 / NONE means "no
@@ -103,6 +123,8 @@ private:
     int            pending_party_slot_ = -1;
     pksave_pocket_t pending_bag_pocket_ = PKSAVE_POCKET_NONE;
     int             pending_bag_slot_   = -1;
+    int            pending_box_index_  = -1;
+    int            pending_box_slot_   = -1;
 };
 
 // Friendly display name for the detected game variant — Checkpoint #1

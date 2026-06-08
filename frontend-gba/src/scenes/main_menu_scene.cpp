@@ -90,17 +90,16 @@ bn::optional<scene_kind> main_menu_scene::update()
     if (bn::keypad::a_pressed())
     {
         const scene_kind target = ENTRY_TARGETS[cursor_];
-        // CP#2 wired Trainer + Save & Exit; CP#3-B added Party; CP#4
-        // adds Bag.  Boxes still no-op until CP#5.
         switch (target)
         {
             case scene_kind::TRAINER:
             case scene_kind::PARTY:
             case scene_kind::BAG:
+            case scene_kind::BOXES:
             case scene_kind::SAVE:
                 return target;
             default:
-                // No-op for unimplemented entries.
+                // No-op for unimplemented entries (none currently).
                 break;
         }
     }

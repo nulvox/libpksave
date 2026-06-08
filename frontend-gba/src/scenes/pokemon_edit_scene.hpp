@@ -77,6 +77,16 @@ enum class edit_mode {
     ACTIVE,
 };
 
+// Where this Pokemon lives in the save — selects party vs box APIs in
+// load_from_save / push_to_save, and which scene B returns to.  The
+// ctor decides this by checking which pending-* pair on the bridge is
+// set; box wins if pending_box_index() >= 0 (the bag pattern), else
+// party fallback via pending_party_slot().
+enum class edit_source {
+    PARTY,
+    BOX,
+};
+
 // What text-input target is currently being drilled into.  Encoded as
 // the mailbox's caller_tag so the result survives the scene-reset
 // across the TEXT_INPUT → POKEMON_EDIT transition.
@@ -174,7 +184,9 @@ private:
     numeric_field    pp_3_;
 
     pksave_pokemon_t pokemon_;
+    edit_source      source_;
     int              slot_;
+    int              box_;   // valid iff source_ == BOX
 
     edit_tab         tab_;
     edit_mode        mode_;
