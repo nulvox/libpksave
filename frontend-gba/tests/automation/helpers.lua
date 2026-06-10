@@ -124,4 +124,35 @@ function M.sram_dump(path)
     return #blob
 end
 
+-- ── Framebuffer dump ────────────────────────────────────────────────────────
+--
+-- `fb_dump(path)` writes the current 240×160 GBA framebuffer as a binary
+-- PPM (P6) file. Backed by the custom `fb_dump_ppm` Lua global registered
+-- in docker/test-gba/mgba-lua.c (see its file header). PPM was picked over
+-- PNG so the harness's Python helpers can parse with stdlib only (no PIL).
+--
+-- mgba's `emu:screenshot()` also works (writes PNG) now that mgba-lua.c
+-- wires up a video buffer at startup, but the Python side has no PNG
+-- decoder; reach for PPM via fb_dump.
+--
+-- Returns true on success and surfaces the C-side error code on failure
+-- so the calling test can fail loudly rather than silently dumping zero
+-- bytes.
+
+function M.fb_dump(path)
+    path = path or "/dump/fb.ppm"
+    if not fb_dump_ppm then
+        console:log("helpers.fb_dump: fb_dump_ppm global not registered — " ..
+                    "mgba-lua.c framebuffer support missing or harness rebuild needed")
+        return false
+    end
+    local rc = fb_dump_ppm(path)
+    if rc ~= 0 then
+        console:log(string.format("helpers.fb_dump: fb_dump_ppm(%s) returned %d", path, rc))
+        return false
+    end
+    console:log(string.format("helpers.fb_dump: wrote PPM to %s", path))
+    return true
+end
+
 return M
