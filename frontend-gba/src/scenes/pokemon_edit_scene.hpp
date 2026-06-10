@@ -55,6 +55,7 @@
 #include "widgets/list_view.hpp"
 #include "widgets/numeric_field.hpp"
 
+#include <bn_optional.h>
 #include <bn_sprite_text_generator.h>
 #include <bn_sprite_ptr.h>
 #include <bn_string.h>
@@ -148,6 +149,12 @@ private:
     bn::vector<bn::sprite_ptr, 32> header_sprites_;
     bn::vector<bn::sprite_ptr, 32> right_panel_sprites_;
     bn::vector<bn::sprite_ptr, 16> placeholder_sprites_;
+    // Right-panel Pokemon sprite (CP#6).  Holds the per-species front
+    // sprite when one was extracted (`make gba SPRITES_ROM=...`) or
+    // the generic silhouette otherwise — `redraw_right_panel` rebuilds
+    // it from `species_sprite_lookup` on every refresh.  Reset to
+    // empty on STATS so the stat list owns that screen area.
+    bn::optional<bn::sprite_ptr>   mon_sprite_;
 
     list_view        list_;
     cycler           species_;

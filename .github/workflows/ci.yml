@@ -57,7 +57,7 @@ jobs:
       - name: Install ruff
         run: pip install ruff
       - name: ruff check
-        run: ruff check libpksave/tests/fixtures/
+        run: ruff check libpksave/tests/fixtures/ tools/
 
   # ── libpksave Unity tests ──────────────────────────────────────────────────
   test-libpksave:

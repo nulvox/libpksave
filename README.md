@@ -80,10 +80,52 @@ make gba      # build pksave-gba.gba  (placeholder — frontend not yet implemen
 make nds      # build pksave-nds.nds  (placeholder — frontend not yet implemented)
 make all      # test + gbc + gba + nds
 make clean    # remove test binaries and bin/ artifacts
+make test-tools # run pure-Python unit tests for tools/
 ```
 
 See [docs/build.md](docs/build.md) for details on the Docker containers,
 the `-DPKSAVE_GENx` compile flags, and CI.
+
+---
+
+## Optional: extract real Pokémon sprites into the GBA editor
+
+By default `make gba` ships a generic 64×64 silhouette on the Pokémon
+editor's right panel — the repository never contains Game Freak art. If
+you own a Generation III ROM, you can extract its sprites into the
+editor build by pointing `SPRITES_ROM` at it:
+
+```sh
+make gba SPRITES_ROM=/path/to/your/ruby.gba
+```
+
+This runs `tools/extract_sprites.py` against your ROM (dumps one 64×64
+indexed BMP per species into `frontend-gba/graphics/sprites/`), then
+`tools/gen_sprite_lookup.py` (emits `frontend-gba/src/species_sprite_lookup.cpp`
+mapping each present species to its `bn::sprite_item*`), then invokes
+the butano build so the extracted bitmaps are compiled in and the
+pokemon-editor right panel shows the real per-species sprite.  Species
+without an extracted BMP keep showing the silhouette.  Both the
+extracted BMPs and the generated `.cpp` are `.gitignore`-d; the
+resulting `pksave-gba.gba` is for your own use only.
+
+Notes:
+
+- The extractor is a no-op when `frontend-gba/graphics/sprites/` is
+  already populated — re-running `make gba SPRITES_ROM=...` doesn't
+  re-extract.  Delete the directory to force re-extraction.
+- The lookup generator runs every `make gba` regardless of whether you
+  passed `SPRITES_ROM` — its output is deterministic, so unchanged
+  inputs mean an unchanged `.cpp` and no extra rebuild churn.
+- All regions (US/JP/EU) and revisions of Ruby / Sapphire / Emerald /
+  FireRed / LeafGreen are supported — the extractor locates
+  `gMonFrontPicTable` and `gMonPaletteTable` by structural signature
+  rather than by hardcoded ROM offsets.  Any GBA ROM whose front-pic
+  table looks like pret's `CompressedSpriteSheet` array (ptr +
+  size=0x800 + tag=index) is fair game.
+- Table-shape signature is derived from the
+  [pret](https://github.com/pret) decompilation projects (factual
+  data, no code copied).
 
 ---
 
