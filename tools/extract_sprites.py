@@ -22,6 +22,12 @@ Data references: pret/pokeruby and pret/pokeemerald species_info /
 gMonFrontPicTable sources.
 """
 
+import argparse
+import os
+import struct
+import sys
+
+
 # Variant name mirrors libpksave's pksave_game_t naming (RS / EMERALD /
 # FRLG). Ruby and Sapphire share sprite tables; same for FireRed/LeafGreen.
 _GAME_CODE_TO_VARIANT = {
@@ -31,12 +37,6 @@ _GAME_CODE_TO_VARIANT = {
     b"BPRE": "FRLG",      # FireRed US
     b"BPGE": "FRLG",      # LeafGreen US
 }
-
-
-import argparse
-import os
-import struct
-import sys
 
 _ROM_BASE_MASK = 0xFE000000  # 0x08xxxxxx or 0x09xxxxxx — cartridge ROM
 _ROM_BASE      = 0x08000000

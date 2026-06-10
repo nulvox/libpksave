@@ -324,8 +324,10 @@ def test_extract_species_returns_pixels_and_palette():
 
     rom = bytearray(0xB0)
     rom[0xAC:0xB0] = b"AXVE"
-    sprite_off = len(rom);  rom.extend(sprite_lz)
-    palette_off = len(rom); rom.extend(palette_lz)
+    sprite_off = len(rom)
+    rom.extend(sprite_lz)
+    palette_off = len(rom)
+    rom.extend(palette_lz)
     pic_entry_off = len(rom)
     rom.extend(_le_u32(0x08000000 + sprite_off) + _le_u16(2048) + _le_u16(0))
     pal_entry_off = len(rom)
@@ -352,8 +354,10 @@ def test_extract_species_round_trips_nontrivial_pixels():
 
     rom = bytearray(0xB0)
     rom[0xAC:0xB0] = b"AXVE"
-    sprite_off  = len(rom); rom.extend(sprite_lz)
-    palette_off = len(rom); rom.extend(palette_lz)
+    sprite_off = len(rom)
+    rom.extend(sprite_lz)
+    palette_off = len(rom)
+    rom.extend(palette_lz)
     pic_entry_off = len(rom)
     rom.extend(_le_u32(0x08000000 + sprite_off) + _le_u16(2048) + _le_u16(0))
     pal_entry_off = len(rom)

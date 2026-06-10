@@ -22,7 +22,7 @@ import sys
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 
-import extract_sprites as ex  # reuse the indexed-PNG writer
+import extract_sprites as ex  # noqa: E402 — reuse the indexed-BMP writer
 
 # Palette: index 0 is the GBA transparency convention (magenta = #FF00FF).
 # Index 1 is the silhouette fill. Remaining entries are a grayscale ramp so

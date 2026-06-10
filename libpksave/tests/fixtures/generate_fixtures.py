@@ -212,23 +212,33 @@ def gen3_xp_for_level(rate, level):
     fixture's encoded XP at Growth+4 matches what the library will derive
     on read — without alignment, pksave_get_box would report a level that
     disagrees with the level the fixture nominally seeds."""
-    if level <= 1: return 0
+    if level <= 1:
+        return 0
     n = level
     n2 = n * n
     n3 = n2 * n
-    if rate == 0: return n3                                            # MEDIUM_FAST
-    if rate == 1:                                                      # ERRATIC
-        if n <= 50: return ((100 - n) * n3) // 50
-        if n <= 68: return ((150 - n) * n3) // 100
-        if n <= 98: return ((1911 - 10 * n) // 3) * n3 // 500
+    if rate == 0:  # MEDIUM_FAST
+        return n3
+    if rate == 1:  # ERRATIC
+        if n <= 50:
+            return ((100 - n) * n3) // 50
+        if n <= 68:
+            return ((150 - n) * n3) // 100
+        if n <= 98:
+            return ((1911 - 10 * n) // 3) * n3 // 500
         return ((160 - n) * n3) // 100
-    if rate == 2:                                                      # FLUCTUATING
-        if n <= 15: return (((n + 1) // 3 + 24) * n3) // 50
-        if n <= 36: return ((n + 14) * n3) // 50
+    if rate == 2:  # FLUCTUATING
+        if n <= 15:
+            return (((n + 1) // 3 + 24) * n3) // 50
+        if n <= 36:
+            return ((n + 14) * n3) // 50
         return (((n // 2) + 32) * n3) // 50
-    if rate == 3: return (6 * n3) // 5 - 15 * n2 + 100 * n - 140       # MEDIUM_SLOW
-    if rate == 4: return (4 * n3) // 5                                 # FAST
-    if rate == 5: return (5 * n3) // 4                                 # SLOW
+    if rate == 3:  # MEDIUM_SLOW
+        return (6 * n3) // 5 - 15 * n2 + 100 * n - 140
+    if rate == 4:  # FAST
+        return (4 * n3) // 5
+    if rate == 5:  # SLOW
+        return (5 * n3) // 4
     return n3
 
 def gen3_make_party_mon(species, level, move1, ot_tid, ot_sid, pid=0):
