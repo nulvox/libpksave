@@ -677,7 +677,7 @@ descriptions).
   When butano debounce or mGBA frame timing changes, tune helpers, not
   N test scripts.
 
-### Test inventory (29 tests, all green)
+### Test inventory (30 tests, all green)
 
 | Test                              | What it proves |
 |-----------------------------------|----------------|
@@ -696,6 +696,7 @@ descriptions).
 | `test_boot_rejects_bad_save.py`   | malformed fixture → boot_error halt; no FLASH writes |
 | `test_tid_roundtrip.py`           | TID +30 through numeric_field; name preserved |
 | `test_main_menu_wrap.py`          | DOWN×5 wraps cursor back to Trainer |
+| `test_dirty_indicator.py`         | header strip CLEAN → DIRTY → AFTER_SAVE hash cycle via fb_dump_ppm |
 
 ### Coverage gaps (CP#3+ to-add as scenes land)
 
@@ -704,8 +705,11 @@ descriptions).
       RS-only; 3-variant fanout still open)
 - [x] Box-slot species round-trip (CP#5 — `test_box_species_roundtrip.py`,
       RS-only; 3-variant fanout still open)
-- [ ] Dirty-indicator visual — currently unreachable; needs
-      framebuffer-byte assertions (filed in harness plan)
+- [x] Dirty-indicator visual — `test_dirty_indicator.py` snapshots the
+      header strip before edit, after edit (TID +10 via numeric_field
+      → mark_dirty), and after Save & Exit. Asserts hash flip on edit,
+      hash restoration on save. Backed by `fb_dump_ppm` (custom Lua
+      global in `docker/test-gba/mgba-lua.c`) + `framebuffer.py`.
 - [ ] Save-blocks-input check — currently inferred from Gate J's clean
       completion, not directly asserted
 
@@ -765,8 +769,11 @@ repo but is not on this list.
               `test_bag_slot_edit_roundtrip.py`)*
         - [x] box-slot species *(CP#5 — RS only;
               `test_box_species_roundtrip.py`)*
-      - [ ] dirty indicator appears after an edit and clears after save
-        *(needs framebuffer assertion infra)*
+      - [x] dirty indicator appears after an edit and clears after save
+        *(`test_dirty_indicator.py` — fb_dump_ppm + header-strip hash;
+        CLEAN/DIRTY/AFTER_SAVE snapshots assert that '*' is added on
+        edit and removed on Save & Exit, with the AFTER_SAVE hash byte-
+        equal to CLEAN)*
       - [ ] save scene blocks input while the FLASH write is in flight
         *(currently inferred from Gate J's clean completion)*
 - [x] `docs/frontend-gba-libpksave-gaps.md` reflects which gaps were

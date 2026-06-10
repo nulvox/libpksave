@@ -55,6 +55,11 @@ Supporting infrastructure shipped alongside:
   all five `PKSAVE_GENx` flags for ctypes consumption.
 - `frontend-gba/tests/automation/pksave_ctypes.py` — minimal Python
   wrapper exposing `detect`, `open`, `get_trainer_name`, `close`.
+- `frontend-gba/tests/automation/framebuffer.py` — PPM parser + region
+  hash / non-black-pixel helpers used by `test_dirty_indicator.py`.
+  Pure stdlib (no Pillow). Paired with helpers.lua's `M.fb_dump(path)`
+  wrapper around the custom `fb_dump_ppm` Lua global registered in
+  `docker/test-gba/mgba-lua.c`. See "Framebuffer dump" gap note below.
 
 Convention learned while probing: mGBA's Lua memory bindings
 lazy-register named regions (`emu.memory.sram`) only after the first
@@ -304,12 +309,69 @@ A+B+C+D+E ─ F ─ G (per-checkpoint coverage, ongoing)
 
 ---
 
+## Framebuffer dump — added 2026-06-10
+
+Closes the only remaining `make test-gba` checkbox under
+`docs/frontend-gba-plan.md` §"Acceptance criteria" (dirty indicator
+appears on edit, clears on save). The infrastructure is small enough
+to live in this section rather than its own track / gate.
+
+**Why it took new C code in `mgba-lua.c`:** mGBA's built-in
+`emu:screenshot(path)` calls `core->getPixels`, which only works once
+the software renderer has been wired up via `core->setVideoBuffer`.
+The Qt/SDL frontends do that automatically; mgba-lua never did, so
+`emu:screenshot` segfaulted on the dummy renderer's no-op pixels read
+(the dummy leaves `*pixels` untouched — see `src/gba/video.c
+GBAVideoDummyRendererGetPixels`). Fix is a one-line allocate +
+`setVideoBuffer(core, buf, width)` BEFORE `core->reset(core)`; the GBA
+core's reset path then swaps the dummy renderer for the software one
+(`src/gba/core.c _GBACoreReset`, line ~598). After that emu:screenshot
+also works (verified writing valid PNGs).
+
+**Why a custom `fb_dump_ppm` and not just emu:screenshot:** the harness
+runs on the bare stdlib (no Pillow), and a stdlib PNG decoder would
+mean pulling zlib + a 100-line scanline-unfilter routine into
+`framebuffer.py`. Binary PPM (P6) is a 3-line ASCII header followed by
+raw RGB triples — `re.match` + slice. The custom function is bound via
+`mSCRIPT_BIND_FUNCTION` + `mScriptContextSetGlobal("fb_dump_ppm", ...)`
+in `mgba-lua.c` so Lua sees a global function returning 0 on success.
+
+**Lua-side wrapper:** `helpers.lua` exposes `M.fb_dump(path)` which
+calls `fb_dump_ppm(path)`, logs success, and surfaces any negative
+error code from C.
+
+**Python-side helpers:** `framebuffer.py` provides:
+- `Framebuffer.load(path)` — PPM parse → `(width, height, pixels)`
+- `.region(x, y, w, h)` / `.region_hash(...)` — strip extraction + hash
+- `.count_non_black(...)` — proxy for "how much ink is drawn here"
+- `header_strip_hash(fb)` / `header_strip_non_black(fb)` — geometry
+  pre-set to the `main_menu_scene` header band (y=0..32). Refactor
+  if any other scene wants its own strip helper.
+
+**Test that consumes it:** `test_dirty_indicator.py` — snapshots
+CLEAN/DIRTY/AFTER_SAVE, asserts hash flip + hash restoration. The
+AFTER_SAVE hash must be **byte-equal** to CLEAN, which doubles as a
+weak regression check on butano text rendering: a font/glyph metric
+change shows up here as a mismatch.
+
+**Caveat for new framebuffer tests:**
+- Snapshots are tied to mgba frame counts, not scene state. The drive
+  script's `h.at(N, fn)` fires at frame N regardless of whether the
+  expected scene has finished rendering. Budget at least 30 frames of
+  slack after each input event before snapshotting, and bump
+  `FRAMES=` in the Python test if you add later snapshots.
+- The header strip is centred text (`text_generator_.set_center_alignment()`),
+  so adding characters SHIFTS existing glyphs. Don't try to assert on
+  a narrow column expecting the original characters to still be there.
+  Hash the whole strip width or skip the assertion.
+
 ## Out of scope for this doc
 
-- Visual / palette / sprite-tearing regressions — `docs/frontend-gba-plan.md`
-  §"Acceptance criteria" filed as v1 follow-up; framebuffer-byte
-  assertions are a separate harness extension.
 - Loading the post-edit `.sav` into an **unmodified Pokémon ROM** to
-  verify the trainer card renders the edit — also v1 follow-up.
+  verify the trainer card renders the edit — v1 follow-up.
+- Visual / palette / sprite-tearing regressions beyond the dirty-
+  indicator strip — possible now that fb_dump_ppm exists, but each new
+  visual assertion needs its own region geometry + a fresh decision on
+  what to hash vs. what to count.
 - NDS-frontend equivalents. The Gen IV developer inherits this harness
   pattern as precedent, not as a directly-reusable artefact.
