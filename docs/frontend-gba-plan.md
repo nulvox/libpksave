@@ -382,13 +382,13 @@ matches.
 > for an edit-then-FLASH-roundtrip test or
 > `test_trainer_scene_nav.py` for a navigation no-mutation test.
 
-- [ ] `widgets/cycler.{hpp,cpp}` — generic name-cycler; takes
+- [x] `widgets/cycler.{hpp,cpp}` — generic name-cycler; takes
       `(current_id, max_id, lookup_fn, filter_pred)` and renders
       `◀ name ▶`. Used for species, move, item, ability, nature.
-- [ ] `scenes/party_scene.{hpp,cpp}` — list of 6 slots via `list_view`,
+- [x] `scenes/party_scene.{hpp,cpp}` — list of 6 slots via `list_view`,
       shows species name + level + nickname per row; A drills into
       `pokemon_edit_scene` with a return-scene hint of party.
-- [ ] `scenes/pokemon_edit_scene.{hpp,cpp}` — three tabs, D-pad
+- [x] `scenes/pokemon_edit_scene.{hpp,cpp}` — three tabs, D-pad
       left/right cycles tabs when no field active-editing:
       - **IDENTITY:** species cycler, nickname (text_input), OT name
         (text_input), held item (cycler), ability (cycler, restricted
@@ -399,13 +399,13 @@ matches.
         calculated stats from L1.
       - **MOVES:** four slots, each (move cycler + PP numeric capped via
         L5 ×1.6).
-- [ ] Right-panel anchor across tabs: placeholder silhouette + species
+- [x] Right-panel anchor across tabs: placeholder silhouette + species
       name + level. Same component on Identity / Stats / Moves.
-- [ ] Pokerus sub-modal — small popup over Identity tab, lets user pick
+      Silhouette path landed CP#6; per-species sprite swap is gated on
+      the `make gba SPRITES_ROM=...` extraction.
+- [x] Pokerus sub-modal — small popup over Identity tab, lets user pick
       NEVER / ACTIVE(strain, days) / CURED(strain). Uses libpksave's
       existing Pokerus API.
-- [ ] Update `tests/checklist.md` with party edit round-trip checks per
-      variant (RS, Emerald, FRLG).
 
 **Done when:** edit a party slot's species/moves/EVs/IVs in fixture,
 save, reload in original game → Pokemon matches and stats are correct
@@ -789,6 +789,84 @@ end-user QA):
   SRAM-only assertions; future framebuffer-byte checks may cover the
   load-bearing cases (Save screen visible, sprite present-or-silhouette
   fallback).
+
+---
+
+## Deferred follow-ups (not blockers for the NDS frontend)
+
+These were surfaced during CP#3–CP#6 hardening and the framebuffer
+harness work (2026-06-10). None of them blocks starting CP#7 (NDS
+frontend); they're parked here so a future cleanup session (or a
+maintainer who has a personal Gen 3 ROM to test with) can pick one
+without re-deriving the context.
+
+### Gen 4 / Gen 5 ability name tables are still stubs
+
+`libpksave/src/names/gen4_abilities.h` and `gen5_abilities.h` contain
+only `"???"` at index 0 — same shape Gen 3 had before 2026-06-10. The
+Gen 3 stub was a real UX bug (the editor's ability cycler rendered
+every label as `???`); for Gen 4/5 it's latent because no frontend
+exposes the cycler yet. `docs/coverage.md` now reads `❌ stub` for
+those cells so it's not a silent lie. **Resolve before the NDS
+frontend's pokemon-edit equivalent reaches the ability row** — the
+fix shape is exactly the Gen 3 patch: `WebFetch` the table from pret
+(`pret/pokeplatinum` for Gen 4, `pret/pokeblack`/`pret/pokeblack2` for
+Gen 5), title-case to match the existing convention, add a handful of
+spot-check Unity cases to `test_gen4_lookups.c` / `test_gen5_lookups.c`
+(file the tests if they don't exist; pattern after
+`test_gen3_lookups.c`'s ability-name block).
+
+### Save-blocks-input has no direct framebuffer assertion
+
+`docs/frontend-gba-plan.md` §"Acceptance criteria" still has *save
+scene blocks input while the FLASH write is in flight* as inferred
+("currently inferred from Gate J's clean completion"). Now that
+`fb_dump_ppm` exists, this closes the same way the dirty indicator did:
+one drive script entering Save & Exit + tapping the D-pad while the
+"SAVING…" splash is on screen, with two snapshots — one mid-save
+asserting the splash glyphs are visible, one after asserting the
+cursor on the post-save main menu didn't move during the splash
+window. ~50 LOC, mirror after `test_dirty_indicator.py`. Latent risk
+is low (no observed regression) but a regression here would corrupt
+saves on a power-off, so closing it is cheap insurance.
+
+### Pokerus-from-box-source is a no-op
+
+`pokemon_edit_scene` guards `ROW_POKERUS` as a silent no-op when
+`source==BOX` (introduced CP#5; documented inline). Players will see
+the row, press A, and nothing happens. The fix shape — widening
+`pokerus_modal_scene` to take a `(source, box, slot)` tuple and
+dispatching to `pksave_{get,set}_box_pokerus` (both already in
+`pksave.h`) — is ~30 LOC + 2 harness tests modelled on
+`test_pokerus_modal_commit.py`. Currently surfaces as a UX dead end,
+not corruption.
+
+### 3-variant fanout for bag / box round-trip is still RS-only
+
+`test_bag_slot_edit_roundtrip.py` and `test_box_species_roundtrip.py`
+exercise RS only. Emerald + FRLG fanout would mirror the L1 trainer-
+name pattern (parametrise over the fixture name). No Gen 3 variant
+divergence is known in the bag or box layouts (RS / Emerald / FRLG
+agree per `libpksave/src/gen3.c`), so the existing RS coverage is the
+load-bearing one; the fanout is defence in depth, not closure of an
+open risk.
+
+### Party / Box right-panel sprite swap
+
+CP#6 wired the per-species sprite lookup through the pokemon-editor
+right panel only. The party and box scenes' right columns are list-
+only; if a right-panel sprite preview is added there later, port
+`pokemon_edit_scene::redraw_right_panel`'s lookup pattern verbatim
+(the silhouette + `species_sprite_lookup` switch already handles the
+"not extracted" fallback).
+
+### 3-variant real-ROM sprite test
+
+The sprite extractor + silhouette path is RS/EMERALD/FRLG agnostic
+in tools/, but there's no end-to-end test that runs `make gba
+SPRITES_ROM=...` against a real Gen 3 dump because the repo doesn't
+bundle Gen 3 ROMs (legal). A maintainer with a personal copy can
+verify locally; stays off the merge gate.
 
 ---
 

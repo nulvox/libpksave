@@ -36,7 +36,7 @@ Legend: ✅ supported · ⛔ absent in game · ❌ not implemented
 | Calculated stats (read-only)  | ✅                  | ✅                  | ✅                  | ✅                  | ✅                  |
 | Pokérus (party + box)         | ⛔                  | ✅                  | ✅                  | ✅                  | ✅                  |
 | Name lookup: species / move / item | ✅              | ✅                  | ✅                  | ✅                  | ✅                  |
-| Name lookup: ability          | ⛔                  | ⛔                  | ✅                  | ✅                  | ✅                  |
+| Name lookup: ability          | ⛔                  | ⛔                  | ✅                  | ❌ stub             | ❌ stub             |
 | Name lookup: nature           | ⛔                  | ⛔                  | ✅ (shared table)   | ✅                  | ✅                  |
 
 ## Bag pockets

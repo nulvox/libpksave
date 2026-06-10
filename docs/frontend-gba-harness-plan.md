@@ -24,11 +24,17 @@ Date produced: 2026-06-06. Last refresh: 2026-06-07.
 
 ## What landed
 
-`make test-gba` runs **14 passing tests** on a clean checkout. POC +
-five hardening rounds + a numeric_field bug fix surfaced by the TID
-round-trip test.
+The POC + five hardening rounds shipped **14 tests** plus a
+numeric_field bug fix surfaced by the TID round-trip — that's the
+inventory in the table below, frozen as the historical record of what
+made the harness usable. Subsequent checkpoints (CP#3/4/5 scenes,
+CP#6 sprite plumbing, the framebuffer dump for the dirty-indicator
+assertion) added another 16 tests; the **current canonical
+`make test-gba` inventory of 30 tests** lives in
+`docs/frontend-gba-plan.md` §"Test inventory" and stays in sync with
+the `GBA_TESTS` list in the root `Makefile`.
 
-| Test                              | What it proves |
+| POC + hardening test              | What it proves |
 |-----------------------------------|----------------|
 | `test_decode_fixture.py`          | ctypes decodes RS / Emerald / FRLG fixtures (no docker) |
 | `test_mgba_harness_smoke.py`      | Python → docker → mgba-lua → stdout marker |
