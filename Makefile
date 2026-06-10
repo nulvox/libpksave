@@ -50,8 +50,9 @@ GBA_TESTS := \
     frontend-gba/tests/automation/test_box_species_roundtrip.py \
     frontend-gba/tests/automation/test_box_stats_level_roundtrip.py
 
-.PHONY: test test-gba gbc gba nds all clean \
-        _build_test _build_test_gba _build_gbc _build_gba _build_nds
+.PHONY: test test-gba test-tools gbc gba nds all clean \
+        _build_test _build_test_gba _build_gbc _build_gba _build_nds \
+        _maybe_extract_sprites
 
 # ── test ─────────────────────────────────────────────────────────────────────
 test: _build_test
@@ -92,13 +93,29 @@ _build_gbc:
 	$(DOCKER) build -t pksave-gbc docker/gbc
 
 # ── gba ──────────────────────────────────────────────────────────────────────
-gba: _build_gba
+# Optional: SPRITES_ROM=/path/to/gen3.gba runs the sprite extractor before
+# the butano build so the editor ships with real Pokemon sprites instead
+# of the default silhouette. The repo never bundles extracted sprite art
+# (frontend-gba/assets/sprites/ is .gitignored).
+gba: _build_gba _maybe_extract_sprites
 	$(DOCKER) run --rm \
 		-v "$(REPO_ROOT):/src" \
 		pksave-gba
 
 _build_gba:
 	$(DOCKER) build -t pksave-gba docker/gba
+
+_maybe_extract_sprites:
+ifneq ($(strip $(SPRITES_ROM)),)
+	$(PYTHON) tools/extract_sprites.py \
+		--rom "$(SPRITES_ROM)" \
+		--out frontend-gba/graphics/sprites/
+endif
+
+# ── test-tools ───────────────────────────────────────────────────────────────
+# Pure-Python unit tests for tools/ — no docker, no devkitARM.
+test-tools:
+	$(PYTHON) tools/test_extract_sprites.py
 
 # ── nds ──────────────────────────────────────────────────────────────────────
 nds: _build_nds
@@ -110,7 +127,7 @@ _build_nds:
 	$(DOCKER) build -t pksave-nds docker/nds
 
 # ── all ───────────────────────────────────────────────────────────────────────
-all: test gbc gba nds
+all: test test-tools gbc gba nds
 
 # ── clean ─────────────────────────────────────────────────────────────────────
 clean:

@@ -5,6 +5,7 @@
 #include "widgets/text_input.hpp"
 
 #include "common_variable_8x16_sprite_font.h"
+#include "bn_sprite_items_silhouette.h"
 
 #include <bn_keypad.h>
 #include <bn_log.h>
@@ -296,6 +297,9 @@ void pokemon_edit_scene::redraw_right_panel()
 
     if (tab_ == edit_tab::STATS)
     {
+        // STATS owns the right panel; drop the silhouette so the stat
+        // list has the full vertical space.
+        silhouette_sprite_.reset();
         // Live calculated stats from pksave_recalc_stats.  The caller
         // is responsible for invoking recalc before redraw — every
         // EV/IV/level commit path does so.
@@ -335,19 +339,21 @@ void pokemon_edit_scene::redraw_right_panel()
         return;
     }
 
-    // IDENTITY / MOVES anchor: silhouette + species + level.
-    bn::string<24> silhouette;
-    silhouette.append("[?]");
-    text_gen_.generate(x_right, y_top + 0 * row_h, silhouette,
-                       right_panel_sprites_);
-
+    // IDENTITY / MOVES anchor: silhouette sprite + species + level.
+    // Silhouette is a 64x64 indexed sprite (frontend-gba/graphics/silhouette.png);
+    // CP#6 follow-up will swap to a per-species sprite when one was extracted.
+    if (!silhouette_sprite_)
+    {
+        silhouette_sprite_ = bn::sprite_items::silhouette.create_sprite(
+            x_right + 32, y_top + 32);
+    }
+    constexpr int text_y_start = y_top + 64 + 4;
     bn::string<24> species_line;
     species_line.append(::pksave_species_name(bridge_.game(),
                                               pokemon_.species));
-    text_gen_.generate(x_right, y_top + 1 * row_h, species_line,
+    text_gen_.generate(x_right, text_y_start, species_line,
                        right_panel_sprites_);
-
-    text_gen_.generate(x_right, y_top + 2 * row_h,
+    text_gen_.generate(x_right, text_y_start + row_h,
                        bn::format<8>("L{}", pokemon_.level),
                        right_panel_sprites_);
 }

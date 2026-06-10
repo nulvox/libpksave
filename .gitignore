@@ -28,6 +28,11 @@ frontend-nds/*.map
 frontend-gba/tests/fixtures/*.sav
 frontend-gba/tests/fixtures/*.bin
 
+# User-extracted Gen III sprite assets (output of tools/extract_sprites.py
+# against a user-supplied ROM — never committed; the repo ships only the
+# generic silhouette).
+frontend-gba/graphics/sprites/
+
 # Test runner binaries and output.  Each tests/test_<name>.c builds into
 # a sibling tests/test_<name> ELF that gcc spits out into the source tree.
 # Ignore the binaries but keep the .c sources.

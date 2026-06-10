@@ -35,7 +35,7 @@ DATA         :=
 # butano's GRAPHICS list is also prefixed with $(CURDIR), which
 # garbles absolute paths.  Instead, the graphics live under our own
 # graphics/ via a symlink-style copy at build time (handled below).
-GRAPHICS     :=  graphics
+GRAPHICS     :=  graphics graphics/sprites
 AUDIO        :=  audio
 DMGAUDIO     :=  dmg_audio
 ROMTITLE     :=  PKSAVE GBA

@@ -80,10 +80,42 @@ make gba      # build pksave-gba.gba  (placeholder — frontend not yet implemen
 make nds      # build pksave-nds.nds  (placeholder — frontend not yet implemented)
 make all      # test + gbc + gba + nds
 make clean    # remove test binaries and bin/ artifacts
+make test-tools # run pure-Python unit tests for tools/
 ```
 
 See [docs/build.md](docs/build.md) for details on the Docker containers,
 the `-DPKSAVE_GENx` compile flags, and CI.
+
+---
+
+## Optional: extract real Pokémon sprites into the GBA editor
+
+By default `make gba` ships a generic 64×64 silhouette on the Pokémon
+editor's right panel — the repository never contains Game Freak art. If
+you own a Generation III ROM, you can extract its sprites into the
+editor build by pointing `SPRITES_ROM` at it:
+
+```sh
+make gba SPRITES_ROM=/path/to/your/ruby.gba
+```
+
+This runs `tools/extract_sprites.py` against your ROM, dumps one 64×64
+indexed BMP per species into `frontend-gba/graphics/sprites/`, and then
+invokes the butano build so the extracted bitmaps are compiled into the
+editor.  The directory is `.gitignore`-d; the resulting `pksave-gba.gba`
+is for your own use only.
+
+Notes:
+
+- The extractor is a no-op when `frontend-gba/graphics/sprites/` is
+  already populated — re-running `make gba SPRITES_ROM=...` doesn't
+  re-extract.  Delete the directory to force re-extraction.
+- Only US English ROMs of Ruby / Sapphire / Emerald / FireRed /
+  LeafGreen are recognised in v1; the extractor raises a clear error
+  on unsupported variants.
+- Per-variant sprite-table addresses are sourced from the
+  [pret](https://github.com/pret) decompilation projects (factual
+  data, no code copied).
 
 ---
 

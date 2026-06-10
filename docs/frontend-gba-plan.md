@@ -19,7 +19,7 @@ Companion docs:
 - `PRD.md` / `SPEC.md` / `AGENT_PROMPT.md` — feature requirements,
   technical spec, and the original build order.
 
-Date produced: 2026-06-03. Last status refresh: 2026-06-07 (CP#5 landed).
+Date produced: 2026-06-03. Last status refresh: 2026-06-09 (CP#6 algorithmic core + silhouette landed).
 
 ---
 
@@ -58,6 +58,19 @@ Date produced: 2026-06-03. Last status refresh: 2026-06-07 (CP#5 landed).
   (deferred follow-up).  Three new harness tests
   (`test_box_scene_nav.py`, `test_box_species_roundtrip.py`,
   `test_box_stats_level_roundtrip.py`).
+- **CP#6 algorithmic core + silhouette (2026-06-09)** —
+  `tools/extract_sprites.py` ships with 29 unit tests (`make test-tools`):
+  variant detection, GBA pointer read, LZ77 (LZ10) decompress, 4bpp
+  untile, BGR555 → RGB888, indexed BMP writer, `extract_species`, and
+  `extract_all` orchestration with idempotency + UNKNOWN-variant guard.
+  `tools/make_silhouette.py` one-shots a procedural 64×64 silhouette
+  BMP into `frontend-gba/graphics/silhouette.bmp`; `pokemon_edit_scene`
+  renders it on the IDENTITY/MOVES right panel via butano
+  `bn::sprite_items::silhouette`.  Root `Makefile` wires
+  `make gba SPRITES_ROM=/path/to/gen3.gba` to invoke the extractor
+  before docker.  Format note: silhouette + extracted sprites both use
+  4bpp indexed BMP (not PNG as originally planned — butano 18.5's grit
+  only consumes BMP).
 - **mGBA-Lua automation harness** — POC + five hardening rounds
   shipped. `make test-gba` is a hard merge gate covering **29 tests**:
   per-variant fixture round-trip (RS / Emerald / FRLG), trainer-name
@@ -68,10 +81,11 @@ Date produced: 2026-06-03. Last status refresh: 2026-06-07 (CP#5 landed).
   detect / dump / sidecar / key-input tests.
   See `docs/frontend-gba-harness-plan.md`.
 
-**Next on your plate:** **Checkpoint #6** — Sprites (Option C).
-`assets/silhouette.png` + `tools/extract_sprites.py` + butano asset
-import for the silhouette on the Pokemon editor / Party / Box right
-panels.
+**Next on your plate:** **Checkpoint #6 follow-ups** — extractor needs
+`_VARIANT_TABLES` populated before the `make gba SPRITES_ROM=...` path
+works against a real ROM; pre-evolution-only conditional render branch
+("real sprite if extracted, else silhouette") is currently silhouette-
+only.  See "Checkpoint #6 — Sprites (Option C)" below.
 
 **Open library gaps that block later checkpoints:** none.
 L8, L9 deferred indefinitely.
@@ -517,25 +531,70 @@ Pokemon matches. *(Met by `test_box_species_roundtrip.py`.)*
 
 ---
 
-## Checkpoint #6 — Sprites (Option C)
+## Checkpoint #6 — Sprites (Option C) — **algorithmic core + silhouette shipped 2026-06-09**
 
-- [ ] `assets/silhouette.png` — generic 64×64 silhouette, drawn by us.
-- [ ] butano asset import for the silhouette; render it on the Pokemon
-      editor and Party/Box list right panels.
-- [ ] `tools/extract_sprites.py` — accepts `--rom /path/to/gen3.gba`,
-      dumps 387 64×64 front sprites to `frontend-gba/assets/sprites/`.
-      No-op if directory already populated.
-- [ ] Makefile target: `make gba SPRITES_ROM=/path/to/rom.gba` runs the
-      extractor before invoking the butano build.
-- [ ] README section documenting the extractor's existence, legal
-      caveat, and how to use it.
+> Format pivot: butano 18.5's grit only consumes BMP (not PNG); the
+> plan's original `silhouette.png` / extracted-`.png` references are
+> now 4bpp indexed BMP.  All else as planned.
+
+- [x] `frontend-gba/graphics/silhouette.bmp` — generic 64×64 silhouette,
+      drawn by us (`tools/make_silhouette.py` is a one-shot regenerator;
+      output is committed).
+- [x] butano asset import for the silhouette (sidecar
+      `silhouette.json`); rendered on the pokemon editor IDENTITY/MOVES
+      right panel via `bn::sprite_items::silhouette`.  STATS tab drops
+      the silhouette and keeps the existing stat list.  Party/Box list
+      scenes do **not** have right panels in the current layout; if
+      that changes, the silhouette would slot in via the same pattern.
+- [x] `tools/extract_sprites.py` — accepts `--rom /path/to/gen3.gba`,
+      dumps one 64×64 indexed BMP + JSON sidecar per species into
+      `frontend-gba/graphics/sprites/`.  No-op when the directory is
+      already populated.  29 unit tests in `tools/test_extract_sprites.py`
+      (`make test-tools`).
+- [x] Makefile target: `make gba SPRITES_ROM=/path/to/rom.gba` runs the
+      extractor before invoking the butano build (root `Makefile`
+      `_maybe_extract_sprites`).  `GRAPHICS` in `frontend-gba/Makefile`
+      includes `graphics/sprites` so grit picks up the extracted BMPs
+      when present.
+- [x] README section documenting the extractor's existence, legal
+      caveat, and how to use it (top-level `README.md` →
+      "Optional: extract real Pokémon sprites").
 - [ ] Pokemon editor right panel: if extracted sprite exists for the
       current species, render it; else render the silhouette.
+      **Currently always silhouette** — per-species conditional render
+      is a follow-up that needs a compile-time-generated lookup table
+      (since butano `sprite_item` symbols are resolved at link time and
+      vary based on which `species_NNN.bmp` files were extracted).
+      Filed below as follow-up.
 
 **Done when:** `make gba` with no args still ships a working ROM (with
 silhouettes); `make gba SPRITES_ROM=...` produces a ROM where the
 Pokemon editor right panel shows the real sprite for the current
-species.
+species.  *Status: first clause met; second clause needs both follow-ups
+below.*
+
+**Follow-ups (deferred):**
+
+- **`_VARIANT_TABLES` data** — `tools/extract_sprites.py`'s per-variant
+  `(gMonFrontPicTable_off, gMonPaletteTable_off, n_species)` lookup is
+  empty; the extractor raises `ValueError` for any real ROM until it's
+  populated.  Pret doesn't expose these as source values (they're
+  emergent linker outputs), so options are: (A) build pret to obtain
+  `.map` files, (B) implement an auto-discovery scanner that locates
+  the tables by structural signature (CompressedSpriteSheet entries
+  with ROM-range pointers and size==0x800).  Option B is the
+  TDD-friendly path and would also be portable across ROM revisions.
+- **Per-species render branch** — pokemon editor currently always
+  renders the silhouette.  Wiring it to swap in `species_NNN` when the
+  extracted BMP exists needs a build-time helper that scans
+  `graphics/sprites/` and generates a `species_sprite_lookup.cpp`
+  mapping species_id → `bn::sprite_item*` or nullptr.
+- **Party/Box right-panel** — those scenes are list-only today; if a
+  right-panel column is added later, port the silhouette render
+  pattern from `pokemon_edit_scene`.
+- **3-variant fanout** — extractor + silhouette are RS/EMERALD/FRLG
+  agnostic, but no real-ROM end-to-end test exists yet (gated on the
+  `_VARIANT_TABLES` follow-up).
 
 ---
 
