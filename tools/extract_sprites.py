@@ -159,17 +159,105 @@ _PIC_ENTRY_SIZE = 8
 _PAL_ENTRY_SIZE = 8
 
 
-# Canonical per-variant table addresses sourced from pret/pokeruby,
-# pret/pokeemerald, pret/pokefirered (gMonFrontPicTable / gMonPaletteTable
-# symbols). Populate from a pret checkout before running against real ROMs;
-# see docs/frontend-gba-plan.md §"Checkpoint #6" follow-ups.
+# Structural signature of Gen 3 sprite/palette tables (auto-discovery).
 #
-# Schema: variant → (pic_table_file_off, pal_table_file_off, n_species)
-_VARIANT_TABLES = {
-    # "RS":      (0x001ECBB4, 0x001EC284, 412),   # TODO: verify against pret
-    # "EMERALD": (0x0030A18C, 0x0030856C, 412),
-    # "FRLG":    (0x00234C18, 0x002362F4, 412),
-}
+# `gMonFrontPicTable` is an array of CompressedSpriteSheet:
+#     struct { const u32 *data; u16 size; u16 tag; };
+# pret initializes it with `[SPECIES_X] = {sprite, MON_PIC_SIZE, SPECIES_X}`
+# so for every entry `i`:
+#     ptr  ∈ cartridge ROM range (0x08xxxxxx or 0x09xxxxxx)
+#     size = 0x800   (64×64 4bpp = 2048 bytes)
+#     tag  = i       (matches the array index)
+#
+# `gMonPaletteTable` is an array of CompressedSpritePalette:
+#     struct { const u32 *data; u16 tag; u16 _pad; };
+# Same designated-initializer convention — tag at offset 4 equals the
+# index, with the trailing u16 zero-padded.
+#
+# Both tables use 8-byte entries on 4-byte-aligned offsets. The pic
+# signature (with size=0x800 at offset 4) and the pal signature
+# (with index-matching tag at offset 4) are disjoint, so the two
+# scanners never confuse one for the other.
+_SPRITE_PIC_SIZE = 0x800
+
+
+def _entry_pic_matches(rom: bytes, off: int, index: int) -> bool:
+    """True iff the 8 bytes at `off` look like CompressedSpriteSheet[index]."""
+    if off + 8 > len(rom):
+        return False
+    ptr  = int.from_bytes(rom[off:off + 4], "little")
+    size = int.from_bytes(rom[off + 4:off + 6], "little")
+    tag  = int.from_bytes(rom[off + 6:off + 8], "little")
+    if (ptr & _ROM_BASE_MASK) != _ROM_BASE:
+        return False
+    if (ptr - _ROM_BASE) >= len(rom):
+        return False
+    if size != _SPRITE_PIC_SIZE:
+        return False
+    return tag == index
+
+
+def _entry_pal_matches(rom: bytes, off: int, index: int) -> bool:
+    """True iff the 8 bytes at `off` look like CompressedSpritePalette[index]."""
+    if off + 8 > len(rom):
+        return False
+    ptr = int.from_bytes(rom[off:off + 4], "little")
+    tag = int.from_bytes(rom[off + 4:off + 6], "little")
+    pad = int.from_bytes(rom[off + 6:off + 8], "little")
+    if (ptr & _ROM_BASE_MASK) != _ROM_BASE:
+        return False
+    if (ptr - _ROM_BASE) >= len(rom):
+        return False
+    if pad != 0:
+        return False
+    return tag == index
+
+
+def find_front_pic_table(rom_bytes: bytes, *, min_run: int = 50):
+    """Locate gMonFrontPicTable by structural signature.
+
+    Scans 4-byte-aligned offsets for the first run of at least `min_run`
+    consecutive CompressedSpriteSheet-shaped entries (ptr-in-ROM,
+    size=0x800, tag=array_index). Extends the run forward to discover
+    the actual table length. Returns (table_offset, n_entries).
+
+    Raises ValueError if no qualifying run exists.
+    """
+    n = len(rom_bytes)
+    last_start = n - 8 * min_run
+    off = 0
+    while off <= last_start:
+        if all(_entry_pic_matches(rom_bytes, off + i * 8, i)
+               for i in range(min_run)):
+            actual = min_run
+            while _entry_pic_matches(rom_bytes, off + actual * 8, actual):
+                actual += 1
+            return off, actual
+        off += 4
+    raise ValueError(
+        f"no run of {min_run}+ CompressedSpriteSheet entries found — "
+        f"is this a Gen 3 Pokemon ROM?"
+    )
+
+
+def find_palette_table(rom_bytes: bytes, *, min_run: int = 50) -> int:
+    """Locate gMonPaletteTable by structural signature.
+
+    Same scan as find_front_pic_table but with the palette-entry
+    pattern (tag at offset 4 matches the array index; trailing u16
+    is zero padding). Returns the table's file offset.
+    """
+    n = len(rom_bytes)
+    last_start = n - 8 * min_run
+    off = 0
+    while off <= last_start:
+        if all(_entry_pal_matches(rom_bytes, off + i * 8, i)
+               for i in range(min_run)):
+            return off
+        off += 4
+    raise ValueError(
+        f"no run of {min_run}+ CompressedSpritePalette entries found"
+    )
 
 
 def _bmp_name_for_species(species_index_zero_based: int) -> str:
@@ -178,13 +266,20 @@ def _bmp_name_for_species(species_index_zero_based: int) -> str:
 
 
 def extract_all(rom_path: str, out_dir: str, *, _table_override=None) -> int:
-    """Walk a Gen 3 ROM's species table and write one PNG per species.
+    """Walk a Gen 3 ROM's species table and write one BMP + JSON per species.
 
-    No-op when `out_dir` already contains any PNGs (idempotency).
-    Returns the number of PNGs written.
+    Sprite + palette tables are located via structural signature
+    (find_front_pic_table / find_palette_table) — no canonical offset
+    database is required, and the same code works across regions and
+    revisions of every Gen 3 Pokemon ROM.
 
-    Raises ValueError on UNKNOWN variants unless `_table_override` is
-    supplied (test injection: (pic_table_off, pal_table_off, n_species)).
+    No-op when `out_dir` already contains any BMPs (idempotency).
+    Returns the number of BMPs written.
+
+    Raises ValueError on non-Gen-3 ROMs (game-code sanity check) and on
+    ROMs that don't contain a discoverable sprite table.
+    `_table_override=(pic_off, pal_off, n_species)` bypasses discovery
+    for test injection.
     """
     with open(rom_path, "rb") as f:
         rom = f.read()
@@ -192,14 +287,15 @@ def extract_all(rom_path: str, out_dir: str, *, _table_override=None) -> int:
     if _table_override is not None:
         pic_table_off, pal_table_off, n_species = _table_override
     else:
+        # find_front_pic_table raises ValueError on non-Gen-3 ROMs (no
+        # CompressedSpriteSheet-shaped run exists), so it doubles as the
+        # validation gate. detect_rom_variant is still informational —
+        # we print it when known to help the user spot misnamed ROMs.
         variant = detect_rom_variant(rom)
-        if variant not in _VARIANT_TABLES:
-            raise ValueError(
-                f"no canonical sprite-table addresses registered for variant "
-                f"{variant!r}. Populate _VARIANT_TABLES in tools/extract_sprites.py "
-                f"from a pret checkout before extracting from real ROMs."
-            )
-        pic_table_off, pal_table_off, n_species = _VARIANT_TABLES[variant]
+        pic_table_off, n_species = find_front_pic_table(rom)
+        pal_table_off = find_palette_table(rom)
+        print(f"extract_sprites: variant={variant} pic@{pic_table_off:#x} "
+              f"pal@{pal_table_off:#x} species={n_species}")
 
     os.makedirs(out_dir, exist_ok=True)
     if any(name.endswith(".bmp") for name in os.listdir(out_dir)):

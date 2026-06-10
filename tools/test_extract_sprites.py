@@ -370,27 +370,37 @@ def test_extract_species_round_trips_nontrivial_pixels():
 
 def _synthetic_rom_with_species(species_count: int, *, game_code=b"AXVE"):
     """Build a tiny ROM containing `species_count` species. Returns
-    (rom_bytes, pic_table_off, pal_table_off)."""
+    (rom_bytes, pic_table_off, pal_table_off).
+
+    Tables mimic pret's designated-initializer convention — entry `i`
+    has tag == i, matching what gMonFrontPicTable / gMonPaletteTable
+    look like after the linker resolves
+    `[SPECIES_X] = {sprite, MON_PIC_SIZE, SPECIES_X}`. The auto-
+    discovery scanner depends on that pattern.
+    """
     rom = bytearray(0xB0)
     rom[0xAC:0xB0] = game_code
-    # Per-species sprite + palette blobs, ascending fill so each PNG differs.
     sprite_offs = []
     palette_offs = []
     for s in range(species_count):
         sprite = bytes([(s & 0x0F) | ((s & 0x0F) << 4)]) * 2048
         palette = bytearray(32)
-        # set entry s with a recognizable BGR555 value
-        palette[2 * s:2 * s + 2] = [0x00, 0x7C]  # pure blue
+        # Tag palette slot = species % 16 so the buffer stays at 32 bytes
+        # for species_count > 15 (palette indices are 0..15 anyway).
+        slot = (s & 0x0F) * 2
+        palette[slot:slot + 2] = [0x00, 0x7C]  # pure blue at the slot
         sprite_offs.append(len(rom))
         rom.extend(_lz10_all_literal(sprite))
         palette_offs.append(len(rom))
         rom.extend(_lz10_all_literal(bytes(palette)))
     pic_table_off = len(rom)
-    for so in sprite_offs:
-        rom.extend(_le_u32(0x08000000 + so) + _le_u16(2048) + _le_u16(0))
+    for i, so in enumerate(sprite_offs):
+        # pic entry: u32 data_ptr, u16 size=0x800, u16 tag=index
+        rom.extend(_le_u32(0x08000000 + so) + _le_u16(2048) + _le_u16(i))
     pal_table_off = len(rom)
-    for po in palette_offs:
-        rom.extend(_le_u32(0x08000000 + po) + _le_u16(0) + _le_u16(0))
+    for i, po in enumerate(palette_offs):
+        # pal entry: u32 data_ptr, u16 tag=index, u16 pad=0
+        rom.extend(_le_u32(0x08000000 + po) + _le_u16(i) + _le_u16(0))
     return bytes(rom), pic_table_off, pal_table_off
 
 
@@ -443,6 +453,91 @@ def test_extract_all_rejects_unknown_variant_without_override():
         except ValueError:
             return
         raise AssertionError("UNKNOWN variant should raise without override")
+
+
+# ── find_front_pic_table / find_palette_table (auto-discovery) ───────────────
+
+def test_find_front_pic_table_locates_synthetic_table():
+    # 12-species synthetic ROM. Scanner with min_run=8 should land on
+    # the pic table and extend forward to find all 12 entries.
+    rom, pic_off, _pal_off = _synthetic_rom_with_species(12)
+    found_off, found_n = ex.find_front_pic_table(rom, min_run=8)
+    assert found_off == pic_off, \
+        f"scanner missed pic table — got {found_off:#x}, expected {pic_off:#x}"
+    assert found_n == 12, f"scanner stopped early at {found_n}, expected 12"
+
+
+def test_find_palette_table_locates_synthetic_table():
+    rom, _pic_off, pal_off = _synthetic_rom_with_species(12)
+    found_off = ex.find_palette_table(rom, min_run=8)
+    assert found_off == pal_off, \
+        f"scanner missed pal table — got {found_off:#x}, expected {pal_off:#x}"
+
+
+def test_find_front_pic_table_rejects_when_no_match():
+    # Random-ish ROM with no table-shaped data anywhere — must raise.
+    rom = bytearray(0xB0)
+    rom[0xAC:0xB0] = b"AXVE"
+    rom.extend(bytes(0x100))  # 256 zero bytes — no entry would pass the ptr check
+    try:
+        ex.find_front_pic_table(bytes(rom), min_run=8)
+    except ValueError:
+        return
+    raise AssertionError("scanner should raise when no table is present")
+
+
+def test_find_front_pic_table_picks_first_run_over_back_table():
+    # gMonBackPicTable shares the structural signature with the front
+    # table; scanner should take the FIRST occurrence (which is the
+    # front table per pret's source ordering).
+    rom, pic_off, _pal_off = _synthetic_rom_with_species(10)
+    # Append a second copy of the pic table further down — same shape.
+    rom = bytearray(rom)
+    # Need fresh sprite blobs the back table can point at (or reuse
+    # the existing ones; reuse keeps the test compact).
+    back_table_off = len(rom)
+    for i in range(10):
+        # Point at the first sprite blob unconditionally — we only care
+        # about the table's structural signature, not the sprite data.
+        rom.extend(_le_u32(0x08000000 + 0xB0) + _le_u16(2048) + _le_u16(i))
+    found_off, _n = ex.find_front_pic_table(bytes(rom), min_run=8)
+    assert found_off == pic_off, \
+        f"scanner returned back table at {found_off:#x}; expected front at {pic_off:#x}"
+    assert found_off < back_table_off
+
+
+def test_extract_all_uses_auto_discovery_end_to_end():
+    # No _table_override: extract_all should auto-discover both tables
+    # in a synthetic AXVE ROM with pret-shaped pic/pal entries, then
+    # produce the same BMPs as the explicit-override path.
+    rom, _pic_off, _pal_off = _synthetic_rom_with_species(60)
+    with tempfile.TemporaryDirectory() as td:
+        rom_path = os.path.join(td, "synth.gba")
+        out_dir = os.path.join(td, "out")
+        with open(rom_path, "wb") as f:
+            f.write(rom)
+        n = ex.extract_all(rom_path, out_dir)  # no override — discovery path
+    assert n == 60, f"expected 60 BMPs via auto-discovery, got {n}"
+
+
+def test_extract_all_auto_discovery_decodes_correct_pixels():
+    # Validate that the auto-discovered tables actually drive the
+    # right LZ77 decompress + untile by checking pixel contents of
+    # species 2 (where _synthetic_rom_with_species sets sprite byte
+    # to (s|s<<4) = 0x22, so all pixels resolve to palette index 2).
+    rom, _pic_off, _pal_off = _synthetic_rom_with_species(60)
+    with tempfile.TemporaryDirectory() as td:
+        rom_path = os.path.join(td, "synth.gba")
+        out_dir = os.path.join(td, "out")
+        with open(rom_path, "wb") as f:
+            f.write(rom)
+        ex.extract_all(rom_path, out_dir)
+        species_03 = os.path.join(out_dir, "species_003.bmp")  # index 2 → species_003
+        _w, _h, pal, px = _parse_indexed_bmp(species_03)
+    # species index 2: sprite bytes all 0x22 → every pixel = 2;
+    # palette[2] = pure blue (per _synthetic_rom_with_species)
+    assert all(p == 2 for p in px), "auto-discovery decoded wrong sprite for species 003"
+    assert pal[2] == (0, 0, 0xF8), "auto-discovery decoded wrong palette for species 003"
 
 
 # ── runner ───────────────────────────────────────────────────────────────────

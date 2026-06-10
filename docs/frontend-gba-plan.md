@@ -19,7 +19,7 @@ Companion docs:
 - `PRD.md` / `SPEC.md` / `AGENT_PROMPT.md` — feature requirements,
   technical spec, and the original build order.
 
-Date produced: 2026-06-03. Last status refresh: 2026-06-09 (CP#6 algorithmic core + silhouette landed).
+Date produced: 2026-06-03. Last status refresh: 2026-06-09 (CP#6 algorithmic core + silhouette + auto-discovery landed).
 
 ---
 
@@ -58,13 +58,16 @@ Date produced: 2026-06-03. Last status refresh: 2026-06-09 (CP#6 algorithmic cor
   (deferred follow-up).  Three new harness tests
   (`test_box_scene_nav.py`, `test_box_species_roundtrip.py`,
   `test_box_stats_level_roundtrip.py`).
-- **CP#6 algorithmic core + silhouette (2026-06-09)** —
-  `tools/extract_sprites.py` ships with 29 unit tests (`make test-tools`):
+- **CP#6 algorithmic core + silhouette + auto-discovery (2026-06-09)** —
+  `tools/extract_sprites.py` ships with 35 unit tests (`make test-tools`):
   variant detection, GBA pointer read, LZ77 (LZ10) decompress, 4bpp
-  untile, BGR555 → RGB888, indexed BMP writer, `extract_species`, and
-  `extract_all` orchestration with idempotency + UNKNOWN-variant guard.
-  `tools/make_silhouette.py` one-shots a procedural 64×64 silhouette
-  BMP into `frontend-gba/graphics/silhouette.bmp`; `pokemon_edit_scene`
+  untile, BGR555 → RGB888, indexed BMP writer, `extract_species`,
+  `extract_all` orchestration with idempotency, plus auto-discovery
+  scanners that locate `gMonFrontPicTable` / `gMonPaletteTable` by
+  structural signature (no hardcoded variant addresses needed —
+  region-agnostic).  `tools/make_silhouette.py` one-shots a
+  procedural 64×64 silhouette BMP into
+  `frontend-gba/graphics/silhouette.bmp`; `pokemon_edit_scene`
   renders it on the IDENTITY/MOVES right panel via butano
   `bn::sprite_items::silhouette`.  Root `Makefile` wires
   `make gba SPRITES_ROM=/path/to/gen3.gba` to invoke the extractor
@@ -81,11 +84,11 @@ Date produced: 2026-06-03. Last status refresh: 2026-06-09 (CP#6 algorithmic cor
   detect / dump / sidecar / key-input tests.
   See `docs/frontend-gba-harness-plan.md`.
 
-**Next on your plate:** **Checkpoint #6 follow-ups** — extractor needs
-`_VARIANT_TABLES` populated before the `make gba SPRITES_ROM=...` path
-works against a real ROM; pre-evolution-only conditional render branch
-("real sprite if extracted, else silhouette") is currently silhouette-
-only.  See "Checkpoint #6 — Sprites (Option C)" below.
+**Next on your plate:** **Checkpoint #6 follow-ups** — extractor
+auto-discovers the sprite/palette tables (no hardcoded variant addresses
+needed); the remaining gap is the per-species render branch in the
+pokemon editor ("real sprite if extracted, else silhouette" — currently
+silhouette-only).  See "Checkpoint #6 — Sprites (Option C)" below.
 
 **Open library gaps that block later checkpoints:** none.
 L8, L9 deferred indefinitely.
@@ -573,17 +576,28 @@ Pokemon editor right panel shows the real sprite for the current
 species.  *Status: first clause met; second clause needs both follow-ups
 below.*
 
+**Auto-discovery (2026-06-09 — closes `_VARIANT_TABLES` follow-up):**
+
+`tools/extract_sprites.py` locates `gMonFrontPicTable` and
+`gMonPaletteTable` via structural signature rather than hardcoded
+offsets.  Pret initializes both arrays with designated initializers
+`[SPECIES_X] = { ..., SPECIES_X }`, so for every entry `i` the tag
+field equals the array index.  The scanner walks 4-byte-aligned
+offsets and accepts the first run of ≥50 entries matching:
+
+- pic table:  `(ptr ∈ 0x08xxxxxx, size == 0x800, tag == i)`
+- pal table:  `(ptr ∈ 0x08xxxxxx, tag == i, _pad == 0)`
+
+Forward-extends from the threshold to discover the actual species
+count.  Region-agnostic — works on US/JP/EU/revision variants
+without hardcoded addresses.  6 new unit tests in
+`tools/test_extract_sprites.py` cover scanner correctness, no-match
+rejection, front-vs-back-table disambiguation (first-occurrence
+wins), and end-to-end extract_all via discovery.  Total
+`make test-tools` count: 35.
+
 **Follow-ups (deferred):**
 
-- **`_VARIANT_TABLES` data** — `tools/extract_sprites.py`'s per-variant
-  `(gMonFrontPicTable_off, gMonPaletteTable_off, n_species)` lookup is
-  empty; the extractor raises `ValueError` for any real ROM until it's
-  populated.  Pret doesn't expose these as source values (they're
-  emergent linker outputs), so options are: (A) build pret to obtain
-  `.map` files, (B) implement an auto-discovery scanner that locates
-  the tables by structural signature (CompressedSpriteSheet entries
-  with ROM-range pointers and size==0x800).  Option B is the
-  TDD-friendly path and would also be portable across ROM revisions.
 - **Per-species render branch** — pokemon editor currently always
   renders the silhouette.  Wiring it to swap in `species_NNN` when the
   extracted BMP exists needs a build-time helper that scans
@@ -593,8 +607,10 @@ below.*
   right-panel column is added later, port the silhouette render
   pattern from `pokemon_edit_scene`.
 - **3-variant fanout** — extractor + silhouette are RS/EMERALD/FRLG
-  agnostic, but no real-ROM end-to-end test exists yet (gated on the
-  `_VARIANT_TABLES` follow-up).
+  agnostic; no real-ROM end-to-end test exists yet because the repo
+  doesn't ship Gen 3 ROMs (legal).  A maintainer with a personal
+  copy can run `make gba SPRITES_ROM=...` and inspect the output, but
+  this stays off the merge gate.
 
 ---
 

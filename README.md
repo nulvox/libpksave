@@ -110,10 +110,13 @@ Notes:
 - The extractor is a no-op when `frontend-gba/graphics/sprites/` is
   already populated — re-running `make gba SPRITES_ROM=...` doesn't
   re-extract.  Delete the directory to force re-extraction.
-- Only US English ROMs of Ruby / Sapphire / Emerald / FireRed /
-  LeafGreen are recognised in v1; the extractor raises a clear error
-  on unsupported variants.
-- Per-variant sprite-table addresses are sourced from the
+- All regions (US/JP/EU) and revisions of Ruby / Sapphire / Emerald /
+  FireRed / LeafGreen are supported — the extractor locates
+  `gMonFrontPicTable` and `gMonPaletteTable` by structural signature
+  rather than by hardcoded ROM offsets.  Any GBA ROM whose front-pic
+  table looks like pret's `CompressedSpriteSheet` array (ptr +
+  size=0x800 + tag=index) is fair game.
+- Table-shape signature is derived from the
   [pret](https://github.com/pret) decompilation projects (factual
   data, no code copied).
 
