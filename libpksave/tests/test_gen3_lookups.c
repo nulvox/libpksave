@@ -302,6 +302,69 @@ void test_item_pocket_non_gen3_game_is_none(void)
         pksave_item_pocket(PKSAVE_GAME_DP, ITEM_POTION));
 }
 
+/* ── pksave_ability_name ─────────────────────────────────────────────────
+ *
+ * Spot-checks across the Gen 3 ability table sourced from pret/pokeemerald
+ * src/data/text/abilities.h. We don't enumerate all 78 entries — a few
+ * load-bearing samples catch the failure modes that matter:
+ *   - first / last valid IDs (1 = Stench, 77 = Air Lock) bracket the table
+ *   - the two pret quirks "Compoundeyes" and "Lightningrod" (one word, not
+ *     two) are explicitly asserted so a well-meaning future re-format that
+ *     "fixes" them would fail loudly
+ *   - the index-0 sentinel and out-of-range IDs both fall through to "???"
+ *   - non-Gen-3 game IDs return "???" so a Gen 1/2 caller never sees a
+ *     Gen 3 ability label leak across.
+ */
+void test_ability_name_first_and_last(void)
+{
+    TEST_ASSERT_EQUAL_STRING("Stench",   pksave_ability_name(PKSAVE_GAME_RS,      1));
+    TEST_ASSERT_EQUAL_STRING("Air Lock", pksave_ability_name(PKSAVE_GAME_EMERALD, 77));
+}
+
+void test_ability_name_pret_one_word_spellings(void)
+{
+    /* The two cartridge-canonical single-word spellings. If a future
+     * contributor "corrects" these to "Compound Eyes" / "Lightning Rod",
+     * the user-memory pret-canonical rule says they're wrong. */
+    TEST_ASSERT_EQUAL_STRING("Compoundeyes", pksave_ability_name(PKSAVE_GAME_RS, 14));
+    TEST_ASSERT_EQUAL_STRING("Lightningrod", pksave_ability_name(PKSAVE_GAME_RS, 31));
+}
+
+void test_ability_name_starter_abilities(void)
+{
+    /* Overgrow / Blaze / Torrent — the three starter abilities. Every Gen
+     * 3 player encounters these within the first 30 minutes; if any broke
+     * the editor would be visibly wrong on the first Pokemon edit. */
+    TEST_ASSERT_EQUAL_STRING("Overgrow", pksave_ability_name(PKSAVE_GAME_RS,   65));
+    TEST_ASSERT_EQUAL_STRING("Blaze",    pksave_ability_name(PKSAVE_GAME_RS,   66));
+    TEST_ASSERT_EQUAL_STRING("Torrent",  pksave_ability_name(PKSAVE_GAME_FRLG, 67));
+}
+
+void test_ability_name_id_zero_is_unknown_sentinel(void)
+{
+    /* The editor's ability cycler treats slot-1 id 0 as "this species has
+     * no second ability" and filters it out, so the renderer should never
+     * see id 0 in practice — but if it does, "???" is the agreed fallback
+     * (see header comment in names/gen3_abilities.h). */
+    TEST_ASSERT_EQUAL_STRING("???", pksave_ability_name(PKSAVE_GAME_RS, 0));
+}
+
+void test_ability_name_out_of_range_is_unknown(void)
+{
+    /* IDs 78+ are unassigned in Gen 3 (Cacophony=76, Air Lock=77 are the
+     * tail). The lookup() guard returns "???" for any id past table_len. */
+    TEST_ASSERT_EQUAL_STRING("???", pksave_ability_name(PKSAVE_GAME_RS,  78));
+    TEST_ASSERT_EQUAL_STRING("???", pksave_ability_name(PKSAVE_GAME_RS, 255));
+}
+
+void test_ability_name_non_gen3_game_is_unknown(void)
+{
+    /* Gen 1 / Gen 2 have no abilities at all. The dispatch in names.c
+     * returns "???" without indexing into the Gen 3 table. */
+    TEST_ASSERT_EQUAL_STRING("???", pksave_ability_name(PKSAVE_GAME_RB, 1));
+    TEST_ASSERT_EQUAL_STRING("???", pksave_ability_name(PKSAVE_GAME_GS, 1));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -339,5 +402,11 @@ int main(void)
     RUN_TEST(test_item_pocket_item_none_is_none);
     RUN_TEST(test_item_pocket_unknown_id_is_none);
     RUN_TEST(test_item_pocket_non_gen3_game_is_none);
+    RUN_TEST(test_ability_name_first_and_last);
+    RUN_TEST(test_ability_name_pret_one_word_spellings);
+    RUN_TEST(test_ability_name_starter_abilities);
+    RUN_TEST(test_ability_name_id_zero_is_unknown_sentinel);
+    RUN_TEST(test_ability_name_out_of_range_is_unknown);
+    RUN_TEST(test_ability_name_non_gen3_game_is_unknown);
     return UNITY_END();
 }
