@@ -99,17 +99,24 @@ editor build by pointing `SPRITES_ROM` at it:
 make gba SPRITES_ROM=/path/to/your/ruby.gba
 ```
 
-This runs `tools/extract_sprites.py` against your ROM, dumps one 64×64
-indexed BMP per species into `frontend-gba/graphics/sprites/`, and then
-invokes the butano build so the extracted bitmaps are compiled into the
-editor.  The directory is `.gitignore`-d; the resulting `pksave-gba.gba`
-is for your own use only.
+This runs `tools/extract_sprites.py` against your ROM (dumps one 64×64
+indexed BMP per species into `frontend-gba/graphics/sprites/`), then
+`tools/gen_sprite_lookup.py` (emits `frontend-gba/src/species_sprite_lookup.cpp`
+mapping each present species to its `bn::sprite_item*`), then invokes
+the butano build so the extracted bitmaps are compiled in and the
+pokemon-editor right panel shows the real per-species sprite.  Species
+without an extracted BMP keep showing the silhouette.  Both the
+extracted BMPs and the generated `.cpp` are `.gitignore`-d; the
+resulting `pksave-gba.gba` is for your own use only.
 
 Notes:
 
 - The extractor is a no-op when `frontend-gba/graphics/sprites/` is
   already populated — re-running `make gba SPRITES_ROM=...` doesn't
   re-extract.  Delete the directory to force re-extraction.
+- The lookup generator runs every `make gba` regardless of whether you
+  passed `SPRITES_ROM` — its output is deterministic, so unchanged
+  inputs mean an unchanged `.cpp` and no extra rebuild churn.
 - All regions (US/JP/EU) and revisions of Ruby / Sapphire / Emerald /
   FireRed / LeafGreen are supported — the extractor locates
   `gMonFrontPicTable` and `gMonPaletteTable` by structural signature

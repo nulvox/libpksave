@@ -33,6 +33,10 @@ frontend-gba/tests/fixtures/*.bin
 # generic silhouette).
 frontend-gba/graphics/sprites/
 
+# Generated species->sprite_item* lookup (output of tools/gen_sprite_lookup.py;
+# rebuilt by `make gba` so it tracks whatever BMPs live in graphics/sprites/).
+frontend-gba/src/species_sprite_lookup.cpp
+
 # Test runner binaries and output.  Each tests/test_<name>.c builds into
 # a sibling tests/test_<name> ELF that gcc spits out into the source tree.
 # Ignore the binaries but keep the .c sources.

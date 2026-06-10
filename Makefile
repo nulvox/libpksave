@@ -52,7 +52,7 @@ GBA_TESTS := \
 
 .PHONY: test test-gba test-tools gbc gba nds all clean \
         _build_test _build_test_gba _build_gbc _build_gba _build_nds \
-        _maybe_extract_sprites
+        _maybe_extract_sprites _gen_sprite_lookup
 
 # ── test ─────────────────────────────────────────────────────────────────────
 test: _build_test
@@ -97,7 +97,7 @@ _build_gbc:
 # the butano build so the editor ships with real Pokemon sprites instead
 # of the default silhouette. The repo never bundles extracted sprite art
 # (frontend-gba/assets/sprites/ is .gitignored).
-gba: _build_gba _maybe_extract_sprites
+gba: _build_gba _maybe_extract_sprites _gen_sprite_lookup
 	$(DOCKER) run --rm \
 		-v "$(REPO_ROOT):/src" \
 		pksave-gba
@@ -112,10 +112,22 @@ ifneq ($(strip $(SPRITES_ROM)),)
 		--out frontend-gba/graphics/sprites/
 endif
 
+# Regenerate species_sprite_lookup.cpp on every gba build so it stays
+# in sync with whatever BMPs landed in frontend-gba/graphics/sprites/.
+# The generated file is gitignored: fresh clones materialize an empty
+# stub here (no `make gba SPRITES_ROM=...` ever run) and get the
+# silhouette-only behavior. `SPRITES_ROM=...` runs above this step
+# and replaces the BMPs, then this step regenerates the lookup.
+_gen_sprite_lookup:
+	$(PYTHON) tools/gen_sprite_lookup.py \
+		--sprites-dir frontend-gba/graphics/sprites/ \
+		--out frontend-gba/src/species_sprite_lookup.cpp
+
 # ── test-tools ───────────────────────────────────────────────────────────────
 # Pure-Python unit tests for tools/ — no docker, no devkitARM.
 test-tools:
 	$(PYTHON) tools/test_extract_sprites.py
+	$(PYTHON) tools/test_gen_sprite_lookup.py
 
 # ── nds ──────────────────────────────────────────────────────────────────────
 nds: _build_nds

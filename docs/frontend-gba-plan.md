@@ -19,7 +19,7 @@ Companion docs:
 - `PRD.md` / `SPEC.md` / `AGENT_PROMPT.md` — feature requirements,
   technical spec, and the original build order.
 
-Date produced: 2026-06-03. Last status refresh: 2026-06-09 (CP#6 algorithmic core + silhouette + auto-discovery landed).
+Date produced: 2026-06-03. Last status refresh: 2026-06-10 (CP#6 per-species render branch closed).
 
 ---
 
@@ -84,11 +84,13 @@ Date produced: 2026-06-03. Last status refresh: 2026-06-09 (CP#6 algorithmic cor
   detect / dump / sidecar / key-input tests.
   See `docs/frontend-gba-harness-plan.md`.
 
-**Next on your plate:** **Checkpoint #6 follow-ups** — extractor
+**Next on your plate:** **Checkpoint #6 is closed.** The extractor
 auto-discovers the sprite/palette tables (no hardcoded variant addresses
-needed); the remaining gap is the per-species render branch in the
-pokemon editor ("real sprite if extracted, else silhouette" — currently
-silhouette-only).  See "Checkpoint #6 — Sprites (Option C)" below.
+needed) and `tools/gen_sprite_lookup.py` emits the per-species switch
+that drives the pokemon-editor right panel ("real sprite if extracted,
+else silhouette").  See "Checkpoint #6 — Sprites (Option C)" below.
+Remaining items (3-variant real-ROM end-to-end test, party/box right
+panels) are out-of-scope follow-ups, not blockers.
 
 **Open library gaps that block later checkpoints:** none.
 L8, L9 deferred indefinitely.
@@ -256,9 +258,11 @@ frontend-gba/
 │       ├── numeric_field.{hpp,cpp}   ← hold-to-accel ±1, D-pad L/R ±10
 │       ├── cycler.{hpp,cpp}          ← species/move/item/ability cycler
 │       └── text_input.{hpp,cpp}      ← Pokemon-grid keyboard scene
-├── assets/
-│   ├── silhouette.png                ← generic 64×64 placeholder (MIT, ours)
-│   └── ui/                           ← fonts, frame chrome (MIT, ours)
+├── graphics/
+│   ├── silhouette.bmp                ← generic 64×64 placeholder (MIT, ours)
+│   ├── silhouette.json               ← butano sidecar declaring it a sprite
+│   └── sprites/                      ← extracted species_NNN.bmp (gitignored;
+│                                       populated by tools/extract_sprites.py)
 └── tests/
     ├── checklist.md                  ← manual verification per checkpoint
     └── fixtures/
@@ -266,8 +270,15 @@ frontend-gba/
         ├── emerald.sav
         └── firered.sav
 
+src/
+├── species_sprite_lookup.hpp         ← lookup interface (hand-written)
+└── species_sprite_lookup.cpp         ← lookup body (generated, gitignored —
+                                        tools/gen_sprite_lookup.py emits it)
+
 tools/
-└── extract_sprites.py                ← optional, takes a user ROM path
+├── extract_sprites.py                ← optional, takes a user ROM path
+└── gen_sprite_lookup.py              ← emits species_sprite_lookup.cpp from
+                                        whatever BMPs landed in graphics/sprites/
 ```
 
 ---
@@ -534,7 +545,7 @@ Pokemon matches. *(Met by `test_box_species_roundtrip.py`.)*
 
 ---
 
-## Checkpoint #6 — Sprites (Option C) — **algorithmic core + silhouette shipped 2026-06-09**
+## Checkpoint #6 — Sprites (Option C) — **closed 2026-06-10**
 
 > Format pivot: butano 18.5's grit only consumes BMP (not PNG); the
 > plan's original `silhouette.png` / extracted-`.png` references are
@@ -562,19 +573,25 @@ Pokemon matches. *(Met by `test_box_species_roundtrip.py`.)*
 - [x] README section documenting the extractor's existence, legal
       caveat, and how to use it (top-level `README.md` →
       "Optional: extract real Pokémon sprites").
-- [ ] Pokemon editor right panel: if extracted sprite exists for the
+- [x] Pokemon editor right panel: if extracted sprite exists for the
       current species, render it; else render the silhouette.
-      **Currently always silhouette** — per-species conditional render
-      is a follow-up that needs a compile-time-generated lookup table
-      (since butano `sprite_item` symbols are resolved at link time and
-      vary based on which `species_NNN.bmp` files were extracted).
-      Filed below as follow-up.
+      `tools/gen_sprite_lookup.py` scans `frontend-gba/graphics/sprites/`
+      and emits `frontend-gba/src/species_sprite_lookup.cpp`, a
+      `pksave_gba::sprite_lookup::species_sprite_for(int)` switch
+      mapping each present species id to its
+      `bn::sprite_item* species_NNN`.  `pokemon_edit_scene::redraw_right_panel`
+      calls the lookup on every redraw and falls back to
+      `bn::sprite_items::silhouette` on nullptr.  Generated file is
+      gitignored; the root `Makefile` runs the generator after the
+      optional `_maybe_extract_sprites` step, so fresh clones get a
+      no-op switch (silhouette everywhere) and `make gba SPRITES_ROM=...`
+      builds get the per-species art.  7 unit tests in
+      `tools/test_gen_sprite_lookup.py` (`make test-tools`).
 
 **Done when:** `make gba` with no args still ships a working ROM (with
 silhouettes); `make gba SPRITES_ROM=...` produces a ROM where the
 Pokemon editor right panel shows the real sprite for the current
-species.  *Status: first clause met; second clause needs both follow-ups
-below.*
+species.  *Status: both clauses met.*
 
 **Auto-discovery (2026-06-09 — closes `_VARIANT_TABLES` follow-up):**
 
@@ -596,16 +613,34 @@ rejection, front-vs-back-table disambiguation (first-occurrence
 wins), and end-to-end extract_all via discovery.  Total
 `make test-tools` count: 35.
 
+**Per-species render branch (shipped 2026-06-10):**
+
+`tools/gen_sprite_lookup.py` generates `frontend-gba/src/species_sprite_lookup.cpp`
+on every `make gba`, scanning `frontend-gba/graphics/sprites/` for
+`species_NNN.bmp` filenames and emitting one `case N: return
+&bn::sprite_items::species_NNN;` per present id.  The corresponding
+hand-written header `frontend-gba/src/species_sprite_lookup.hpp`
+declares `pksave_gba::sprite_lookup::species_sprite_for(int)`;
+`pokemon_edit_scene::redraw_right_panel` calls it on every redraw and
+substitutes `bn::sprite_items::silhouette` when the lookup returns
+nullptr (no BMP extracted for that species).  Generator is deterministic
+(stable sort by id, fixed boilerplate) so incremental rebuilds stay
+diff-clean.  7 host-side tests in `tools/test_gen_sprite_lookup.py`
+cover empty/missing dirs, single + multiple species, decoy rejection
+(silhouette.bmp / .json sidecars / wrong extensions), deterministic
+output, and signature/namespace contract.
+
+The generated `.cpp` lives at `frontend-gba/src/species_sprite_lookup.cpp`
+and is gitignored — fresh clones materialize a no-op switch on first
+`make gba`.  The grit-emitted `bn::sprite_items::species_NNN` symbols
+are link-time, which is why we have to gate on the BMPs being present
+on disk *before* the butano build runs.
+
 **Follow-ups (deferred):**
 
-- **Per-species render branch** — pokemon editor currently always
-  renders the silhouette.  Wiring it to swap in `species_NNN` when the
-  extracted BMP exists needs a build-time helper that scans
-  `graphics/sprites/` and generates a `species_sprite_lookup.cpp`
-  mapping species_id → `bn::sprite_item*` or nullptr.
 - **Party/Box right-panel** — those scenes are list-only today; if a
-  right-panel column is added later, port the silhouette render
-  pattern from `pokemon_edit_scene`.
+  right-panel column is added later, port the same lookup pattern from
+  `pokemon_edit_scene::redraw_right_panel`.
 - **3-variant fanout** — extractor + silhouette are RS/EMERALD/FRLG
   agnostic; no real-ROM end-to-end test exists yet because the repo
   doesn't ship Gen 3 ROMs (legal).  A maintainer with a personal
@@ -710,11 +745,13 @@ mGBA Lua harness for scene-loop and save-flow).  The user-facing
 manual checklist in `frontend-gba/tests/checklist.md` stays in the
 repo but is not on this list.
 
-- [x] `make gba` (no args) produces `pksave-gba.gba` — currently with
-      silhouette pending CP#6 (no sprite rendering yet, so this is
-      trivially "no sprites" until CP#6).
-- [ ] `make gba SPRITES_ROM=...` produces a ROM with real sprites
-      *(CP#6)*.
+- [x] `make gba` (no args) produces `pksave-gba.gba` — ships with the
+      generic silhouette on the pokemon-editor right panel; the
+      `species_sprite_lookup` switch is a no-op (returns nullptr for
+      every species, so every species renders the silhouette).
+- [x] `make gba SPRITES_ROM=...` produces a ROM where the pokemon-editor
+      right panel shows the real per-species sprite, falling back to
+      the silhouette for any species absent from the ROM dump.
 - [x] `make test` green — Unity coverage across all Gen flags (19
       new L6/L7 cases on top of the existing suite).
 - [ ] `make test-gba` green — mGBA Lua harness covers:

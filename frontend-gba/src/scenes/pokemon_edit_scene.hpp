@@ -149,9 +149,12 @@ private:
     bn::vector<bn::sprite_ptr, 32> header_sprites_;
     bn::vector<bn::sprite_ptr, 32> right_panel_sprites_;
     bn::vector<bn::sprite_ptr, 16> placeholder_sprites_;
-    // Right-panel silhouette (CP#6).  Present on IDENTITY/MOVES tabs;
-    // reset to empty on STATS so the stat list owns that screen area.
-    bn::optional<bn::sprite_ptr>   silhouette_sprite_;
+    // Right-panel Pokemon sprite (CP#6).  Holds the per-species front
+    // sprite when one was extracted (`make gba SPRITES_ROM=...`) or
+    // the generic silhouette otherwise — `redraw_right_panel` rebuilds
+    // it from `species_sprite_lookup` on every refresh.  Reset to
+    // empty on STATS so the stat list owns that screen area.
+    bn::optional<bn::sprite_ptr>   mon_sprite_;
 
     list_view        list_;
     cycler           species_;
