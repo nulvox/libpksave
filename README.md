@@ -40,7 +40,6 @@ money, recalculates checksums, and writes the same buffer back to disk:
 #include <stdint.h>
 #include <stdio.h>
 #include "pksave.h"
-
 int main(void) {
     uint8_t bytes[512 * 1024];
     FILE *fp = fopen("game.sav", "rb");
