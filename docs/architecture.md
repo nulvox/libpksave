@@ -9,8 +9,9 @@ Copyright (c) 2026 gbsdk contributors
 
 ```
 libpksave/
-├── PRD.md, SPEC.md, AGENT_PROMPT.md   — design + build brief
 ├── Makefile                            — top-level; delegates everything to Docker
+├── docs/
+│   └── internal/                       — archived product/spec/agent planning briefs
 ├── libpksave/                          — the library
 │   ├── include/pksave.h                — public API (the only header callers include)
 │   ├── src/
@@ -23,9 +24,9 @@ libpksave/
 │   │   └── names/genN_*.h              — species/move/item/ability tables
 │   ├── Makefile                        — invoked inside docker/test
 │   └── tests/                          — Unity tests + fixture .sav files
-├── frontend-gbc/                       — empty (gbdk-2020, TODO)
-├── frontend-gba/                       — empty (butano, TODO)
-├── frontend-nds/                       — empty (BlocksDS, TODO)
+├── frontend-gbc/                       — placeholder (gbdk-2020, TODO)
+├── frontend-gba/                       — implemented Gen III editor (butano)
+├── frontend-nds/                       — placeholder (BlocksDS, TODO)
 ├── docker/{test,gbc,gba,nds}/          — one Dockerfile per toolchain
 └── bin/                                — Docker build artifacts land here
 ```

@@ -9,7 +9,7 @@ This document lists game features that exist in the real save formats but
 that `libpksave` does **not** currently expose. Two categories:
 
 1. **Out of scope (v1, by design)** — listed as non-goals in
-   [PRD.md](../PRD.md). Editing them is intentionally deferred so that
+   [the original product requirements](internal/PRD.md). Editing them is intentionally deferred so that
    v1 ships a small, audit-able feature set with reliable round-trip
    semantics.
 2. **In scope but not yet implemented** — gaps in the current code that
@@ -22,7 +22,7 @@ it, this is the place to check before filing a bug.
 
 ## 1. Out of scope (by design)
 
-These features are listed as v1 non-goals in PRD.md. There is no API for
+These features are listed as v1 non-goals in the archived product requirements. There is no API for
 any of them and the underlying offsets are not parsed. They are also not
 re-checksummed beyond what's needed to keep the save valid — the library
 preserves their bytes unchanged on flush.

@@ -5,7 +5,7 @@ Copyright (c) 2026 gbsdk contributors
 
 # `frontend-gba` execution plan
 
-Implementation plan for AGENT_PROMPT.md item #4: the Gen III front-end
+Implementation plan for `docs/internal/AGENT_PROMPT.md` item #4: the Gen III front-end
 for Ruby, Sapphire, Emerald, FireRed, and LeafGreen. SDK: butano on
 devkitARM. `libpksave` is linked as a static C library; C++ calls it
 through an `extern "C"` bridge.
@@ -16,7 +16,8 @@ Companion docs:
   this plan and the rollout strategy for closing them.
 - `docs/frontend-gba-harness-plan.md` — mGBA-Lua automation harness
   reference: what's shipped, the helper patterns, how to add a new test.
-- `PRD.md` / `SPEC.md` / `AGENT_PROMPT.md` — feature requirements,
+- `docs/internal/PRD.md` / `docs/internal/SPEC.md` /
+  `docs/internal/AGENT_PROMPT.md` — archived feature requirements,
   technical spec, and the original build order.
 
 Date produced: 2026-06-03. Last status refresh: 2026-06-10 (CP#6 per-species render branch closed).

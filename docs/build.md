@@ -11,14 +11,16 @@ matching container for each target and volume-mounts the repo at `/src`.
 
 ## Targets
 
-| `make …`  | What it does                                                                | Container        |
-|-----------|-----------------------------------------------------------------------------|------------------|
-| `test`    | Runs every Unity test for every generation                                  | `pksave-test`    |
-| `gbc`     | Builds `bin/pksave-gbc.gbc` — **frontend is empty, target is a no-op today** | `pksave-gbc`     |
-| `gba`     | Builds `bin/pksave-gba.gba` — **frontend is empty, target is a no-op today** | `pksave-gba`     |
-| `nds`     | Builds `bin/pksave-nds.nds` — **frontend is empty, target is a no-op today** | `pksave-nds`     |
-| `all`     | `test` + `gbc` + `gba` + `nds`                                              | all four         |
-| `clean`   | Removes `bin/*.{gbc,gba,nds}` and `libpksave/tests/test_*`                  | none             |
+| `make …`   | What it does                                                               | Container         |
+|------------|----------------------------------------------------------------------------|-------------------|
+| `test`     | Runs every Unity test for every generation                                 | `pksave-test`     |
+| `test-gba` | Runs the headless mGBA/Lua automation suite for the Gen III editor         | `pksave-test-gba` |
+| `test-tools` | Runs the pure-Python sprite extraction and lookup-generator tests        | none              |
+| `gbc`      | Reserved for `bin/pksave-gbc.gbc`; the frontend is still a placeholder     | `pksave-gbc`      |
+| `gba`      | Builds the implemented Gen III editor as `bin/pksave-gba.gba`              | `pksave-gba`      |
+| `nds`      | Reserved for `bin/pksave-nds.nds`; the frontend is still a placeholder     | `pksave-nds`      |
+| `all`      | `test` + `test-tools` + `gbc` + `gba` + `nds`                              | all platforms     |
+| `clean`    | Removes generated ROMs, test binaries, and the host shared library         | none              |
 
 Each Docker image is built on first use and cached afterwards.
 
@@ -31,8 +33,8 @@ Each Docker image is built on first use and cached afterwards.
 - **`docker/gbc`** — Ubuntu 24.04 + gbdk-2020 4.3.0.
   Compile flags: `-DPKSAVE_GEN1 -DPKSAVE_GEN2`.
 - **`docker/gba`** — `devkitpro/devkitarm:latest` + butano 18.5.0.
-  Compile flags: `-DPKSAVE_GEN3`. C++ frontend, libpksave linked as a C
-  static lib via `extern "C"`.
+  Compile flags: `-DPKSAVE_GEN3`. The C++ frontend compiles libpksave's C
+  sources into the Butano build and accesses them through a small bridge.
 - **`docker/nds`** — `ghcr.io/blocksds/sdk:latest`.
   Compile flags: `-DPKSAVE_GEN4 -DPKSAVE_GEN5`.
 
@@ -80,6 +82,6 @@ make -C libpksave fixtures
 4. **test-libpksave** — builds the `pksave-test` image (with GitHub
    Actions cache) and runs the full Unity suite.
 
-The three frontend builds (`gbc`, `gba`, `nds`) are **not** in CI today
-because the frontends themselves don't exist yet — see
-[frontends.md](frontends.md).
+The cross-compiled frontend ROMs and mGBA automation suite are not part of the
+current GitHub Actions workflow; CI currently gates the portable library and
+support tooling. See [frontends.md](frontends.md) for platform status.

@@ -5,141 +5,140 @@ Copyright (c) 2026 gbsdk contributors
 
 # libpksave
 
-A portable C99 library for reading and writing Pokémon save files from
-Generations I–V, intended to be linked into homebrew save-editor ROMs that
-run inside an emulator. The user symlinks their game's `.sav` onto the
-editor ROM's battery-backed SRAM slot; libpksave parses, mutates, and
-re-checksums the buffer in place.
+`libpksave` is a portable C99 library for detecting, reading, editing, and
+checksum-validating binary Pokémon save files from Generations I–V. It keeps
+save-format details behind one public header so host tools and emulator-ready
+editors can work with trainer, party, box, bag, and Pokérus data without
+hard-coding offsets or checksum rules.
 
-> **Status:** the library itself is implemented and tested for all twelve
-> game variants. **None of the three frontends are written yet** — the
-> `frontend-gbc/`, `frontend-gba/`, and `frontend-nds/` directories are
-> empty placeholders. See [docs/frontends.md](docs/frontends.md).
+The library is implemented and fixture-tested for twelve game variants. A GBA
+editor demonstrates the API against Generation III saves; GBC and NDS
+frontends remain planned.
 
----
+## Overview and design goals
 
-## Table of contents
+- **Portable C99:** no SDK headers, heap allocation, or I/O in the library.
+  Callers provide a mutable save buffer and remain responsible for persistence.
+- **One public API:** consumers include only
+  [`libpksave/include/pksave.h`](libpksave/include/pksave.h).
+- **Format isolation:** generation-specific parsing, character encoding, data
+  layout, and checksum logic stay inside `libpksave/src/`.
+- **Small target builds:** `PKSAVE_GEN1` through `PKSAVE_GEN5` compile-time
+  flags allow embedded frontends to include only the formats they need.
+- **In-place editing:** sessions alias the caller-owned save buffer; a
+  successful `pksave_flush()` serializes pending data and recalculates the
+  format's checksums.
+- **Testable behavior:** synthetic fixtures cover detection, read/write
+  round-trips, and post-flush checksum validation for every supported variant.
 
-### Specifications
+## Minimal C API example
 
-- [PRD.md](PRD.md) — product requirements: what the editor should do
-- [SPEC.md](SPEC.md) — technical specification: repo layout, API,
-  toolchains, format research notes
-- [AGENT_PROMPT.md](AGENT_PROMPT.md) — build-order brief for the
-  implementing agent
+This host-side example loads a save, detects its format, changes the trainer's
+money, recalculates checksums, and writes the same buffer back to disk:
 
-### Documentation
+```c
+#include <stdint.h>
+#include <stdio.h>
+#include "pksave.h"
 
-- [docs/architecture.md](docs/architecture.md) — repo layout, build flow,
-  per-generation `#ifdef PKSAVE_GENx` partitioning
-- [docs/build.md](docs/build.md) — building and running the test suite,
-  Docker container conventions, CI overview
-- [docs/coverage.md](docs/coverage.md) — per-generation feature coverage
-  matrix (what works today)
-- [docs/unsupported-features.md](docs/unsupported-features.md) — game
-  features not covered by the library (deliberately out of scope or
-  not-yet-implemented), with reasoning
-- [docs/frontends.md](docs/frontends.md) — frontend implementation status
-  (currently: all three are TODO)
+int main(void) {
+    uint8_t bytes[512 * 1024];
+    FILE *fp = fopen("game.sav", "rb");
+    if (!fp) return 1;
+    size_t len = fread(bytes, 1, sizeof bytes, fp);
+    fclose(fp);
 
-### Source map
+    pksave_game_t game = pksave_detect(bytes, len);
+    if (game == PKSAVE_GAME_UNKNOWN) return 1;
+    pksave_save_t *save = pksave_open(bytes, len, game);
+    pksave_trainer_t trainer;
+    if (!save || pksave_get_trainer(save, &trainer) != PKSAVE_OK) return 1;
+    trainer.money = 999999;
+    if (pksave_set_trainer(save, &trainer) != PKSAVE_OK ||
+        pksave_flush(save) != PKSAVE_OK) return 1;
+
+    fp = fopen("game.sav", "wb");
+    if (!fp || fwrite(bytes, 1, len, fp) != len) return 1;
+    fclose(fp);
+    pksave_close(save);
+    return 0;
+}
+```
+
+Compile the library with the generation flags required by your application;
+the repository's Makefiles demonstrate complete host and embedded builds.
+Back up real save files before editing them.
+
+## Supported formats and status
+
+| Generation | Games / variants | Save size | Core data support | Checksum support | Current limitations |
+|---|---|---:|---|---|---|
+| I | Red/Blue (`RB`), Yellow (`YELLOW`) | 32 KiB | Trainer, party, boxes, single bag pocket | One's-complement byte | Held items, nature, abilities, and separate pockets do not exist in-game |
+| II | Gold/Silver (`GS`), Crystal (`CRYSTAL`) | 32 KiB | Trainer, party, boxes, Items/Balls/Key pockets, Pokérus | LE16 sums, including Crystal's secondary copy | TM/HM and Berry pockets are not yet wired |
+| III | Ruby/Sapphire (`RS`), Emerald, FireRed/LeafGreen (`FRLG`) | 128 KiB | Full public read/write API and lookup tables | Per-section checksums across rotating save slots | GBA editor is implemented; emulator-level coverage continues to expand |
+| IV | Diamond/Pearl (`DP`), Platinum, HeartGold/SoulSilver (`HGSS`) | 512 KiB | Trainer, party, boxes, bag, Pokérus | CRC-16-CCITT block checksums | Ability-name lookup is currently a stub |
+| V | Black/White (`BW`), Black 2/White 2 (`BW2`) | 512 KiB | Trainer, party, boxes, bag, Pokérus | CRC-16-CCITT block checksums | Ability-name lookup is currently a stub |
+
+All variants are detected from raw save bytes by `pksave_detect()`; callers do
+not need to supply a filename hint. See
+[`docs/coverage.md`](docs/coverage.md) for the per-feature matrix and
+[`docs/unsupported-features.md`](docs/unsupported-features.md) for explicit
+non-goals and remaining gaps.
+
+## Build and test
+
+The reproducible top-level workflow uses Docker for C and cross-compilation
+toolchains. Python 3 is also used by asset and fixture tooling.
+
+```sh
+# Build the test image and run all Unity tests for Generations I-V
+make test
+
+# Run pure-Python tests for sprite tooling
+make test-tools
+
+# Build the implemented Generation III editor ROM
+make gba
+# output: bin/pksave-gba.gba
+
+# Run the headless mGBA/Lua frontend automation suite
+make test-gba
+```
+
+The GBA build can optionally extract sprites from a legally obtained
+Generation III ROM without committing game assets:
+
+```sh
+make gba SPRITES_ROM=/path/to/your/game.gba
+```
+
+`make gbc` and `make nds` reserve the builds for the planned GBC and NDS
+editors; those frontend directories are currently placeholders. `make all`
+invokes every platform target, so use the individual commands above for the
+currently implemented and tested workflow.
+
+For a direct host build of the shared library (GCC required):
+
+```sh
+make -C libpksave lib
+# output: libpksave/libpksave.so
+```
+
+See [`docs/build.md`](docs/build.md) for container/toolchain details and
+[`docs/frontends.md`](docs/frontends.md) for frontend status.
+
+## Repository map
 
 - [`libpksave/include/pksave.h`](libpksave/include/pksave.h) — public API
-- [`libpksave/src/`](libpksave/src/) — implementation
-  (`detect.c`, `session.c`, `checksum.c`, `names.c`, `gen1.c` … `gen5.c`)
-- [`libpksave/src/names/`](libpksave/src/names/) — per-generation
-  species / move / item / ability name tables
-- [`libpksave/tests/`](libpksave/tests/) — Unity tests, one per generation,
-  plus `tests/fixtures/` with one synthetic `.sav` per variant
-
----
-
-## Supported game variants
-
-| Generation | Variant enum     | Games                                  | Save size |
-|------------|------------------|----------------------------------------|-----------|
-| I          | `RB`, `YELLOW`   | Red, Blue, Yellow                      | 32 KiB    |
-| II         | `GS`, `CRYSTAL`  | Gold, Silver, Crystal                  | 32 KiB    |
-| III        | `RS`, `EMERALD`, `FRLG` | Ruby, Sapphire, Emerald, FireRed, LeafGreen | 128 KiB   |
-| IV         | `DP`, `PLATINUM`, `HGSS` | Diamond, Pearl, Platinum, HeartGold, SoulSilver | 512 KiB   |
-| V          | `BW`, `BW2`      | Black, White, Black 2, White 2         | 512 KiB   |
-
-All twelve variants are auto-detected by `pksave_detect()` from raw SRAM
-bytes; no user prompt or filename hint is required.
-
----
-
-## Quick start
-
-The host only needs Docker — no cross-compilers are installed locally.
-
-```sh
-make test     # run libpksave Unity tests for all five generations
-make gbc      # build pksave-gbc.gbc  (placeholder — frontend not yet implemented)
-make gba      # build pksave-gba.gba  (placeholder — frontend not yet implemented)
-make nds      # build pksave-nds.nds  (placeholder — frontend not yet implemented)
-make all      # test + gbc + gba + nds
-make clean    # remove test binaries and bin/ artifacts
-make test-tools # run pure-Python unit tests for tools/
-```
-
-See [docs/build.md](docs/build.md) for details on the Docker containers,
-the `-DPKSAVE_GENx` compile flags, and CI.
-
----
-
-## Optional: extract real Pokémon sprites into the GBA editor
-
-By default `make gba` ships a generic 64×64 silhouette on the Pokémon
-editor's right panel — the repository never contains Game Freak art. If
-you own a Generation III ROM, you can extract its sprites into the
-editor build by pointing `SPRITES_ROM` at it:
-
-```sh
-make gba SPRITES_ROM=/path/to/your/ruby.gba
-```
-
-This runs `tools/extract_sprites.py` against your ROM (dumps one 64×64
-indexed BMP per species into `frontend-gba/graphics/sprites/`), then
-`tools/gen_sprite_lookup.py` (emits `frontend-gba/src/species_sprite_lookup.cpp`
-mapping each present species to its `bn::sprite_item*`), then invokes
-the butano build so the extracted bitmaps are compiled in and the
-pokemon-editor right panel shows the real per-species sprite.  Species
-without an extracted BMP keep showing the silhouette.  Both the
-extracted BMPs and the generated `.cpp` are `.gitignore`-d; the
-resulting `pksave-gba.gba` is for your own use only.
-
-Notes:
-
-- The extractor is a no-op when `frontend-gba/graphics/sprites/` is
-  already populated — re-running `make gba SPRITES_ROM=...` doesn't
-  re-extract.  Delete the directory to force re-extraction.
-- The lookup generator runs every `make gba` regardless of whether you
-  passed `SPRITES_ROM` — its output is deterministic, so unchanged
-  inputs mean an unchanged `.cpp` and no extra rebuild churn.
-- All regions (US/JP/EU) and revisions of Ruby / Sapphire / Emerald /
-  FireRed / LeafGreen are supported — the extractor locates
-  `gMonFrontPicTable` and `gMonPaletteTable` by structural signature
-  rather than by hardcoded ROM offsets.  Any GBA ROM whose front-pic
-  table looks like pret's `CompressedSpriteSheet` array (ptr +
-  size=0x800 + tag=index) is fair game.
-- Table-shape signature is derived from the
-  [pret](https://github.com/pret) decompilation projects (factual
-  data, no code copied).
-
----
-
-## What this repo is, in one paragraph
-
-`libpksave` is the shared brain. The three frontends — when written — are
-just UI shells that call `pksave_detect()` on boot, then route user input
-through `pksave_get_*` / `pksave_set_*` accessors and call
-`pksave_flush()` to recompute checksums before returning to the main menu.
-No frontend ever touches save offsets, byte layouts, or character
-encodings directly; the library owns all save-format knowledge.
+- [`libpksave/src/`](libpksave/src/) — detection, dispatch, per-generation
+  codecs, checksums, limits, and lookup tables
+- [`libpksave/tests/`](libpksave/tests/) — Unity tests and generated synthetic
+  save fixtures
+- [`frontend-gba/`](frontend-gba/) — Butano-based Generation III editor ROM
+- [`docker/`](docker/) — reproducible host-test and cross-compilation images
+- [`docs/`](docs/) — architecture, coverage, build, and frontend documentation
 
 ## License
 
-MIT. See SPDX headers at the top of every source file. Struct layouts
-and offsets are derived from the [pret](https://github.com/pret) decomp
-projects (factual data, no code copied).
+Source files carry MIT SPDX identifiers. No standalone `LICENSE` file is
+currently included.
