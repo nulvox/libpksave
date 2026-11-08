@@ -7,19 +7,43 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  zizmor:
+    name: Audit GitHub Actions workflows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          advanced-security: false
 
   # ── Dockerfile lint ────────────────────────────────────────────────────────
   lint-docker:
     name: Lint Dockerfiles
+    needs: zizmor
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: hadolint/hadolint-action@v3.1.0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4bfde3cf # v3.1.0
         with:
           recursive: true
           config: .hadolint.yaml
@@ -27,9 +51,14 @@ jobs:
   # ── C static analysis ──────────────────────────────────────────────────────
   lint-c:
     name: Lint C sources (cppcheck)
+    needs: zizmor
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - name: Install cppcheck
         run: sudo apt-get install -y --no-install-recommends cppcheck
       - name: cppcheck libpksave/src
@@ -48,10 +77,15 @@ jobs:
   # ── Python lint ────────────────────────────────────────────────────────────
   lint-python:
     name: Lint Python (ruff)
+    needs: zizmor
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.x'
       - name: Install ruff
@@ -62,13 +96,18 @@ jobs:
   # ── libpksave Unity tests ──────────────────────────────────────────────────
   test-libpksave:
     name: Test libpksave (all generations)
+    needs: zizmor
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - name: Build test image (cached)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: docker/test
           tags: pksave-test
@@ -76,4 +115,4 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Run Unity tests
-        run: docker run --rm -v "${{ github.workspace }}:/src" pksave-test
+        run: docker run --rm -v "$GITHUB_WORKSPACE:/src" pksave-test
