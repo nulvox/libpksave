@@ -25,11 +25,7 @@ import sys
 import tempfile
 import traceback
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-if _HERE not in sys.path:
-    sys.path.insert(0, _HERE)
-
-import gen_sprite_lookup as gsl  # noqa: E402
+import gen_sprite_lookup as gsl
 
 
 def _touch(path: str) -> None:
@@ -199,7 +195,7 @@ def main() -> int:
         try:
             t()
             print(f"  PASS  {t.__name__}")
-        except Exception:
+        except Exception:  # noqa: BLE001
             print(f"  FAIL  {t.__name__}")
             traceback.print_exc()
             failures.append(t.__name__)

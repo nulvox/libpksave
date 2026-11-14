@@ -17,11 +17,7 @@ import sys
 import tempfile
 import traceback
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-if _HERE not in sys.path:
-    sys.path.insert(0, _HERE)
-
-import extract_sprites as ex  # noqa: E402
+import extract_sprites as ex
 
 
 def _header_with_game_code(code: bytes) -> bytes:
@@ -195,7 +191,7 @@ def _parse_indexed_bmp(path):
     _file_size, _r1, _r2, pixel_off = struct.unpack("<IHHI", data[2:14])
     (dib_size,) = struct.unpack("<I", data[14:18])
     assert dib_size == 40, f"expected BITMAPINFOHEADER (40), got {dib_size}"
-    w, h, planes, bpp, compression, image_size, _xppm, _yppm, clr_used, _clr_imp = \
+    w, h, planes, bpp, compression, _image_size, _xppm, _yppm, _clr_used, _clr_imp = \
         struct.unpack("<iiHHIIiiII", data[18:54])
     assert planes == 1 and bpp == 4 and compression == 0, \
         f"expected planes=1 bpp=4 compression=0; got planes={planes} bpp={bpp} compression={compression}"
@@ -553,7 +549,7 @@ def main() -> int:
         try:
             t()
             print(f"  PASS  {t.__name__}")
-        except Exception:
+        except Exception:  # noqa: BLE001
             print(f"  FAIL  {t.__name__}")
             traceback.print_exc()
             failures.append(t.__name__)

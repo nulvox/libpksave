@@ -27,7 +27,6 @@ import os
 import struct
 import sys
 
-
 # Variant name mirrors libpksave's pksave_game_t naming (RS / EMERALD /
 # FRLG). Ruby and Sapphire share sprite tables; same for FireRed/LeafGreen.
 _GAME_CODE_TO_VARIANT = {
