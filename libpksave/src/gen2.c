@@ -49,6 +49,16 @@
 
 #ifdef PKSAVE_GEN2
 
+#include "names/gen2_base_stats.h"
+
+static uint8_t gen2_growth_rate_for_species(uint16_t species_id)
+{
+    if (species_id < sizeof(gen2_base_stats) / sizeof(gen2_base_stats[0])) {
+        return gen2_base_stats[species_id].growth_rate;
+    }
+    return 0;
+}
+
 /* ── shared offsets ──────────────────────────────────────────────────────── */
 #define G2_TID          0x2008U
 #define G2_PLAYER_NAME  0x200BU
@@ -265,10 +275,30 @@ static void gen2_encode_party_mon(const pksave_pokemon_t *in,
     /* Overlay exposed fields in-place so unsurfaced bytes (OT ID@0x06-0x07,
      * exp@0x08-0x0A, friendship@0x1B, pokerus@0x1C, caught_data@0x1D-0x1E,
      * status@0x20) survive round-trip edits.  Fresh slots inherit trainer TID. */
-    if (data[0x00] == 0 && data[0x06] == 0 && data[0x07] == 0) {
+    uint8_t  old_sp  = data[0x00];
+    uint8_t  old_lvl = data[0x1F];
+    uint32_t old_xp  = ((uint32_t)data[0x08] << 16)
+                     | ((uint32_t)data[0x09] << 8)
+                     | (uint32_t)data[0x0A];
+    if (old_lvl == 0 && old_xp > 0) {
+        old_lvl = pksave_level_from_xp(gen2_growth_rate_for_species(old_sp), old_xp);
+    }
+
+    if (old_sp == 0 && data[0x06] == 0 && data[0x07] == 0) {
         data[0x06] = (uint8_t)(trainer_tid >> 8);
         data[0x07] = (uint8_t)(trainer_tid & 0xFF);
     }
+
+    /* Recompute 3-byte experience when species or level changes (or on a
+     * fresh slot), preserving within-level XP progress on no-op edits. */
+    if ((uint8_t)in->species != old_sp || in->level != old_lvl || old_xp == 0) {
+        uint32_t new_xp = pksave_xp_for_level(
+            gen2_growth_rate_for_species(in->species), in->level);
+        data[0x08] = (uint8_t)(new_xp >> 16);
+        data[0x09] = (uint8_t)(new_xp >> 8);
+        data[0x0A] = (uint8_t)(new_xp & 0xFF);
+    }
+
     data[0x00] = (uint8_t)in->species;
     data[0x01] = (uint8_t)in->held_item;
     data[0x1F] = in->level;
@@ -409,11 +439,18 @@ static void gen2_decode_box_mon(const uint8_t *data,
                                  pksave_pokemon_t *out)
 {
     /* Box mon is the first 32 bytes of the party-mon struct (0x00..0x1F),
-     * which includes level at 0x1F; only status (0x20), current HP (0x22),
-     * and calculated party stats (0x24..0x2F) are absent. */
+     * which includes level at 0x1F (falling back to XP@0x08-0x0A if 0);
+     * only status (0x20), current HP (0x22), and party stats (0x24..0x2F)
+     * are absent. */
     uint8_t party[G2_PARTY_MON_SIZE];
     memset(party, 0, G2_PARTY_MON_SIZE);
     memcpy(party, data, G2_BOX_MON_SIZE);
+    if (party[0x1F] == 0) {
+        uint32_t xp = ((uint32_t)data[0x08] << 16)
+                    | ((uint32_t)data[0x09] << 8)
+                    | (uint32_t)data[0x0A];
+        party[0x1F] = pksave_level_from_xp(gen2_growth_rate_for_species(data[0x00]), xp);
+    }
     gen2_decode_party_mon(party, ot_name, nick, out);
 }
 

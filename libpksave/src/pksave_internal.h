@@ -39,6 +39,49 @@ static inline uint8_t pksave_pokerus_encode(uint8_t strain, uint8_t days)
     return (uint8_t)(((strain & 0x0F) << 4) | (days & 0x0F));
 }
 
+/* Experience curve helpers shared by Gen I–III.
+ * Growth rate enum:
+ *   0 = MEDIUM_FAST   1 = ERRATIC     2 = FLUCTUATING
+ *   3 = MEDIUM_SLOW   4 = FAST        5 = SLOW
+ * (Gen I/II use only 0, 3, 4, 5; Gen III+ add 1 and 2.) */
+static inline uint32_t pksave_xp_for_level(uint8_t rate, uint8_t lvl)
+{
+    if (lvl <= 1) return 0;
+    uint32_t n  = (uint32_t)lvl;
+    uint32_t n2 = n * n;
+    uint32_t n3 = n2 * n;
+    switch (rate) {
+    case 0: /* MEDIUM_FAST */
+        return n3;
+    case 1: /* ERRATIC */
+        if (n <= 50) return ((100u - n) * n3) /  50u;
+        if (n <= 68) return ((150u - n) * n3) / 100u;
+        if (n <= 98) return (((1911u - 10u * n) / 3u) * n3) / 500u;
+        return ((160u - n) * n3) / 100u;
+    case 2: /* FLUCTUATING */
+        if (n <= 15) return ((((n + 1u) / 3u) + 24u) * n3) /  50u;
+        if (n <= 36) return ((n + 14u)                * n3) /  50u;
+        return (((n / 2u) + 32u)                      * n3) /  50u;
+    case 3: /* MEDIUM_SLOW */
+        return (6u * n3) / 5u + 100u * n - 15u * n2 - 140u;
+    case 4: /* FAST */
+        return (4u * n3) / 5u;
+    case 5: /* SLOW */
+        return (5u * n3) / 4u;
+    default:
+        return n3;
+    }
+}
+
+static inline uint8_t pksave_level_from_xp(uint8_t rate, uint32_t xp)
+{
+    uint8_t lvl = 100;
+    while (lvl > 1 && pksave_xp_for_level(rate, lvl) > xp) {
+        --lvl;
+    }
+    return lvl;
+}
+
 /* Per-generation parse/serialize/checksum helpers declared here,
  * defined in each genN.c; guarded by PKSAVE_GENx at the call site. */
 
