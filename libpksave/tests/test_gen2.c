@@ -473,7 +473,18 @@ void test_gs_set_party_slot_preserves_pokerus_and_metadata(void)
     pksave_pokemon_t party[6];
     uint8_t count = 0;
     TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party(s, party, &count));
-    party[0].level = 45;
+
+    /* 1) No-op level/species edit preserves existing sub-level XP (35) */
+    party[0].move_pp[0] = 20;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_party_slot(s, 0, &party[0]));
+    const uint8_t *mon0 = gs_buf + 0x2892;
+    TEST_ASSERT_EQUAL_UINT8(0x12, mon0[0x06]);
+    TEST_ASSERT_EQUAL_UINT8(0x34, mon0[0x07]);
+    TEST_ASSERT_EQUAL_UINT8(35,   mon0[0x0A]);
+    TEST_ASSERT_EQUAL_UINT8(70,   mon0[0x1B]);
+
+    /* 2) Changing level to 50 on Bayleef (153, MEDIUM_SLOW) updates XP to 117360 (0x01CA70) */
+    party[0].level = 50;
     TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_party_slot(s, 0, &party[0]));
     TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
     pksave_close(s);
@@ -486,12 +497,9 @@ void test_gs_set_party_slot_preserves_pokerus_and_metadata(void)
     TEST_ASSERT_EQUAL(PKSAVE_PKRS_ACTIVE, pkrs.status);
     pksave_close(s);
 
-    /* Verify OT ID@0x06-0x07, exp@0x08-0x0A, friendship@0x1B at 0x2892 */
-    const uint8_t *mon0 = gs_buf + 0x2892;
-    TEST_ASSERT_EQUAL_UINT8(0x12, mon0[0x06]);
-    TEST_ASSERT_EQUAL_UINT8(0x34, mon0[0x07]);
-    TEST_ASSERT_EQUAL_UINT8(35,   mon0[0x0A]);
-    TEST_ASSERT_EQUAL_UINT8(70,   mon0[0x1B]);
+    TEST_ASSERT_EQUAL_UINT8(0x01, mon0[0x08]);
+    TEST_ASSERT_EQUAL_UINT8(0xCA, mon0[0x09]);
+    TEST_ASSERT_EQUAL_UINT8(0x70, mon0[0x0A]);
 }
 
 void test_gs_set_box_slot_preserves_pokerus_and_metadata(void)
@@ -505,6 +513,17 @@ void test_gs_set_box_slot_preserves_pokerus_and_metadata(void)
     pksave_pokemon_t box[30];
     uint8_t count = 0;
     TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+
+    /* 1) No-op level/species edit preserves existing sub-level XP (35) */
+    box[0].move_pp[0] = 20;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_box_slot(s, 1, 0, &box[0]));
+    const uint8_t *box1_mon0 = gs_buf + 0x4000 + 1102 + 22;
+    TEST_ASSERT_EQUAL_UINT8(0x12, box1_mon0[0x06]);
+    TEST_ASSERT_EQUAL_UINT8(0x34, box1_mon0[0x07]);
+    TEST_ASSERT_EQUAL_UINT8(35,   box1_mon0[0x0A]);
+    TEST_ASSERT_EQUAL_UINT8(70,   box1_mon0[0x1B]);
+
+    /* 2) Changing level to 30 on Bayleef (153, MEDIUM_SLOW) updates XP to 21760 (0x005500) */
     box[0].level = 30;
     TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_box_slot(s, 1, 0, &box[0]));
     TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
@@ -518,11 +537,9 @@ void test_gs_set_box_slot_preserves_pokerus_and_metadata(void)
     TEST_ASSERT_EQUAL(PKSAVE_PKRS_ACTIVE, pkrs.status);
     pksave_close(s);
 
-    const uint8_t *box1_mon0 = gs_buf + 0x4000 + 1102 + 22;
-    TEST_ASSERT_EQUAL_UINT8(0x12, box1_mon0[0x06]);
-    TEST_ASSERT_EQUAL_UINT8(0x34, box1_mon0[0x07]);
-    TEST_ASSERT_EQUAL_UINT8(35,   box1_mon0[0x0A]);
-    TEST_ASSERT_EQUAL_UINT8(70,   box1_mon0[0x1B]);
+    TEST_ASSERT_EQUAL_UINT8(0x00, box1_mon0[0x08]);
+    TEST_ASSERT_EQUAL_UINT8(0x55, box1_mon0[0x09]);
+    TEST_ASSERT_EQUAL_UINT8(0x00, box1_mon0[0x0A]);
 }
 
 void test_gs_set_box_slot_out_of_range(void)

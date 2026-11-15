@@ -285,20 +285,27 @@ void test_rb_set_party_slot_preserves_unsurfaced_fields(void)
     pksave_pokemon_t party[6];
     uint8_t count = 0;
     TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party(s, party, &count));
-    party[0].level = 50;
-    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_party_slot(s, 0, &party[0]));
-    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
-    pksave_close(s);
 
-    /* Verify types@0x05-0x06, catch_rate@0x07, OT ID@0x0C-0x0D, exp@0x0E-0x10
-     * at party slot 0 (0x2F34) were not wiped by set_party_slot. */
+    /* 1) No-op level/species edit preserves existing sub-level XP (35) */
+    party[0].move_pp[0] = 20;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_party_slot(s, 0, &party[0]));
     const uint8_t *mon0 = rb_buf + 0x2F34;
     TEST_ASSERT_EQUAL_UINT8(0x16, mon0[0x05]);  /* Grass */
     TEST_ASSERT_EQUAL_UINT8(0x03, mon0[0x06]);  /* Poison */
     TEST_ASSERT_EQUAL_UINT8(45,   mon0[0x07]);  /* catch_rate */
     TEST_ASSERT_EQUAL_UINT8(0x12, mon0[0x0C]);  /* OT ID hi */
     TEST_ASSERT_EQUAL_UINT8(0x34, mon0[0x0D]);  /* OT ID lo */
-    TEST_ASSERT_EQUAL_UINT8(35,   mon0[0x10]);  /* exp lo */
+    TEST_ASSERT_EQUAL_UINT8(35,   mon0[0x10]);  /* exp lo preserved */
+
+    /* 2) Changing level to 50 on Bulbasaur (MEDIUM_SLOW) updates XP to 117360 (0x01CA70) */
+    party[0].level = 50;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_party_slot(s, 0, &party[0]));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    TEST_ASSERT_EQUAL_UINT8(0x01, mon0[0x0E]);
+    TEST_ASSERT_EQUAL_UINT8(0xCA, mon0[0x0F]);
+    TEST_ASSERT_EQUAL_UINT8(0x70, mon0[0x10]);
 }
 
 void test_rb_set_box_slot_preserves_unsurfaced_fields_and_multi_slot_nick(void)
@@ -312,10 +319,11 @@ void test_rb_set_box_slot_preserves_unsurfaced_fields_and_multi_slot_nick(void)
     TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
     TEST_ASSERT_EQUAL_UINT8(1, count);
 
-    /* Edit existing slot 0 and also write a second mon into slot 1 */
-    box[0].level = 30;
+    /* Edit existing slot 0 without changing level/species → XP (35) preserved */
+    box[0].move_pp[0] = 20;
     TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_box_slot(s, 1, 0, &box[0]));
 
+    /* Write a second mon (Pikachu 0x54, MEDIUM_FAST, Lv 15 → XP 3375 = 0x000D2F) into slot 1 */
     pksave_pokemon_t slot1 = box[0];
     slot1.species = 0x54;   /* Pikachu */
     slot1.level   = 15;
@@ -333,6 +341,15 @@ void test_rb_set_box_slot_preserves_unsurfaced_fields_and_multi_slot_nick(void)
     TEST_ASSERT_EQUAL_UINT8(0x12, box1_mon0[0x0C]);
     TEST_ASSERT_EQUAL_UINT8(0x34, box1_mon0[0x0D]);
     TEST_ASSERT_EQUAL_UINT8(35,   box1_mon0[0x10]);
+
+    /* Slot 1 (Pikachu): Electric/Electric (0x17), catch_rate 190, XP 3375 (0x000D2F) */
+    const uint8_t *box1_mon1 = box1_mon0 + 33;
+    TEST_ASSERT_EQUAL_UINT8(0x17, box1_mon1[0x05]);
+    TEST_ASSERT_EQUAL_UINT8(0x17, box1_mon1[0x06]);
+    TEST_ASSERT_EQUAL_UINT8(190,  box1_mon1[0x07]);
+    TEST_ASSERT_EQUAL_UINT8(0x00, box1_mon1[0x0E]);
+    TEST_ASSERT_EQUAL_UINT8(0x0D, box1_mon1[0x0F]);
+    TEST_ASSERT_EQUAL_UINT8(0x2F, box1_mon1[0x10]);
 
     /* Re-open and verify both slot 0 and slot 1 nicknames round-tripped */
     s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
