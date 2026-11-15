@@ -307,10 +307,11 @@ void test_gs_get_stored_box_with_mon(void)
     TEST_ASSERT_NOT_NULL(s);
     pksave_pokemon_t box[30];
     uint8_t count = 0;
-    /* Fixture populates box 1 with one Bulbasaur */
+    /* Fixture populates box 1 with one Bulbasaur lvl 8 */
     TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
     TEST_ASSERT_EQUAL_UINT8(1, count);
     TEST_ASSERT_EQUAL_UINT16(0x99, box[0].species);
+    TEST_ASSERT_EQUAL_UINT8(8, box[0].level);
     TEST_ASSERT_EQUAL_UINT8(33, box[0].move_ids[0]);
     pksave_close(s);
 }
@@ -325,6 +326,7 @@ void test_crystal_get_stored_box_with_mon(void)
     TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 7, box, &count));
     TEST_ASSERT_EQUAL_UINT8(1, count);
     TEST_ASSERT_EQUAL_UINT16(0x9A, box[0].species);
+    TEST_ASSERT_EQUAL_UINT8(16, box[0].level);
     pksave_close(s);
 }
 
@@ -401,6 +403,7 @@ void test_gs_set_box_slot_round_trip(void)
     TEST_ASSERT_EQUAL_UINT8(1, count);
 
     box[0].species      = 158;   /* Totodile (Gen II ID) */
+    box[0].level        = 24;
     box[0].held_item    = 200;
     box[0].move_ids[0]  = 44;    /* Bite */
     box[0].move_pp[0]   = 25;
@@ -417,6 +420,7 @@ void test_gs_set_box_slot_round_trip(void)
     TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
     TEST_ASSERT_EQUAL_UINT8(1, count);
     TEST_ASSERT_EQUAL_UINT16(158, box[0].species);
+    TEST_ASSERT_EQUAL_UINT8(24, box[0].level);
     TEST_ASSERT_EQUAL_UINT16(200, box[0].held_item);
     TEST_ASSERT_EQUAL_UINT8(44, box[0].move_ids[0]);
     TEST_ASSERT_EQUAL_UINT8(25, box[0].move_pp[0]);
@@ -456,6 +460,69 @@ void test_crystal_set_box_slot_round_trip(void)
     TEST_ASSERT_EQUAL(PKSAVE_OK,
         pksave_validate_checksum(crystal_buf, SRAM_SIZE, PKSAVE_GAME_CRYSTAL));
     pksave_close(s);
+}
+
+void test_gs_set_party_slot_preserves_pokerus_and_metadata(void)
+{
+    if (!load_fixture("gs.sav", gs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS);
+    TEST_ASSERT_NOT_NULL(s);
+
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_party_pokerus(s, 0, 3, 2));
+
+    pksave_pokemon_t party[6];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party(s, party, &count));
+    party[0].level = 45;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_party_slot(s, 0, &party[0]));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS);
+    pksave_pokerus_t pkrs;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party_pokerus(s, 0, &pkrs));
+    TEST_ASSERT_EQUAL_UINT8(3, pkrs.strain);
+    TEST_ASSERT_EQUAL_UINT8(2, pkrs.days);
+    TEST_ASSERT_EQUAL(PKSAVE_PKRS_ACTIVE, pkrs.status);
+    pksave_close(s);
+
+    /* Verify OT ID@0x06-0x07, exp@0x08-0x0A, friendship@0x1B at 0x2892 */
+    const uint8_t *mon0 = gs_buf + 0x2892;
+    TEST_ASSERT_EQUAL_UINT8(0x12, mon0[0x06]);
+    TEST_ASSERT_EQUAL_UINT8(0x34, mon0[0x07]);
+    TEST_ASSERT_EQUAL_UINT8(35,   mon0[0x0A]);
+    TEST_ASSERT_EQUAL_UINT8(70,   mon0[0x1B]);
+}
+
+void test_gs_set_box_slot_preserves_pokerus_and_metadata(void)
+{
+    if (!load_fixture("gs.sav", gs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS);
+    TEST_ASSERT_NOT_NULL(s);
+
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_box_pokerus(s, 1, 0, 2, 1));
+
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    box[0].level = 30;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_box_slot(s, 1, 0, &box[0]));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS);
+    pksave_pokerus_t pkrs;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box_pokerus(s, 1, 0, &pkrs));
+    TEST_ASSERT_EQUAL_UINT8(2, pkrs.strain);
+    TEST_ASSERT_EQUAL_UINT8(1, pkrs.days);
+    TEST_ASSERT_EQUAL(PKSAVE_PKRS_ACTIVE, pkrs.status);
+    pksave_close(s);
+
+    const uint8_t *box1_mon0 = gs_buf + 0x4000 + 1102 + 22;
+    TEST_ASSERT_EQUAL_UINT8(0x12, box1_mon0[0x06]);
+    TEST_ASSERT_EQUAL_UINT8(0x34, box1_mon0[0x07]);
+    TEST_ASSERT_EQUAL_UINT8(35,   box1_mon0[0x0A]);
+    TEST_ASSERT_EQUAL_UINT8(70,   box1_mon0[0x1B]);
 }
 
 void test_gs_set_box_slot_out_of_range(void)
@@ -606,6 +673,83 @@ void test_crystal_set_item_round_trip(void)
     pksave_close(s);
 }
 
+void test_gs_get_tmhm_pocket(void)
+{
+    if (!load_fixture("gs.sav", gs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_item_t items[57];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_get_pocket(s, PKSAVE_POCKET_TM_HM, items, &count));
+    TEST_ASSERT_EQUAL_UINT8(2, count);
+    TEST_ASSERT_EQUAL_UINT16(0xBF, items[0].item_id);   /* TM01 */
+    TEST_ASSERT_EQUAL_UINT16(2,    items[0].quantity);
+    TEST_ASSERT_EQUAL_UINT16(0xF3, items[1].item_id);   /* HM01 */
+    TEST_ASSERT_EQUAL_UINT16(1,    items[1].quantity);
+    pksave_close(s);
+}
+
+void test_crystal_get_tmhm_pocket(void)
+{
+    static uint8_t cry_tmhm[SRAM_SIZE];
+    if (!load_fixture("crystal.sav", cry_tmhm, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(cry_tmhm, SRAM_SIZE, PKSAVE_GAME_CRYSTAL);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_item_t items[57];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_get_pocket(s, PKSAVE_POCKET_TM_HM, items, &count));
+    TEST_ASSERT_EQUAL_UINT8(1, count);
+    TEST_ASSERT_EQUAL_UINT16(0xC4, items[0].item_id);   /* TM05 (past 0xC3 gap) */
+    TEST_ASSERT_EQUAL_UINT16(3,    items[0].quantity);
+    pksave_close(s);
+}
+
+void test_gs_set_tmhm_round_trip(void)
+{
+    if (!load_fixture("gs.sav", gs_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS);
+    TEST_ASSERT_NOT_NULL(s);
+
+    /* Replace slot 0 (TM01 ×2) with TM29 (0xDD, past both 0xC3 and 0xDC gaps) ×7 */
+    pksave_item_t tm29 = { .item_id = 0xDD, .quantity = 7 };
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_set_item(s, PKSAVE_POCKET_TM_HM, 0, &tm29));
+
+    /* Reject non-TM/HM IDs and filler gap IDs (0xC3, 0xDC) */
+    pksave_item_t bad_potion = { .item_id = 0x12, .quantity = 1 };
+    pksave_item_t bad_gap1   = { .item_id = 0xC3, .quantity = 1 };
+    pksave_item_t bad_gap2   = { .item_id = 0xDC, .quantity = 1 };
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE,
+        pksave_set_item(s, PKSAVE_POCKET_TM_HM, 0, &bad_potion));
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE,
+        pksave_set_item(s, PKSAVE_POCKET_TM_HM, 0, &bad_gap1));
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE,
+        pksave_set_item(s, PKSAVE_POCKET_TM_HM, 0, &bad_gap2));
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_RANGE,
+        pksave_set_item(s, PKSAVE_POCKET_TM_HM, 57, &tm29));
+
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS);
+    pksave_item_t items[57];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_get_pocket(s, PKSAVE_POCKET_TM_HM, items, &count));
+    TEST_ASSERT_EQUAL_UINT8(2, count);
+    TEST_ASSERT_EQUAL_UINT16(0xDD, items[0].item_id);   /* TM29 */
+    TEST_ASSERT_EQUAL_UINT16(7,    items[0].quantity);
+    TEST_ASSERT_EQUAL_UINT16(0xF3, items[1].item_id);   /* HM01 */
+    TEST_ASSERT_EQUAL_UINT16(1,    items[1].quantity);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(gs_buf, SRAM_SIZE, PKSAVE_GAME_GS));
+    pksave_close(s);
+}
+
 /* ── Gen II derived fields: is_shiny + stat exp passthrough ── */
 
 void test_gen2_is_shiny_derived(void)
@@ -738,10 +882,15 @@ int main(void)
     RUN_TEST(test_crystal_get_stored_box_with_mon);
     RUN_TEST(test_gs_set_box_slot_round_trip);
     RUN_TEST(test_crystal_set_box_slot_round_trip);
+    RUN_TEST(test_gs_set_party_slot_preserves_pokerus_and_metadata);
+    RUN_TEST(test_gs_set_box_slot_preserves_pokerus_and_metadata);
     RUN_TEST(test_gs_set_box_slot_out_of_range);
     RUN_TEST(test_gs_get_items_pocket);
     RUN_TEST(test_gs_get_balls_pocket);
     RUN_TEST(test_gs_get_key_pocket);
+    RUN_TEST(test_gs_get_tmhm_pocket);
+    RUN_TEST(test_crystal_get_tmhm_pocket);
+    RUN_TEST(test_gs_set_tmhm_round_trip);
     RUN_TEST(test_gs_set_item_round_trip);
     RUN_TEST(test_gs_set_item_out_of_range);
     RUN_TEST(test_crystal_get_items_pocket);

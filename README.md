@@ -73,7 +73,7 @@ Back up real save files before editing them.
 | Generation | Games / variants | Save size | Core data support | Checksum support | Current limitations |
 |---|---|---:|---|---|---|
 | I | Red/Blue (`RB`), Yellow (`YELLOW`) | 32 KiB | Trainer, party, boxes, single bag pocket | One's-complement byte | Held items, nature, abilities, and separate pockets do not exist in-game |
-| II | Gold/Silver (`GS`), Crystal (`CRYSTAL`) | 32 KiB | Trainer, party, boxes, Items/Balls/Key pockets, Pokérus | LE16 sums, including Crystal's secondary copy | TM/HM and Berry pockets are not yet wired |
+| II | Gold/Silver (`GS`), Crystal (`CRYSTAL`) | 32 KiB | Trainer, party, boxes, Items/Balls/Key/TM-HM pockets, Pokérus | LE16 sums, including Crystal's secondary copy | Berries live in the Items pocket in-game (no separate Berries pocket) |
 | III | Ruby/Sapphire (`RS`), Emerald, FireRed/LeafGreen (`FRLG`) | 128 KiB | Full public read/write API and lookup tables | Per-section checksums across rotating save slots | GBA editor is implemented; emulator-level coverage continues to expand |
 | IV | Diamond/Pearl (`DP`), Platinum, HeartGold/SoulSilver (`HGSS`) | 512 KiB | Trainer, party, boxes, bag, Pokérus | CRC-16-CCITT block checksums | Ability-name lookup is currently a stub |
 | V | Black/White (`BW`), Black 2/White 2 (`BW2`) | 512 KiB | Trainer, party, boxes, bag, Pokérus | CRC-16-CCITT block checksums | Ability-name lookup is currently a stub |

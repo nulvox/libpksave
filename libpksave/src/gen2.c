@@ -259,9 +259,16 @@ static void gen2_decode_party_mon(const uint8_t *data,
 static void gen2_encode_party_mon(const pksave_pokemon_t *in,
                                    uint8_t *data,
                                    uint8_t *ot_name,
-                                   uint8_t *nick)
+                                   uint8_t *nick,
+                                   uint16_t trainer_tid)
 {
-    memset(data, 0, G2_PARTY_MON_SIZE);
+    /* Overlay exposed fields in-place so unsurfaced bytes (OT ID@0x06-0x07,
+     * exp@0x08-0x0A, friendship@0x1B, pokerus@0x1C, caught_data@0x1D-0x1E,
+     * status@0x20) survive round-trip edits.  Fresh slots inherit trainer TID. */
+    if (data[0x00] == 0 && data[0x06] == 0 && data[0x07] == 0) {
+        data[0x06] = (uint8_t)(trainer_tid >> 8);
+        data[0x07] = (uint8_t)(trainer_tid & 0xFF);
+    }
     data[0x00] = (uint8_t)in->species;
     data[0x01] = (uint8_t)in->held_item;
     data[0x1F] = in->level;
@@ -370,13 +377,14 @@ int gen2_get_party(pksave_save_t *s, pksave_pokemon_t out[6], uint8_t *count)
 int gen2_set_party_slot(pksave_save_t *s, uint8_t slot, const pksave_pokemon_t *mon)
 {
     if (slot >= 6) return PKSAVE_ERR_RANGE;
+    uint16_t trainer_tid = (uint16_t)((s->sram[G2_TID] << 8) | s->sram[G2_TID + 1]);
     uint32_t data_off = party_data_off(s->game);
     uint32_t ot_off   = party_ot_off(s->game);
     uint32_t nick_off = party_nick_off(s->game);
     uint8_t *data = s->sram + data_off + (size_t)slot * G2_PARTY_MON_SIZE;
     uint8_t *ot   = s->sram + ot_off   + (size_t)slot * G2_NAME_LEN;
     uint8_t *nick = s->sram + nick_off  + (size_t)slot * G2_NAME_LEN;
-    gen2_encode_party_mon(mon, data, ot, nick);
+    gen2_encode_party_mon(mon, data, ot, nick, trainer_tid);
     s->sram[party_spec_off(s->game) + slot] = (uint8_t)mon->species;
     uint8_t cnt = s->sram[party_cnt_off(s->game)];
     if (slot >= cnt) {
@@ -400,16 +408,13 @@ static void gen2_decode_box_mon(const uint8_t *data,
                                  const uint8_t *nick,
                                  pksave_pokemon_t *out)
 {
-    /* Box mon is the first 32 bytes of the party-mon struct: same fields
-     * through caught_data (0x1F). Level (0x20) and stats (0x24+) are absent
-     * — in Gen II, level is derived from experience by the game at withdraw.
-     * libpksave leaves level=0 for stored mons; frontends should not display
-     * a level for box mons until the user moves them to the party. */
+    /* Box mon is the first 32 bytes of the party-mon struct (0x00..0x1F),
+     * which includes level at 0x1F; only status (0x20), current HP (0x22),
+     * and calculated party stats (0x24..0x2F) are absent. */
     uint8_t party[G2_PARTY_MON_SIZE];
     memset(party, 0, G2_PARTY_MON_SIZE);
     memcpy(party, data, G2_BOX_MON_SIZE);
     gen2_decode_party_mon(party, ot_name, nick, out);
-    out->level = 0;
 }
 
 int gen2_get_box(pksave_save_t *s, uint8_t box, pksave_pokemon_t out[30], uint8_t *cnt)
@@ -447,10 +452,13 @@ int gen2_set_box_slot(pksave_save_t *s, uint8_t box, uint8_t slot,
                                   + (size_t)G2_BOX_PER_BOX * G2_NAME_LEN
                                   + (size_t)slot * G2_NAME_LEN;
 
-    /* Encode as party mon, then copy first 32 bytes (box mon omits level + stats). */
+    /* Seed tmp from existing 32-byte box mon so unsurfaced fields survive. */
+    uint16_t trainer_tid = (uint16_t)((s->sram[G2_TID] << 8) | s->sram[G2_TID + 1]);
     uint8_t tmp[G2_PARTY_MON_SIZE];
     uint8_t ot_tmp[G2_NAME_LEN], nick_tmp[G2_NAME_LEN];
-    gen2_encode_party_mon(mon, tmp, ot_tmp, nick_tmp);
+    memset(tmp, 0, sizeof(tmp));
+    memcpy(tmp, data, G2_BOX_MON_SIZE);
+    gen2_encode_party_mon(mon, tmp, ot_tmp, nick_tmp, trainer_tid);
     memcpy(data, tmp, G2_BOX_MON_SIZE);
     memcpy(ot, ot_tmp, G2_NAME_LEN);
     memcpy(nick, nick_tmp, G2_NAME_LEN);
@@ -512,20 +520,46 @@ int gen2_set_box_pokerus(pksave_save_t *s, uint8_t box, uint8_t slot,
 }
 
 /* ── bag / item pockets ──────────────────────────────────────────────────── */
-/* Each pocket lays out as: 1 count byte, N×(id[, qty]) entries, 0xFF terminator.
- * Items, Balls: 2 bytes/entry (id, qty). Key items: 1 byte/entry (id only). */
+/* Items, Balls, Key: 1 count byte, N×(id[, qty]) entries, 0xFF terminator.
+ *   Items, Balls: 2 bytes/entry (id, qty). Key items: 1 byte/entry (id only).
+ * TM/HM (wTMsHMs): 57-byte quantity array (TM01-TM50 + HM01-HM07, no count
+ *   byte or 0xFF terminator). Item IDs start at 0xBF (TM01) through 0xF9
+ *   (HM07), skipping unused filler item IDs 0xC3 and 0xDC. */
 
+#define GS_TMHM_OFF     0x2410U
 #define GS_ITEMS_CNT    0x2449U
 #define GS_KEY_CNT      0x2474U
 #define GS_BALLS_CNT    0x248FU
 
+#define CRY_TMHM_OFF    0x23E6U
 #define CRY_ITEMS_CNT   0x241FU
 #define CRY_KEY_CNT     0x244AU
 #define CRY_BALLS_CNT   0x2465U
 
+#define G2_TMHM_MAX     57
 #define G2_ITEMS_MAX    20
 #define G2_KEY_MAX      25
 #define G2_BALLS_MAX    12
+
+static uint16_t gen2_tmhm_item_id(uint8_t idx)
+{
+    uint16_t id = (uint16_t)(0xBFU + idx);
+    if (id >= 0xC3U) id++;
+    if (id >= 0xDCU) id++;
+    return id;
+}
+
+static int gen2_tmhm_index(uint16_t item_id)
+{
+    if (item_id < 0xBFU || item_id > 0xF9U ||
+        item_id == 0xC3U || item_id == 0xDCU) {
+        return -1;
+    }
+    uint16_t idx = item_id - 0xBFU;
+    if (item_id > 0xC3U) idx--;
+    if (item_id > 0xDCU) idx--;
+    return (int)idx;
+}
 
 struct g2_pocket_layout {
     uint16_t count_off;
@@ -562,6 +596,21 @@ static int gen2_pocket_layout(pksave_save_t *s, pksave_pocket_t p,
 
 int gen2_get_pocket(pksave_save_t *s, pksave_pocket_t p, pksave_item_t *out, uint8_t *cnt)
 {
+    if (p == PKSAVE_POCKET_TM_HM) {
+        uint16_t off = is_crystal(s->game) ? CRY_TMHM_OFF : GS_TMHM_OFF;
+        const uint8_t *tmhm = s->sram + off;
+        uint8_t n = 0;
+        for (uint8_t i = 0; i < G2_TMHM_MAX; i++) {
+            if (tmhm[i] > 0) {
+                out[n].item_id  = gen2_tmhm_item_id(i);
+                out[n].quantity = tmhm[i];
+                n++;
+            }
+        }
+        *cnt = n;
+        return PKSAVE_OK;
+    }
+
     struct g2_pocket_layout layout;
     if (gen2_pocket_layout(s, p, &layout) != PKSAVE_OK) {
         *cnt = 0;
@@ -586,6 +635,31 @@ int gen2_get_pocket(pksave_save_t *s, pksave_pocket_t p, pksave_item_t *out, uin
 int gen2_set_item(pksave_save_t *s, pksave_pocket_t p, uint8_t slot,
                    const pksave_item_t *item)
 {
+    if (p == PKSAVE_POCKET_TM_HM) {
+        if (slot >= G2_TMHM_MAX) return PKSAVE_ERR_RANGE;
+        int new_idx = -1;
+        if (item->item_id != 0) {
+            new_idx = gen2_tmhm_index(item->item_id);
+            if (new_idx < 0) return PKSAVE_ERR_RANGE;
+        }
+        uint16_t off = is_crystal(s->game) ? CRY_TMHM_OFF : GS_TMHM_OFF;
+        uint8_t *tmhm = s->sram + off;
+        uint8_t seen = 0;
+        for (uint8_t i = 0; i < G2_TMHM_MAX; i++) {
+            if (tmhm[i] > 0) {
+                if (seen == slot) {
+                    tmhm[i] = 0;
+                    break;
+                }
+                seen++;
+            }
+        }
+        if (new_idx >= 0) {
+            tmhm[new_idx] = (uint8_t)item->quantity;
+        }
+        return PKSAVE_OK;
+    }
+
     struct g2_pocket_layout layout;
     if (gen2_pocket_layout(s, p, &layout) != PKSAVE_OK) return PKSAVE_ERR_GAME;
     if (slot >= layout.max_slots) return PKSAVE_ERR_RANGE;

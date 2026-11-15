@@ -50,13 +50,12 @@ returns `PKSAVE_ERR_GAME` for an unsupported pocket.
 | `POCKET_ITEMS`       | ✅     | ✅      | ✅       | ✅      | ✅     |
 | `POCKET_BALLS`       | ⛔ (mixed into Items) | ✅ | ✅ | ✅ | ✅ |
 | `POCKET_KEY`         | ⛔ (mixed into Items) | ✅ | ✅ | ✅ | ✅ |
-| `POCKET_TM_HM`       | ⛔ (mixed into Items) | ❌ not yet wired | ✅ | ✅ | ✅ |
-| `POCKET_BERRIES`     | ⛔                    | ❌ not yet wired | ✅ | ✅ | ✅ |
+| `POCKET_TM_HM`       | ⛔ (mixed into Items) | ✅ | ✅ | ✅ | ✅ |
+| `POCKET_BERRIES`     | ⛔                    | ⛔ (mixed into Items) | ✅ | ✅ | ✅ |
 
 Gen I genuinely has only one bag pocket; the in-game UI doesn't separate
-Balls / Key / TM-HM. The Gen II ❌ entries are present in the games but
-not yet wired through `gen2_pocket_layout()` — see
-[unsupported-features.md](unsupported-features.md).
+Balls / Key / TM-HM. Gen II separates Items, Balls, Key Items, and TM/HM,
+while Berries are regular items stored inside the Items pocket.
 
 ## Detection signals (for reference)
 

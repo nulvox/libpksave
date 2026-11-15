@@ -418,6 +418,9 @@ def gen1_make_party_mon(species, level, move1):
     mon = bytearray(44)
     mon[0x00] = species
     mon[0x03] = level    # box_level (catch_rate slot reused as level in party)
+    mon[0x05] = 0x16     # type1 = Grass (pret/pokered GRASS = 0x16)
+    mon[0x06] = 0x03     # type2 = Poison (pret/pokered POISON = 0x03)
+    mon[0x07] = 45       # catch_rate (Bulbasaur = 45)
     mon[0x08] = move1    # first move
     mon[0x0C:0x0E] = struct.pack('>H', TEST_TID)   # OT ID big-endian
     # exp: set to something appropriate for level 5 (~35 for most mons)
@@ -670,7 +673,7 @@ def gen2_write_pocket(buf, count_off, max_slots, has_qty, entries):
     buf[count_off + 1 + max_slots * entry_size] = 0xFF
 
 # GS pocket offsets (count byte; data follows at +1)
-GS_TMHM_OFF       = 0x2418   # 57 bytes packed (50 TMs + 7 HMs)
+GS_TMHM_OFF       = 0x2410   # 57 bytes packed (50 TMs + 7 HMs, 0x2410..0x2448)
 GS_ITEMS_CNT      = 0x2449   # 1 + 20×2 + 0xFF
 GS_KEY_CNT        = 0x2474   # 1 + 25 + 0xFF
 GS_BALLS_CNT      = 0x248F   # 1 + 12×2 + 0xFF
@@ -697,6 +700,8 @@ def make_gen2_gs():
                       [(0x04, 7)])              # Poke Ball ×7
     gen2_write_pocket(buf, GS_KEY_CNT, 25, False,
                       [(0x07,)])                # Bicycle
+    buf[GS_TMHM_OFF + 0]  = 2                   # TM01 (0xBF) ×2
+    buf[GS_TMHM_OFF + 50] = 1                   # HM01 (0xF3) ×1
 
     # Primary checksum: sum bytes 0x2009..0x2D68
     chk1 = gen2_checksum_range(buf, 0x2009, 0x2D68)
@@ -720,6 +725,7 @@ def make_gen2_crystal():
                       [])                       # empty
     gen2_write_pocket(buf, CRY_KEY_CNT, 25, False,
                       [])                       # empty
+    buf[CRY_TMHM_OFF + 4] = 3                   # TM05 (0xC4) ×3
 
     # Crystal primary checksum: sum bytes 0x2009..0x2B82 → store at 0x2D0D
     chk1 = gen2_checksum_range(buf, 0x2009, 0x2B82)

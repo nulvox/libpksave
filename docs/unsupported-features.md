@@ -57,20 +57,13 @@ editing.
 These are gaps in the current code rather than scope decisions. They
 should be filled before a frontend ships.
 
-### Gen II — TM/HM and Berries pockets not wired
+### Gen I & II — Bag pockets
 
-`gen2_pocket_layout()` (`libpksave/src/gen2.c`) only resolves
-`POCKET_ITEMS`, `POCKET_BALLS`, and `POCKET_KEY`. `POCKET_TM_HM` and
-`POCKET_BERRIES` fall through to `PKSAVE_ERR_GAME`, which the public
-`pksave_get_pocket` reports as `count = 0`. The games themselves have
-these pockets; the offsets and slot counts are documented in
-`pret/pokecrystal` and need to be plumbed in.
-
-### Gen I — Bag pockets
-
-Gen I games have a **single** bag pocket in-engine, so this is not a gap
-relative to the games. Mentioned here only so the asymmetry with Gen II+
-is not surprising.
+Gen I games have a **single** bag pocket in-engine (`POCKET_ITEMS`). Gen II
+separates `POCKET_ITEMS`, `POCKET_BALLS`, `POCKET_KEY`, and `POCKET_TM_HM`
+(all wired in `libpksave/src/gen2.c`), while Berries are regular items stored
+inside `POCKET_ITEMS` (a dedicated `POCKET_BERRIES` was introduced in Gen III).
+Mentioned here only so the asymmetry with Gen III+ is not surprising.
 
 ### Held item on Gen II reads
 
