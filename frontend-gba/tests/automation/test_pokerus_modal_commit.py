@@ -106,7 +106,7 @@ def main():
 
         save = pk.open(sram, detected, lib=lib)
         try:
-            party, count = pk.get_party(save)
+            party, _count = pk.get_party(save)
             pkrs = pk.get_party_pokerus(save, 0)
         finally:
             pk.close(save)

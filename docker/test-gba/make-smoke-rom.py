@@ -30,6 +30,7 @@
 
 import sys
 
+
 def build_rom() -> bytes:
     rom = bytearray(0xC0 + 4)
     # ARM: B 0xC0  →  0xEA00002E (24-bit signed offset = (target - PC - 8) >> 2)

@@ -137,8 +137,8 @@ def main():
         try:
             name              = pk.get_trainer_name(save)
             party, party_cnt  = pk.get_party(save)
-            box0, box0_cnt    = pk.get_box(save, 0)
-            box1, box1_cnt    = pk.get_box(save, EDITED_BOX)
+            box0, _box0_cnt   = pk.get_box(save, 0)
+            box1, _box1_cnt   = pk.get_box(save, EDITED_BOX)
         finally:
             pk.close(save)
 

@@ -22,9 +22,7 @@ header is `P6\\n<w> <h>\\n<maxval>\\n` followed by the binary body.
 
 import hashlib
 import re
-import struct
 from dataclasses import dataclass
-from typing import Iterable, Tuple
 
 GBA_WIDTH = 240
 GBA_HEIGHT = 160

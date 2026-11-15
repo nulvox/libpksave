@@ -91,7 +91,7 @@ jobs:
       - name: Install ruff
         run: pip install ruff
       - name: ruff check
-        run: ruff check libpksave/tests/fixtures/ tools/
+        run: ruff check .
       - name: Run Python tool tests
         run: make test-tools
       - name: Run GBA host widget tests

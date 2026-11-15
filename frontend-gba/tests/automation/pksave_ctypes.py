@@ -18,7 +18,6 @@ trainer name returned here is already a regular Python str.
 import ctypes
 import enum
 import os
-import sys
 from ctypes import (
     CDLL,
     POINTER,
@@ -32,7 +31,6 @@ from ctypes import (
     c_void_p,
 )
 from typing import Optional
-
 
 # ── enums (mirror of pksave.h) ────────────────────────────────────────────────
 
@@ -267,7 +265,7 @@ class Save:
             if not self._closed and self._handle:
                 self._lib.pksave_close(self._handle)
                 self._closed = True
-        except Exception:
+        except Exception:  # noqa: BLE001
             pass
 
 
@@ -286,7 +284,7 @@ def detect(buf: bytes, *, lib: Optional[CDLL] = None) -> Game:
 
 
 def open(buf: bytes, game: Optional[Game] = None,
-         *, lib: Optional[CDLL] = None) -> Save:  # noqa: A001
+         *, lib: Optional[CDLL] = None) -> Save:
     """Open a save buffer.  If `game` is omitted, auto-detect first.
 
     Returns a Save handle.  The internal SRAM buffer is kept alive by the

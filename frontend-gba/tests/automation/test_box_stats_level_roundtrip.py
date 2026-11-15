@@ -114,7 +114,7 @@ def main():
         try:
             name             = pk.get_trainer_name(save)
             box1, _          = pk.get_box(save, EDITED_BOX)
-            party, party_cnt = pk.get_party(save)
+            party, _party_cnt = pk.get_party(save)
         finally:
             pk.close(save)
 
