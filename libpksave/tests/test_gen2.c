@@ -53,7 +53,8 @@ void test_gs_trainer_round_trip(void)
     TEST_ASSERT_GREATER_THAN(0, (int)tr.money);
 
     uint32_t new_money = 12345;
-    tr.money = new_money;
+    tr.money  = new_money;
+    tr.badges = 0xA5FFU; /* all 8 Johto badges + Kanto badges 0xA5 */
     TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_trainer(s, &tr));
     TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
     pksave_close(s);
@@ -62,6 +63,7 @@ void test_gs_trainer_round_trip(void)
     TEST_ASSERT_NOT_NULL(s);
     TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_trainer(s, &tr));
     TEST_ASSERT_EQUAL_UINT32(new_money, tr.money);
+    TEST_ASSERT_EQUAL_UINT16(0xA5FFU, tr.badges);
     pksave_close(s);
 }
 
@@ -107,7 +109,8 @@ void test_crystal_trainer_round_trip(void)
     TEST_ASSERT_GREATER_THAN(0, (int)tr.money);
 
     uint32_t new_money = 12345;
-    tr.money = new_money;
+    tr.money  = new_money;
+    tr.badges = 0x5AC3U; /* Johto 0xC3 + Kanto 0x5A */
     TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_trainer(s, &tr));
     TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
     pksave_close(s);
@@ -116,6 +119,11 @@ void test_crystal_trainer_round_trip(void)
     TEST_ASSERT_NOT_NULL(s);
     TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_trainer(s, &tr));
     TEST_ASSERT_EQUAL_UINT32(new_money, tr.money);
+    TEST_ASSERT_EQUAL_UINT16(0x5AC3U, tr.badges);
+    /* Verify Crystal primary sGameData (0x2009..0x2B82) was mirrored into
+     * backup sBackupGameData (0x1209..0x1D82) on flush. */
+    TEST_ASSERT_EQUAL_MEMORY(crystal_buf + 0x2009, crystal_buf + 0x1209,
+                             0x2B82 - 0x2009 + 1);
     pksave_close(s);
 }
 

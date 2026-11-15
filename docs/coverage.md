@@ -17,23 +17,23 @@ Legend: ✅ supported · ⛔ absent in game · ❌ not implemented
 | Feature                                  | Gen I (RB/Y)         | Gen II (GS/C)        | Gen III (RS/E/FRLG)  | Gen IV (DP/Pt/HGSS) | Gen V (BW/BW2)      |
 |------------------------------------------|----------------------|----------------------|----------------------|---------------------|---------------------|
 | Save detection                           | ✅                   | ✅                   | ✅                   | ✅                  | ✅                  |
-| Checksum recompute on flush              | ✅ (Bank 1 byte)     | ✅ (LE16 ×1 / ×2)    | ✅ (per-section)     | ✅ (general block)  | ✅ (single block)   |
+| Checksum recompute on flush              | ✅ (Bank 1 + Banks 2–3)| ✅ (LE16 + Crystal mirror)| ✅ (per-section) | ✅ (general block)  | ✅ (single block)   |
 | Trainer name / TID / SID                 | ✅ (SID ⛔)          | ✅ (SID ⛔)          | ✅                   | ✅ (ASCII-in-u16)   | ✅                  |
 | Trainer money                            | ✅                   | ✅                   | ✅                   | ✅                  | ✅                  |
-| Badges (`uint8_t` bitfield)              | ✅ (8 Kanto)         | ✅ (8 Johto only)    | ✅ (8 Hoenn/Kanto)   | ✅ (8 Sinnoh/Johto) | ✅ (8 Unova)        |
+| Badges (`uint16_t` bitfield)             | ✅ (8 Kanto)         | ✅ (16 Johto+Kanto)  | ✅ (8 Hoenn/Kanto)   | ✅ (8 Sinnoh/Johto) | ✅ (8 Unova)        |
 | Party read / slot write                  | ✅                   | ✅                   | ✅                   | ✅                  | ✅                  |
 | Box count                                | 12 (20 slots/box)    | 14 (20 slots/box)    | 14 (30 slots/box)    | 18 (30 slots/box)   | 24 (30 slots/box)   |
-| Box read / slot write                    | ✅                   | ✅                   | ✅                   | ✅                  | ✅                  |
+| Box read / slot write                    | ✅ (cur + stored)    | ✅ (cur `sBox` + stored)| ✅ (multi-section)| ✅                  | ✅                  |
 | Box Pokémon level & XP sync              | ✅ (`box_level` + XP)| ✅ (`0x1F` + XP)     | ✅ (XP↔level sync)   | ❌ (left 0)         | ❌ (left 0)         |
 | Pokémon nickname                         | ✅                   | ✅                   | ✅                   | ❌                  | ❌                  |
 | Pokémon OT name                          | ✅                   | ✅                   | ✅                   | ❌                  | ❌                  |
-| Species / party level / moves+PP         | ✅                   | ✅                   | ✅ (moves ≤ 255)     | ✅ (moves ≤ 255)    | ✅ (moves ≤ 255)    |
+| Species / party level / moves+PP         | ✅                   | ✅                   | ✅                   | ✅                  | ✅                  |
 | EVs / stat experience                    | ✅ (stat exp 0-65535)| ✅ (stat exp 0-65535)| ✅ (EV 0-255)        | ✅ (EV 0-255)       | ✅ (EV 0-255)       |
 | IVs / DVs                                | ✅ (DV→IV ×2)        | ✅ (DV→IV ×2)        | ✅                   | ✅                  | ✅                  |
 | Held item                                | ⛔                   | ✅                   | ✅                   | ✅                  | ✅                  |
 | Nature                                   | ⛔                   | ⛔                   | ✅ (PID-synced)      | ❌                  | ❌                  |
 | Ability slot                             | ⛔                   | ⛔                   | ✅                   | ❌                  | ❌                  |
-| Shininess (`is_shiny`)                   | ✅ (read-only DV)    | ✅ (read-only DV)    | ✅ (PID-synced R/W)  | ❌                  | ❌                  |
+| Shininess (`is_shiny`)                   | ✅ (derived from DVs)| ✅ (derived from DVs)| ✅ (PID-synced)      | ❌                  | ❌                  |
 | Party stats (`stat[6]` read/write)       | ✅                   | ✅                   | ✅                   | ✅                  | ✅                  |
 | Stat recalculation (`pksave_recalc_stats`)| ✅ (DV + √StatExp)  | ✅ (DV + √StatExp)   | ✅ (IV + EV/4 ±10%)  | ❌                  | ❌                  |
 | Pokérus (party + box)                    | ⛔                   | ✅                   | ✅                   | ✅                  | ✅                  |

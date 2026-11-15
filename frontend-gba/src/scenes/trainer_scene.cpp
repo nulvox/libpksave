@@ -245,7 +245,7 @@ bn::optional<scene_kind> trainer_scene::update()
         if (bn::keypad::a_pressed())
         {
             const int b = sel - ROW_BADGE_0;
-            trainer_.badges ^= static_cast<uint8_t>(1u << b);
+            trainer_.badges ^= static_cast<uint16_t>(1u << b);
             push_to_save();
             need_list_redraw = true;
             need_header_redraw = true;

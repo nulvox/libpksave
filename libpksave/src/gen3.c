@@ -381,7 +381,7 @@ int gen3_set_trainer(pksave_save_t *s, const pksave_trainer_t *in)
     gen3_encode_name(in->name, sec0, 7);
     memcpy(sec0 + 0x00A, &in->tid, 2);
     memcpy(sec0 + 0x00C, &in->sid, 2);
-    sec0[0x083] = in->badges;
+    sec0[0x083] = (uint8_t)in->badges;
 
     uint32_t key = g3_security_key(sec0, s->game);
     uint32_t money_enc = in->money ^ key;
@@ -954,7 +954,17 @@ static int g3_pocket_layout(pksave_game_t game, pksave_pocket_t p,
             default: return PKSAVE_ERR_GAME;
         }
     }
-    /* RS / Emerald (RS-layout; matches the fixture generator) */
+    if (game == PKSAVE_GAME_EMERALD) {
+        switch (p) {
+            case PKSAVE_POCKET_ITEMS:   out->off = 0x560; out->max_slots = 30; return PKSAVE_OK;
+            case PKSAVE_POCKET_KEY:     out->off = 0x5D8; out->max_slots = 30; return PKSAVE_OK;
+            case PKSAVE_POCKET_BALLS:   out->off = 0x650; out->max_slots = 16; return PKSAVE_OK;
+            case PKSAVE_POCKET_TM_HM:   out->off = 0x690; out->max_slots = 64; return PKSAVE_OK;
+            case PKSAVE_POCKET_BERRIES: out->off = 0x790; out->max_slots = 46; return PKSAVE_OK;
+            default: return PKSAVE_ERR_GAME;
+        }
+    }
+    /* RS (pret/pokeruby SaveBlock1) */
     switch (p) {
         case PKSAVE_POCKET_ITEMS:   out->off = 0x560; out->max_slots = 20; return PKSAVE_OK;
         case PKSAVE_POCKET_KEY:     out->off = 0x5B0; out->max_slots = 20; return PKSAVE_OK;

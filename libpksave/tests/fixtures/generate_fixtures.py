@@ -513,8 +513,8 @@ def make_gen1_rb():
     # Bulbasaur's name in Gen 1 charset
     buf[0x307E:0x307E+11] = gen1_encode("BULBASAUR", 11)
 
-    # Current box number at 0x284C
-    buf[0x284C] = 0   # box 1
+    # Current box number at 0x284C (bit 7 = BIT_HAS_CHANGED_BOXES)
+    buf[0x284C] = 0x80   # box 1 active, stored boxes initialized
 
     # Populate box 1 (stored in bank 2 at 0x4000 + 1*1122) with one Bulbasaur lvl 7
     gen1_write_box(buf, 0x4000 + 1 * GEN1_BOX_SIZE,
@@ -529,8 +529,14 @@ def make_gen1_rb():
     # Remaining 17 slots zeroed, terminator 0xFF after last entry of the array
     buf[0x25C9 + 1 + 20 * 2]  = 0xFF
 
-    # Checksum
+    # Checksums (Bank 1 main checksum + Bank 2 & Bank 3 PC box checksums)
     buf[GEN1_CHKSUM_ADDR] = gen1_checksum(buf)
+    for bank_base in (0x4000, 0x6000):
+        bank_boxes_sz = 6 * GEN1_BOX_SIZE
+        buf[bank_base + bank_boxes_sz] = (0xFF - (sum(buf[bank_base:bank_base + bank_boxes_sz]) & 0xFF)) & 0xFF
+        for b in range(6):
+            b_off = bank_base + b * GEN1_BOX_SIZE
+            buf[bank_base + bank_boxes_sz + 1 + b] = (0xFF - (sum(buf[b_off:b_off + GEN1_BOX_SIZE]) & 0xFF)) & 0xFF
     return bytes(buf)
 
 def make_gen1_yellow():
@@ -672,15 +678,15 @@ def gen2_write_pocket(buf, count_off, max_slots, has_qty, entries):
     # Terminator after the data array
     buf[count_off + 1 + max_slots * entry_size] = 0xFF
 
-# GS pocket offsets (count byte; data follows at +1)
-GS_TMHM_OFF       = 0x2410   # 57 bytes packed (50 TMs + 7 HMs, 0x2410..0x2448)
-GS_ITEMS_CNT      = 0x2449   # 1 + 20×2 + 0xFF
-GS_KEY_CNT        = 0x2474   # 1 + 25 + 0xFF
-GS_BALLS_CNT      = 0x248F   # 1 + 12×2 + 0xFF
+# GS pocket offsets (from pret/pokegold ram/wram.asm + sPlayerData@0x2009)
+GS_TMHM_OFF       = 0x23E6   # 57 bytes packed (50 TMs + 7 HMs, 0x23E6..0x241E)
+GS_ITEMS_CNT      = 0x241F   # 1 + 20×2 + 0xFF (0x241F..0x2448)
+GS_KEY_CNT        = 0x2449   # 1 + 25 + 0xFF   (0x2449..0x2463)
+GS_BALLS_CNT      = 0x2464   # 1 + 12×2 + 0xFF (0x2464..0x247D)
 
-# Crystal pocket offsets (shifted relative to GS)
-CRY_TMHM_OFF      = 0x23E6
-CRY_ITEMS_CNT     = 0x241F
+# Crystal pocket offsets (shifted +1 relative to GS)
+CRY_TMHM_OFF      = 0x23E7
+CRY_ITEMS_CNT     = 0x2420
 CRY_KEY_CNT       = 0x244A
 CRY_BALLS_CNT     = 0x2465
 
@@ -728,6 +734,8 @@ def make_gen2_crystal():
     buf[CRY_TMHM_OFF + 4] = 3                   # TM05 (0xC4) ×3
 
     # Crystal primary checksum: sum bytes 0x2009..0x2B82 → store at 0x2D0D
+    # Mirror primary sGameData (0x2009..0x2B82) into backup (0x1209..0x1D82)
+    buf[0x1209:0x1D83] = buf[0x2009:0x2B83]
     chk1 = gen2_checksum_range(buf, 0x2009, 0x2B82)
     struct.pack_into('<H', buf, 0x2D0D, chk1)
     # Crystal secondary: sum 0x1209..0x1D82 → 0x1F0D
@@ -783,12 +791,19 @@ def gen3_pack_item_slot(data, off, item_id, quantity, security_key):
     struct.pack_into('<H', data, off,     item_id)
     struct.pack_into('<H', data, off + 2, quantity ^ (security_key & 0xFFFF))
 
-# RS/Emerald (RS-layout) pocket offsets within section 1 data
-GEN3_RSE_ITEMS_OFF   = 0x560
-GEN3_RSE_KEY_OFF     = 0x5B0
-GEN3_RSE_BALLS_OFF   = 0x600
-GEN3_RSE_TMHM_OFF    = 0x640
-GEN3_RSE_BERRIES_OFF = 0x740
+# RS pocket offsets within section 1 data (pret/pokeruby SaveBlock1)
+GEN3_RS_ITEMS_OFF   = 0x560
+GEN3_RS_KEY_OFF     = 0x5B0
+GEN3_RS_BALLS_OFF   = 0x600
+GEN3_RS_TMHM_OFF    = 0x640
+GEN3_RS_BERRIES_OFF = 0x740
+
+# Emerald pocket offsets within section 1 data (pret/pokeemerald SaveBlock1)
+GEN3_EM_ITEMS_OFF   = 0x560
+GEN3_EM_KEY_OFF     = 0x5D8
+GEN3_EM_BALLS_OFF   = 0x650
+GEN3_EM_TMHM_OFF    = 0x690
+GEN3_EM_BERRIES_OFF = 0x790
 
 # FRLG pocket offsets within section 1 data
 GEN3_FRLG_ITEMS_OFF   = 0x310
@@ -797,8 +812,8 @@ GEN3_FRLG_BALLS_OFF   = 0x430
 GEN3_FRLG_TMHM_OFF    = 0x464
 GEN3_FRLG_BERRIES_OFF = 0x54C
 
-def gen3_make_section1_rse(money, security_key, party_mon_bytes):
-    """Build section 1 data (SaveBlock1) for RS/E layout."""
+def gen3_make_section1_rse(money, security_key, party_mon_bytes, is_emerald=False):
+    """Build section 1 data (SaveBlock1) for RS or Emerald layout."""
     data = bytearray(3968)
     # Team size at 0x234
     data[0x234] = 1
@@ -808,12 +823,15 @@ def gen3_make_section1_rse(money, security_key, party_mon_bytes):
     money_enc = money ^ security_key
     struct.pack_into('<I', data, 0x490, money_enc)
 
+    items_off = GEN3_EM_ITEMS_OFF if is_emerald else GEN3_RS_ITEMS_OFF
+    balls_off = GEN3_EM_BALLS_OFF if is_emerald else GEN3_RS_BALLS_OFF
+
     # Items pocket: 2 items (Potion ×5, Hyper Potion-ish ×2)
-    gen3_pack_item_slot(data, GEN3_RSE_ITEMS_OFF + 0*4, 13,   5, security_key)
-    gen3_pack_item_slot(data, GEN3_RSE_ITEMS_OFF + 1*4, 0x44, 2, security_key)
+    gen3_pack_item_slot(data, items_off + 0*4, 13,   5, security_key)
+    gen3_pack_item_slot(data, items_off + 1*4, 0x44, 2, security_key)
 
     # Balls pocket: 1 Poke Ball ×10
-    gen3_pack_item_slot(data, GEN3_RSE_BALLS_OFF + 0*4, 4, 10, security_key)
+    gen3_pack_item_slot(data, balls_off + 0*4, 4, 10, security_key)
     return bytes(data)
 
 def gen3_make_section1_frlg(money, security_key, party_mon_bytes):
@@ -881,7 +899,8 @@ def gen3_make_save(game_code, security_key_sec0, security_key_frlg, is_frlg):
         sec1_data = gen3_make_section1_frlg(TEST_MONEY, sk, mon)
     else:
         sk = security_key_sec0
-        sec1_data = gen3_make_section1_rse(TEST_MONEY, sk, mon)
+        is_em = (game_code != 0 and not is_frlg)
+        sec1_data = gen3_make_section1_rse(TEST_MONEY, sk, mon, is_emerald=is_em)
 
     # Write sections 0-13 (slot 0) and mirror as slot 1 (same data, count=2)
     sections_data = [bytearray(sec0_list), bytearray(sec1_data)]

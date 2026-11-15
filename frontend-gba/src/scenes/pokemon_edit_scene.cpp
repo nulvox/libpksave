@@ -732,7 +732,7 @@ void pokemon_edit_scene::commit_move_slot(int slot)
     if (mc == nullptr) return;
     const int old_id = pokemon_.move_ids[slot];
     const int new_id = mc->id();
-    pokemon_.move_ids[slot] = static_cast<uint8_t>(new_id);
+    pokemon_.move_ids[slot] = static_cast<uint16_t>(new_id);
 
     numeric_field* nf = pp_field_for_slot(slot);
     if (nf != nullptr)
