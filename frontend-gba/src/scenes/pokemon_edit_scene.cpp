@@ -509,9 +509,19 @@ void pokemon_edit_scene::format_row(int row, bn::string<32>& out)
         case ROW_POKERUS:
         {
             pksave_pokerus_t pkrs = {};
-            ::pksave_get_party_pokerus(bridge_.handle(),
-                                       static_cast<uint8_t>(slot_),
-                                       &pkrs);
+            if (source_ == edit_source::BOX)
+            {
+                ::pksave_get_box_pokerus(bridge_.handle(),
+                                         static_cast<uint8_t>(box_),
+                                         static_cast<uint8_t>(slot_),
+                                         &pkrs);
+            }
+            else
+            {
+                ::pksave_get_party_pokerus(bridge_.handle(),
+                                           static_cast<uint8_t>(slot_),
+                                           &pkrs);
+            }
             switch (pkrs.status)
             {
                 case PKSAVE_PKRS_NEVER:
@@ -914,23 +924,18 @@ bn::optional<scene_kind> pokemon_edit_scene::update()
                     need_header_redraw = true;
                     break;
                 case ROW_POKERUS:
-                    // Pokerus from a box-resident Pokemon is a CP#5
-                    // deferred follow-up (pokerus_modal_scene currently
-                    // keys on pending_party_slot only; the
-                    // pksave_{get,set}_box_pokerus APIs exist, just need
-                    // wiring + 2 tests).  Treat as no-op here so the box
-                    // entry path doesn't crash or misdirect into a party
-                    // slot.
+                    // Re-stamp the active source's pending-* handoff so
+                    // pokerus_modal_scene (and the subsequent return to
+                    // pokemon_edit_scene) both target the same slot.
                     if (source_ == edit_source::BOX)
                     {
-                        break;
+                        bridge_.set_pending_box(box_, slot_);
                     }
-                    // Re-set pending_party_slot so the modal can read
-                    // the same slot.  party_scene set it on entry; the
-                    // bridge keeps it across scene transitions, but
-                    // re-stamping here makes the dependency explicit
-                    // and survives someone refactoring party_scene.
-                    bridge_.set_pending_party_slot(slot_);
+                    else
+                    {
+                        bridge_.clear_pending_box();
+                        bridge_.set_pending_party_slot(slot_);
+                    }
                     return scene_kind::POKERUS_MODAL;
                 case ROW_SPECIES:
                 case ROW_ITEM:

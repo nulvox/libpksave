@@ -224,7 +224,9 @@ pksave_game_t pksave_detect(const uint8_t *sram, size_t len)
     if (!sram) return PKSAVE_GAME_UNKNOWN;
 
     if (len == SIZE_GEN12) {
+#if defined(PKSAVE_GEN1) || defined(PKSAVE_GEN2)
         pksave_game_t g;
+#endif
 #ifdef PKSAVE_GEN1
         g = detect_gen1(sram, len);
         if (g != PKSAVE_GAME_UNKNOWN) return g;

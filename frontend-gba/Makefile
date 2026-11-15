@@ -51,11 +51,12 @@ ROMCODE      :=  PKSE
 # USERFLAGS instead, which is appended verbatim to CFLAGS / CXXFLAGS.
 USERFLAGS    :=  -DPKSAVE_GEN3 \
                  -DBN_CFG_SRAM_WAIT_STATE=BN_SRAM_WAIT_STATE_3 \
+                 -fno-short-enums \
                  -I$(BUTANO_HOME)/common/include \
                  -std=gnu17
 USERCXXFLAGS :=
 USERASFLAGS  :=
-USERLDFLAGS  :=
+USERLDFLAGS  :=  -Wl,--no-enum-size-warning
 USERLIBDIRS  :=
 USERLIBS     :=
 DEFAULTLIBS  :=

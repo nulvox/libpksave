@@ -27,6 +27,7 @@ party_scene::party_scene(pksave_bridge& bridge)
     , party_{}
     , party_count_(0)
 {
+    bridge_.clear_pending_box();
     load_from_save();
     list_.set_row_provider(&party_scene::row_provider_thunk, this);
     redraw_header();

@@ -53,12 +53,14 @@ Date produced: 2026-06-03. Last status refresh: 2026-06-10 (CP#6 per-species ren
 - **CP#5 frontend** — `scenes/box_scene` (linear 30-slot list_view;
   SELECT cycles boxes wrapping; A drills into pokemon_edit_scene via
   new `pending_box_index` / `pending_box_slot` pair on the bridge,
-  mirroring the bag handoff pattern).  `pokemon_edit_scene` branches
-  `load_from_save` / `push_to_save` / B-return on a new `edit_source`
-  enum (PARTY vs BOX); ROW_POKERUS guarded as no-op when source==BOX
-  (deferred follow-up).  Three new harness tests
-  (`test_box_scene_nav.py`, `test_box_species_roundtrip.py`,
-  `test_box_stats_level_roundtrip.py`).
+  mirroring the bag handoff pattern).  `pokemon_edit_scene` and
+  `pokerus_modal_scene` branch `load_from_save` / `push_to_save` /
+  `commit_to_save` / B-return on the active source (PARTY vs BOX).
+  Five harness tests (`test_box_scene_nav.py`,
+  `test_box_species_roundtrip.py` × 3 variants,
+  `test_box_stats_level_roundtrip.py`,
+  `test_box_pokerus_modal_cancel.py`,
+  `test_box_pokerus_modal_commit.py`).
 - **CP#6 algorithmic core + silhouette + auto-discovery (2026-06-09)** —
   `tools/extract_sprites.py` ships with 35 unit tests (`make test-tools`):
   variant detection, GBA pointer read, LZ77 (LZ10) decompress, 4bpp
@@ -76,13 +78,15 @@ Date produced: 2026-06-03. Last status refresh: 2026-06-10 (CP#6 per-species ren
   4bpp indexed BMP (not PNG as originally planned — butano 18.5's grit
   only consumes BMP).
 - **mGBA-Lua automation harness** — POC + five hardening rounds
-  shipped. `make test-gba` is a hard merge gate covering **29 tests**:
+  shipped. `make test-gba` is a hard merge gate covering **33 tests**:
   per-variant fixture round-trip (RS / Emerald / FRLG), trainer-name
   round-trip per variant, TID numeric round-trip, main-menu cursor
   wrap, boot rejects malformed save, party / pokemon-edit / pokerus /
-  stats / moves round-trips, bag nav + bag slot-edit round-trip,
-  box-scene nav + box species round-trip, plus the supporting smoke /
-  detect / dump / sidecar / key-input tests.
+  stats / moves round-trips, bag nav + 3-variant bag slot-edit round-trip,
+  box-scene nav + 3-variant box species round-trip + box level & box
+  pokerus modal tests, dirty-indicator + save-blocks-input framebuffer
+  tests, plus the supporting smoke / detect / dump / sidecar / key-input
+  tests.
   See `docs/frontend-gba-harness-plan.md`.
 
 **Next on your plate:** **Checkpoint #6 is closed.** The extractor
@@ -464,8 +468,6 @@ reload → quantity matches what was set. *(Met by
 
 **Follow-ups (deferred):**
 
-- 3-variant fanout for the bag round-trip (currently RS-only;
-  Emerald + FRLG would mirror the L1 pattern).
 - "Swap item between pockets" path — currently the user can only edit
   in-pocket; cross-pocket swaps require a Delete-then-Add pair.
 - Per-checkpoint manual-checklist row in `frontend-gba/tests/checklist.md`.
@@ -508,8 +510,10 @@ encode); L1–L7 covered everything else for `pokemon_edit_scene` reuse.
       (PARTY vs BOX), decided in the ctor by checking
       `pending_box_index() >= 0` first then falling back to
       `pending_party_slot()`.  Branches `load_from_save` (party vs box
-      get), `push_to_save` (party vs box set), and B-return (PARTY vs
-      BOXES).  ROW_POKERUS guarded as no-op when source==BOX (see L11).
+      get), `push_to_save` (party vs box set), `ROW_POKERUS` display and
+      modal handoff, and B-return (PARTY vs BOXES).  `pokerus_modal_scene`
+      similarly branches on `pending_box_index() >= 0` to dispatch
+      `pksave_{get,set}_box_pokerus`.
 - [x] `main.cpp` and `main_menu_scene` wire `scene_kind::BOXES` to
       `box_scene`.  Previously the BOXES menu entry fell back to
       MAIN_MENU.
@@ -532,15 +536,6 @@ Pokemon matches. *(Met by `test_box_species_roundtrip.py`.)*
 
 **Follow-ups (deferred):**
 
-- **Pokerus from box source** — `pokerus_modal_scene` keys on
-  `pending_party_slot` only; entering it from a box drill would point
-  at the wrong slot.  The ROW_POKERUS branch in `pokemon_edit_scene`
-  is therefore guarded as a no-op when source==BOX.  Extending
-  `pokerus_modal_scene` to take `(source, box, slot)` and branching to
-  `pksave_{get,set}_box_pokerus` (both already in `pksave.h`) is the
-  follow-up; adds ~30 LOC + 2 harness tests.
-- 3-variant fanout for box species round-trip (currently RS-only;
-  Emerald + FRLG would mirror the L1 trainer-name fanout pattern).
 - Cross-box "move slot" path — currently only in-slot species/etc
   edits; moving a mon between boxes requires Delete-then-Add.
 
@@ -678,7 +673,7 @@ descriptions).
   When butano debounce or mGBA frame timing changes, tune helpers, not
   N test scripts.
 
-### Test inventory (30 tests, all green)
+### Test inventory (33 tests, all green)
 
 | Test                              | What it proves |
 |-----------------------------------|----------------|
@@ -690,7 +685,6 @@ descriptions).
 | `test_flash_detected.py`          | mGBA logs `Detected Flash savegame` after boot (FLASH 128 KiB) |
 | `test_key_input.py`               | A-tap flips KEYINPUT bit 0 (`0x03ff → 0x03fe`) |
 | `test_sidecar_save.py`            | `--save rs.sav` puts the fixture's first 16 bytes into SRAM |
-| `test_sram_dump_full.py`          | mirror-probe full dump |
 | `test_fixture_roundtrip.py`       | 3-variant boot-load → dump → decode (RS/Emerald/FRLG) |
 | `test_trainer_scene_nav.py`       | navigation (`A` from main menu) produces zero FLASH writes |
 | `test_trainer_name_roundtrip.py`  | 3-variant trainer-name edit RED → REDAAA through FLASH |
@@ -698,21 +692,24 @@ descriptions).
 | `test_tid_roundtrip.py`           | TID +30 through numeric_field; name preserved |
 | `test_main_menu_wrap.py`          | DOWN×5 wraps cursor back to Trainer |
 | `test_dirty_indicator.py`         | header strip CLEAN → DIRTY → AFTER_SAVE hash cycle via fb_dump_ppm |
+| `test_save_blocks_input.py`       | save_scene renders "SAVING..." splash and blocks D-pad input |
 
 ### Coverage gaps (CP#3+ to-add as scenes land)
 
 - [x] Party-slot species/level/move round-trip (CP#3 — shipped)
-- [x] Bag item/qty round-trip (CP#4 — `test_bag_slot_edit_roundtrip.py`,
-      RS-only; 3-variant fanout still open)
-- [x] Box-slot species round-trip (CP#5 — `test_box_species_roundtrip.py`,
-      RS-only; 3-variant fanout still open)
+- [x] Bag item/qty round-trip (CP#4 — `test_bag_slot_edit_roundtrip.py` × 3 variants)
+- [x] Box-slot species round-trip (CP#5 — `test_box_species_roundtrip.py` × 3 variants)
+- [x] Box-slot Pokerus modal cancel + commit (`test_box_pokerus_modal_cancel.py`,
+      `test_box_pokerus_modal_commit.py`)
 - [x] Dirty-indicator visual — `test_dirty_indicator.py` snapshots the
       header strip before edit, after edit (TID +10 via numeric_field
       → mark_dirty), and after Save & Exit. Asserts hash flip on edit,
       hash restoration on save. Backed by `fb_dump_ppm` (custom Lua
       global in `docker/test-gba/mgba-lua.c`) + `framebuffer.py`.
-- [ ] Save-blocks-input check — currently inferred from Gate J's clean
-      completion, not directly asserted
+- [x] Save-blocks-input check — `test_save_blocks_input.py` snapshots
+      before, during, and after Save & Exit while injecting D-pad DOWN
+      taps during the save splash, asserting the splash renders and
+      post-save main_menu cursor remains on row 0.
 
 ### Pattern for adding a new test
 
@@ -759,24 +756,23 @@ repo but is not on this list.
       the silhouette for any species absent from the ROM dump.
 - [x] `make test` green — Unity coverage across all Gen flags (19
       new L6/L7 cases on top of the existing suite).
-- [ ] `make test-gba` green — mGBA Lua harness covers:
+- [x] `make test-gba` green — mGBA Lua harness covers:
       - [x] boot + variant detection on RS / Emerald / FRLG fixtures
       - [x] UNKNOWN-content fixture lands on the boot error scene
       - SRAM-roundtrip after Save & Exit for at least one field per CP:
         - [x] trainer name (Gate J × 3 variants)
         - [x] trainer TID (numeric_field exercise)
         - [x] party-slot species *(CP#3)*
-        - [x] bag item quantity *(CP#4 — RS only;
-              `test_bag_slot_edit_roundtrip.py`)*
-        - [x] box-slot species *(CP#5 — RS only;
-              `test_box_species_roundtrip.py`)*
+        - [x] bag item quantity *(CP#4 — `test_bag_slot_edit_roundtrip.py` × 3 variants)*
+        - [x] box-slot species *(CP#5 — `test_box_species_roundtrip.py` × 3 variants)*
       - [x] dirty indicator appears after an edit and clears after save
         *(`test_dirty_indicator.py` — fb_dump_ppm + header-strip hash;
         CLEAN/DIRTY/AFTER_SAVE snapshots assert that '*' is added on
         edit and removed on Save & Exit, with the AFTER_SAVE hash byte-
         equal to CLEAN)*
-      - [ ] save scene blocks input while the FLASH write is in flight
-        *(currently inferred from Gate J's clean completion)*
+      - [x] save scene blocks input while the FLASH write is in flight
+        *(`test_save_blocks_input.py` — fb_dump_ppm snapshots PRE, SAVING,
+        and POST while injecting D-pad DOWN taps during the splash)*
 - [x] `docs/frontend-gba-libpksave-gaps.md` reflects which gaps were
       filled, which were deferred, and why.
 
@@ -816,41 +812,6 @@ Gen 5), title-case to match the existing convention, add a handful of
 spot-check Unity cases to `test_gen4_lookups.c` / `test_gen5_lookups.c`
 (file the tests if they don't exist; pattern after
 `test_gen3_lookups.c`'s ability-name block).
-
-### Save-blocks-input has no direct framebuffer assertion
-
-`docs/frontend-gba-plan.md` §"Acceptance criteria" still has *save
-scene blocks input while the FLASH write is in flight* as inferred
-("currently inferred from Gate J's clean completion"). Now that
-`fb_dump_ppm` exists, this closes the same way the dirty indicator did:
-one drive script entering Save & Exit + tapping the D-pad while the
-"SAVING…" splash is on screen, with two snapshots — one mid-save
-asserting the splash glyphs are visible, one after asserting the
-cursor on the post-save main menu didn't move during the splash
-window. ~50 LOC, mirror after `test_dirty_indicator.py`. Latent risk
-is low (no observed regression) but a regression here would corrupt
-saves on a power-off, so closing it is cheap insurance.
-
-### Pokerus-from-box-source is a no-op
-
-`pokemon_edit_scene` guards `ROW_POKERUS` as a silent no-op when
-`source==BOX` (introduced CP#5; documented inline). Players will see
-the row, press A, and nothing happens. The fix shape — widening
-`pokerus_modal_scene` to take a `(source, box, slot)` tuple and
-dispatching to `pksave_{get,set}_box_pokerus` (both already in
-`pksave.h`) — is ~30 LOC + 2 harness tests modelled on
-`test_pokerus_modal_commit.py`. Currently surfaces as a UX dead end,
-not corruption.
-
-### 3-variant fanout for bag / box round-trip is still RS-only
-
-`test_bag_slot_edit_roundtrip.py` and `test_box_species_roundtrip.py`
-exercise RS only. Emerald + FRLG fanout would mirror the L1 trainer-
-name pattern (parametrise over the fixture name). No Gen 3 variant
-divergence is known in the bag or box layouts (RS / Emerald / FRLG
-agree per `libpksave/src/gen3.c`), so the existing RS coverage is the
-load-bearing one; the fanout is defence in depth, not closure of an
-open risk.
 
 ### Party / Box right-panel sprite swap
 

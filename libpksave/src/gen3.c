@@ -412,27 +412,50 @@ int gen3_get_party(pksave_save_t *s, pksave_pokemon_t out[6], uint8_t *count)
  * contest stats, met data, etc.) survive the write.  Then overwrites the
  * fields exposed by pksave_pokemon_t, recomputes the checksum, and
  * re-encrypts. */
-/* Walk PIDs in steps of 25 (preserves nature == pid % 25) starting from
- * a hint, returning the first PID whose shininess matches target_shiny.
- * Expected iterations: ~1 for non-shiny, ~8192 for shiny.  Caps at 100k
- * for safety; on cap-hit returns -1 and caller keeps the old PID. */
+/* Find a non-zero PID matching target_nature (pid % 25) and target_shiny
+ * (((pid_low ^ pid_high ^ tid ^ sid) < 8)) while preserving the original
+ * low byte (hint & 0xFF), which determines gender against the species's
+ * gender threshold in Gen III.
+ *
+ * When target_shiny == 1, shiny PIDs satisfy pid_high = pid_low ^ tid ^ sid ^ s
+ * for s in 0..7.  Scanning the 256 values of the second byte (bits 8..15)
+ * across all 8 shiny offsets (at most 2,048 candidates) is mathematically
+ * guaranteed to cover all 25 natures for every (tid, sid, low_byte) tuple.
+ * When target_shiny == 0, stepping the upper 24 bits from (hint >> 8) finds
+ * a non-shiny PID with the target nature within at most 51 steps. */
 static int g3_find_pid(uint8_t target_nature, uint8_t target_shiny,
                        uint16_t tid, uint16_t sid, uint32_t hint,
                        uint32_t *out_pid)
 {
     target_nature = (uint8_t)(target_nature % 25U);
     target_shiny  = (uint8_t)(target_shiny & 1U);
+    uint8_t low_byte = (uint8_t)(hint & 0xFFU);
 
-    /* Anchor base so base % 25 == target_nature. */
-    uint32_t base = hint - (hint % 25U) + target_nature;
-
-    for (uint32_t step = 0; step < 100000U; step++) {
-        uint32_t pid = base + step * 25U;
-        if (pid == 0) continue;  /* PID=0 is the box-decoder's empty sentinel */
-        uint8_t shiny = (uint8_t)(((((pid & 0xFFFFU) ^ (pid >> 16)) ^ tid ^ sid) < 8U) ? 1 : 0);
-        if (shiny == target_shiny) {
-            *out_pid = pid;
-            return 0;
+    if (target_shiny) {
+        uint8_t start_mid = (uint8_t)((hint >> 8) & 0xFFU);
+        for (uint32_t d = 0; d < 256U; d++) {
+            uint8_t  mid     = (uint8_t)((start_mid + d) & 0xFFU);
+            uint16_t pid_low = (uint16_t)(((uint16_t)mid << 8) | low_byte);
+            for (uint16_t s = 0; s < 8U; s++) {
+                uint16_t pid_high = (uint16_t)(pid_low ^ tid ^ sid ^ s);
+                uint32_t pid = ((uint32_t)pid_high << 16) | (uint32_t)pid_low;
+                if (pid != 0 && (pid % 25U) == target_nature) {
+                    *out_pid = pid;
+                    return 0;
+                }
+            }
+        }
+    } else {
+        uint32_t k0 = hint >> 8;
+        for (uint32_t step = 0; step < 256U; step++) {
+            uint32_t k   = (k0 + step) & 0xFFFFFFU;
+            uint32_t pid = (k << 8) | (uint32_t)low_byte;
+            if (pid == 0) continue;  /* PID=0 is the box-decoder's empty sentinel */
+            uint8_t shiny = (uint8_t)(((((pid & 0xFFFFU) ^ (pid >> 16)) ^ tid ^ sid) < 8U) ? 1 : 0);
+            if (!shiny && (pid % 25U) == target_nature) {
+                *out_pid = pid;
+                return 0;
+            }
         }
     }
     return -1;

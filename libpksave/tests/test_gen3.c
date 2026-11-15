@@ -809,6 +809,50 @@ void test_rs_box_unshiny_toggle_round_trip(void)
     pksave_close(s);
 }
 
+/* Gender in Gen III is determined by (PID & 0xFF) compared against the
+ * species's gender threshold.  Box 1 slot 0 has PID=0x12345678 (low byte
+ * 0x78) at linear PC offset 1 + 30*80 = 2401 inside section 5 (0x5000).
+ * Verify that changing nature and toggling shininess both preserve the
+ * low PID byte at 0x5000 + 2401. */
+void test_rs_pid_recompute_preserves_gender_byte(void)
+{
+    if (!load_fixture("rs.sav", rs_buf, SRAM_SIZE)) return;
+    const size_t box1_slot0_pid_lo = 5U * 0x1000U + 1U + 30U * 80U;
+    TEST_ASSERT_EQUAL_HEX8(0x78, rs_buf[box1_slot0_pid_lo]);
+
+    pksave_save_t *s = pksave_open(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+
+    /* 1) Edit nature (21 -> 3 Modest) and un-shiny (1 -> 0) */
+    box[0].nature   = 3;
+    box[0].is_shiny = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_box_slot(s, 1, 0, &box[0]));
+    TEST_ASSERT_EQUAL_HEX8(0x78, rs_buf[box1_slot0_pid_lo]);
+
+    /* 2) Edit nature (3 -> 15 Jolly) and re-shiny (0 -> 1) */
+    box[0].nature   = 15;
+    box[0].is_shiny = 1;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_box_slot(s, 1, 0, &box[0]));
+    TEST_ASSERT_EQUAL_HEX8(0x78, rs_buf[box1_slot0_pid_lo]);
+
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    s = pksave_open(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    TEST_ASSERT_EQUAL_UINT8(15, box[0].nature);
+    TEST_ASSERT_EQUAL_UINT8(1,  box[0].is_shiny);
+    TEST_ASSERT_EQUAL_HEX8(0x78, rs_buf[box1_slot0_pid_lo]);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(rs_buf, SRAM_SIZE, PKSAVE_GAME_RS));
+    pksave_close(s);
+}
+
 /* ── Gen III pokerus ── */
 
 void test_rs_party_pokerus_round_trip(void)
@@ -931,6 +975,7 @@ int main(void)
     RUN_TEST(test_rs_box_pid_derived_fields);
     RUN_TEST(test_rs_party_shiny_toggle_round_trip);
     RUN_TEST(test_rs_box_unshiny_toggle_round_trip);
+    RUN_TEST(test_rs_pid_recompute_preserves_gender_byte);
     RUN_TEST(test_rs_party_pokerus_round_trip);
     RUN_TEST(test_emerald_party_pokerus_round_trip);
     RUN_TEST(test_frlg_party_pokerus_round_trip);
