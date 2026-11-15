@@ -143,6 +143,9 @@ const char *pksave_item_name(pksave_game_t game, uint16_t id)
 #ifdef PKSAVE_GEN1
         case PKSAVE_GAME_RB:
         case PKSAVE_GAME_YELLOW:
+            if (id >= 0xC4U && id <= 0xFAU) {
+                return gen1_tmhm_names[id - 0xC4U];
+            }
             return lookup(gen1_item_names,
                           sizeof(gen1_item_names)/sizeof(*gen1_item_names), id);
 #endif

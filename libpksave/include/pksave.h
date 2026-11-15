@@ -107,9 +107,8 @@ int pksave_set_item(pksave_save_t *save, pksave_pocket_t pocket,
 
 /* ── Stat recalculation ──────────────────────────────────────────────────── */
 /* Recompute pkm->stat[6] in-place from species, level, nature, IVs, and EVs.
- * Uses the official Gen III formula (HP and per-stat) with nature ±10%.
- * Caller is responsible for setting nature; pksave_get_party / get_box
- * populate it from PID on Gen III reads.  Unknown species → stats zeroed. */
+ * Gen I/II use the DV + ceil(sqrt(stat_exp))/4 formula; Gen III uses the
+ * modern IV + EV/4 formula with nature ±10%.  Unknown species → stats zeroed. */
 void pksave_recalc_stats(pksave_pokemon_t *pkm, pksave_game_t game);
 
 /* ── Pokerus API ─────────────────────────────────────────────────────────── */
@@ -164,28 +163,33 @@ typedef struct {
 pksave_species_abilities_t pksave_species_abilities(pksave_game_t game, uint16_t species_id);
 
 /* ── Per-move lookups ────────────────────────────────────────────────────── */
-/* Returns the base PP for a Gen 3 move (before PP Ups).  Unknown move
+/* Returns the base PP for a move (before PP Ups) in Gen I–III.  Unknown move
  * returns 0.  Frontend caps the PP numeric field at base * 1.6 (rounded
  * down) to allow PP-Up headroom — but that math is a frontend concern. */
 uint8_t pksave_move_base_pp(pksave_game_t game, uint16_t move_id);
 
 /* ── Per-item lookups ────────────────────────────────────────────────────── */
-/* Max stack size for one slot of a Gen 3 item.  Berries cap at 999, key
- * items + HMs cap at 1, ordinary items + balls + TMs cap at 99.  Returns 0
- * as a sentinel for ITEM_NONE (id 0), unknown IDs, or non-Gen-3 games. */
+/* Max stack size for one slot of an item in Gen I–III.  Berries cap at 999
+ * (Gen III), key items + HMs cap at 1, ordinary items + balls + TMs cap at 99.
+ * Returns 0 as a sentinel for ITEM_NONE (id 0), unknown IDs, or unsupported
+ * games. */
 uint16_t pksave_item_max_stack(pksave_game_t game, uint16_t item_id);
 
-/* Pocket category for a Gen 3 item.  Returns PKSAVE_POCKET_NONE for
- * ITEM_NONE (id 0), unknown IDs, or non-Gen-3 games.  Both RSE and FRLG
- * agree on the per-item pocket assignment for every shared ID, so a
- * single canonical table sourced from pret/pokeemerald covers all three
- * variants. */
+/* Pocket category for an item in Gen I–III.  Returns PKSAVE_POCKET_NONE for
+ * ITEM_NONE (id 0), unknown IDs, or unsupported games.  In Gen I all valid
+ * items map to PKSAVE_POCKET_ITEMS (single bag pocket). */
 pksave_pocket_t pksave_item_pocket(pksave_game_t game, uint16_t item_id);
 
-/* ── Gen III in-game name-length limits (excluding null terminator) ─────── */
-/* These are the character limits the Gen III name-entry screen enforces.
- * Per-gen equivalents (PKSAVE_GEN1_*, PKSAVE_GEN2_*, ...) will be added
- * when those frontends land. */
+/* ── In-game name-length limits (excluding null terminator) ─────────────── */
+/* These are the character limits the in-game name-entry screen enforces. */
+#define PKSAVE_GEN1_TRAINER_NAME_MAX  7
+#define PKSAVE_GEN1_NICKNAME_MAX      10
+#define PKSAVE_GEN1_OT_NAME_MAX       7
+
+#define PKSAVE_GEN2_TRAINER_NAME_MAX  7
+#define PKSAVE_GEN2_NICKNAME_MAX      10
+#define PKSAVE_GEN2_OT_NAME_MAX       7
+
 #define PKSAVE_GEN3_TRAINER_NAME_MAX  7
 #define PKSAVE_GEN3_NICKNAME_MAX      10
 #define PKSAVE_GEN3_OT_NAME_MAX       7
