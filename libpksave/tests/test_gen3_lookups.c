@@ -151,9 +151,9 @@ void test_move_base_pp_move_zero_returns_zero(void)
 
 void test_move_base_pp_non_gen3_game_returns_zero(void)
 {
-    /* Non-Gen-3 games return 0 even for a valid Gen 3 move ID. */
-    TEST_ASSERT_EQUAL_UINT8(0, pksave_move_base_pp(PKSAVE_GAME_RB, 1));
+    /* Unsupported games (Gen 4/5) return 0 even for a valid move ID. */
     TEST_ASSERT_EQUAL_UINT8(0, pksave_move_base_pp(PKSAVE_GAME_DP, 1));
+    TEST_ASSERT_EQUAL_UINT8(0, pksave_move_base_pp(PKSAVE_GAME_BW, 1));
 }
 
 /* ── pksave_item_max_stack ───────────────────────────────────────────── */
@@ -223,8 +223,8 @@ void test_item_max_stack_placeholder_id_returns_zero(void)
 
 void test_item_max_stack_non_gen3_game_returns_zero(void)
 {
-    TEST_ASSERT_EQUAL_UINT16(0, pksave_item_max_stack(PKSAVE_GAME_RB, ITEM_POTION));
     TEST_ASSERT_EQUAL_UINT16(0, pksave_item_max_stack(PKSAVE_GAME_DP, ITEM_POTION));
+    TEST_ASSERT_EQUAL_UINT16(0, pksave_item_max_stack(PKSAVE_GAME_BW, ITEM_POTION));
 }
 
 /* ── pksave_item_pocket ──────────────────────────────────────────────── */
@@ -297,9 +297,9 @@ void test_item_pocket_unknown_id_is_none(void)
 void test_item_pocket_non_gen3_game_is_none(void)
 {
     TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_NONE,
-        pksave_item_pocket(PKSAVE_GAME_RB, ITEM_POTION));
-    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_NONE,
         pksave_item_pocket(PKSAVE_GAME_DP, ITEM_POTION));
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_NONE,
+        pksave_item_pocket(PKSAVE_GAME_BW, ITEM_POTION));
 }
 
 /* ── pksave_ability_name ─────────────────────────────────────────────────

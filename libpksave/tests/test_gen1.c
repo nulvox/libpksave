@@ -459,14 +459,81 @@ void test_gen1_move_name_lookup(void)
 
 void test_gen1_item_name_lookup(void)
 {
-    /* Item IDs 1-indexed; per pret/pokered data/items/names.asm */
+    /* Item IDs 1-indexed; per pret/pokered data/items/names.asm + HM/TM block */
     TEST_ASSERT_EQUAL_STRING("Master Ball", pksave_item_name(PKSAVE_GAME_RB, 0x01));
     TEST_ASSERT_EQUAL_STRING("Potion",      pksave_item_name(PKSAVE_GAME_RB, 0x14));
     TEST_ASSERT_EQUAL_STRING("Antidote",    pksave_item_name(PKSAVE_GAME_RB, 0x0B));
     TEST_ASSERT_EQUAL_STRING("Full Heal",   pksave_item_name(PKSAVE_GAME_RB, 0x34));
     TEST_ASSERT_EQUAL_STRING("Rare Candy",  pksave_item_name(PKSAVE_GAME_RB, 0x28));
+    TEST_ASSERT_EQUAL_STRING("HM01",        pksave_item_name(PKSAVE_GAME_RB, 0xC4));
+    TEST_ASSERT_EQUAL_STRING("HM05",        pksave_item_name(PKSAVE_GAME_YELLOW, 0xC8));
+    TEST_ASSERT_EQUAL_STRING("TM01",        pksave_item_name(PKSAVE_GAME_RB, 0xC9));
+    TEST_ASSERT_EQUAL_STRING("TM50",        pksave_item_name(PKSAVE_GAME_YELLOW, 0xFA));
     TEST_ASSERT_EQUAL_STRING("???",         pksave_item_name(PKSAVE_GAME_RB, 0));
+    TEST_ASSERT_EQUAL_STRING("???",         pksave_item_name(PKSAVE_GAME_RB, 0x54));
+    TEST_ASSERT_EQUAL_STRING("???",         pksave_item_name(PKSAVE_GAME_RB, 0xC3));
+    TEST_ASSERT_EQUAL_STRING("???",         pksave_item_name(PKSAVE_GAME_RB, 0xFB));
     TEST_ASSERT_EQUAL_STRING("???",         pksave_item_name(PKSAVE_GAME_RB, 0xFF));
+}
+
+void test_gen1_move_base_pp_and_item_lookups(void)
+{
+    /* Move base PP */
+    TEST_ASSERT_EQUAL_UINT8(35, pksave_move_base_pp(PKSAVE_GAME_RB, 1));      /* Pound */
+    TEST_ASSERT_EQUAL_UINT8(35, pksave_move_base_pp(PKSAVE_GAME_YELLOW, 33)); /* Tackle */
+    TEST_ASSERT_EQUAL_UINT8(15, pksave_move_base_pp(PKSAVE_GAME_RB, 85));     /* Thunderbolt */
+    TEST_ASSERT_EQUAL_UINT8(10, pksave_move_base_pp(PKSAVE_GAME_RB, 165));    /* Struggle (10 PP in Gen I) */
+    TEST_ASSERT_EQUAL_UINT8(0,  pksave_move_base_pp(PKSAVE_GAME_RB, 0));
+    TEST_ASSERT_EQUAL_UINT8(0,  pksave_move_base_pp(PKSAVE_GAME_RB, 166));
+
+    /* Item max stack & pocket */
+    TEST_ASSERT_EQUAL_UINT16(99, pksave_item_max_stack(PKSAVE_GAME_RB, 0x01));     /* Master Ball */
+    TEST_ASSERT_EQUAL_UINT16(1,  pksave_item_max_stack(PKSAVE_GAME_RB, 0x06));     /* Bicycle (key) */
+    TEST_ASSERT_EQUAL_UINT16(99, pksave_item_max_stack(PKSAVE_GAME_RB, 0x14));     /* Potion */
+    TEST_ASSERT_EQUAL_UINT16(1,  pksave_item_max_stack(PKSAVE_GAME_RB, 0xC4));     /* HM01 */
+    TEST_ASSERT_EQUAL_UINT16(99, pksave_item_max_stack(PKSAVE_GAME_YELLOW, 0xC9)); /* TM01 */
+    TEST_ASSERT_EQUAL_UINT16(0,  pksave_item_max_stack(PKSAVE_GAME_RB, 0));
+    TEST_ASSERT_EQUAL_UINT16(0,  pksave_item_max_stack(PKSAVE_GAME_RB, 0x07));     /* SURFBOARD "?????" */
+    TEST_ASSERT_EQUAL_UINT16(0,  pksave_item_max_stack(PKSAVE_GAME_RB, 0x80));     /* gap */
+
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_ITEMS, pksave_item_pocket(PKSAVE_GAME_RB, 0x01));
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_ITEMS, pksave_item_pocket(PKSAVE_GAME_RB, 0x06));
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_ITEMS, pksave_item_pocket(PKSAVE_GAME_RB, 0xC4));
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_ITEMS, pksave_item_pocket(PKSAVE_GAME_RB, 0xFA));
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_NONE,  pksave_item_pocket(PKSAVE_GAME_RB, 0));
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_NONE,  pksave_item_pocket(PKSAVE_GAME_RB, 0x80));
+}
+
+void test_gen1_recalc_stats(void)
+{
+    pksave_pokemon_t pkm;
+    memset(&pkm, 0, sizeof(pkm));
+
+    /* Mewtwo (Gen 1 internal ID 0x83): base HP=106, Atk=110, Def=90, Spc=154, Spe=130.
+     * At Lv 100 with max DVs (15 → ivs=30) and max StatExp (65535 → bonus=63):
+     *   HP    = ((106+15)*2 + 63)*100/100 + 100 + 10 = 305 + 110 = 415
+     *   Atk   = ((110+15)*2 + 63)*100/100 + 5 = 313 + 5 = 318
+     *   Def   = ((90+15)*2  + 63)*100/100 + 5 = 273 + 5 = 278
+     *   Spc   = ((154+15)*2 + 63)*100/100 + 5 = 401 + 5 = 406 (stat[3] == stat[4])
+     *   Spe   = ((130+15)*2 + 63)*100/100 + 5 = 353 + 5 = 358 */
+    pkm.species = 0x83;
+    pkm.level   = 100;
+    for (int i = 0; i < 6; i++) {
+        pkm.ivs[i] = 30;
+        pkm.evs[i] = 65535;
+    }
+    pksave_recalc_stats(&pkm, PKSAVE_GAME_RB);
+    TEST_ASSERT_EQUAL_UINT16(415, pkm.stat[0]);
+    TEST_ASSERT_EQUAL_UINT16(318, pkm.stat[1]);
+    TEST_ASSERT_EQUAL_UINT16(278, pkm.stat[2]);
+    TEST_ASSERT_EQUAL_UINT16(406, pkm.stat[3]);
+    TEST_ASSERT_EQUAL_UINT16(406, pkm.stat[4]);
+    TEST_ASSERT_EQUAL_UINT16(358, pkm.stat[5]);
+
+    /* MissingNo. slot (0x1F) → zeroed */
+    pkm.species = 0x1F;
+    pksave_recalc_stats(&pkm, PKSAVE_GAME_RB);
+    TEST_ASSERT_EQUAL_UINT16(0, pkm.stat[0]);
 }
 
 /* ── Gen I bag / items pocket ── */
@@ -607,6 +674,8 @@ int main(void)
     RUN_TEST(test_gen1_species_name_lookup);
     RUN_TEST(test_gen1_move_name_lookup);
     RUN_TEST(test_gen1_item_name_lookup);
+    RUN_TEST(test_gen1_move_base_pp_and_item_lookups);
+    RUN_TEST(test_gen1_recalc_stats);
     RUN_TEST(test_gen1_is_shiny_derived);
     RUN_TEST(test_gen1_stat_exp_passthrough);
     RUN_TEST(test_rb_pokerus_unsupported);

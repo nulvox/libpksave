@@ -3,18 +3,88 @@
  * Copyright (c) 2026 nulvox
  *
  * pksave_recalc_stats — recompute the stat[6] array from
- * species + level + nature + IVs + EVs using the official Gen III formula.
+ * species + level + nature + IVs + EVs.
  *
+ * Gen I/II formula (pret/pokered CalcStats, pret/pokecrystal CalcPkmnStats):
+ *   Bonus = floor(min(255, ceil(sqrt(StatExp))) / 4)
+ *   HP    = floor(((Base + DV) * 2 + Bonus) * Level / 100) + Level + 10
+ *   Other = floor(((Base + DV) * 2 + Bonus) * Level / 100) + 5
+ *
+ * Gen III formula:
  *   HP    = floor((2*Base + IV + EV/4) * Level / 100) + Level + 10
  *   Other = floor((2*Base + IV + EV/4) * Level / 100) + 5,
  *           then ×1.1 (raised by nature) or ×0.9 (lowered) and floor.
- *
- * Base stats are looked up per generation.  Gen III tables for species
- * 1-411 live in names/gen3_base_stats.h (the Hoenn + Kanto/Johto roster).
- * Currently a stub — replaced with the full table once the generator
- * subagent lands names/gen3_base_stats.h.
  */
 #include "pksave_internal.h"
+
+#if defined(PKSAVE_GEN1) || defined(PKSAVE_GEN2)
+
+/* Matches GetSquareRoot in pret/pokered & pret/pokecrystal:
+ * smallest b in [1, 255] with b*b >= stat_exp (0 when stat_exp == 0),
+ * then divided by 4. */
+static uint8_t gen12_stat_bonus(uint16_t stat_exp)
+{
+    if (stat_exp == 0) return 0;
+    uint32_t b = 1;
+    while (b < 255U && b * b < (uint32_t)stat_exp) {
+        b++;
+    }
+    return (uint8_t)(b / 4U);
+}
+
+static uint16_t gen12_hp_stat(uint8_t base, uint8_t iv_scaled,
+                              uint16_t stat_exp, uint8_t level)
+{
+    uint8_t dv = (uint8_t)((iv_scaled / 2U) & 0x0FU);
+    uint8_t bonus = gen12_stat_bonus(stat_exp);
+    uint32_t num = ((uint32_t)(base + dv) * 2U + bonus) * level;
+    return (uint16_t)(num / 100U + level + 10U);
+}
+
+static uint16_t gen12_other_stat(uint8_t base, uint8_t iv_scaled,
+                                 uint16_t stat_exp, uint8_t level)
+{
+    uint8_t dv = (uint8_t)((iv_scaled / 2U) & 0x0FU);
+    uint8_t bonus = gen12_stat_bonus(stat_exp);
+    uint32_t num = ((uint32_t)(base + dv) * 2U + bonus) * level;
+    return (uint16_t)(num / 100U + 5U);
+}
+
+#endif /* PKSAVE_GEN1 || PKSAVE_GEN2 */
+
+#ifdef PKSAVE_GEN1
+#include "names/gen1_base_stats.h"
+
+static const gen1_base_stats_t *gen1_base_stats_lookup(uint16_t species)
+{
+    if (species >= sizeof(gen1_base_stats) / sizeof(gen1_base_stats[0])) {
+        return NULL;
+    }
+    const gen1_base_stats_t *bs = &gen1_base_stats[species];
+    if (bs->hp == 0 && bs->atk == 0 && bs->def == 0 &&
+        bs->spc == 0 && bs->spe == 0) {
+        return NULL;
+    }
+    return bs;
+}
+#endif /* PKSAVE_GEN1 */
+
+#ifdef PKSAVE_GEN2
+#include "names/gen2_base_stats.h"
+
+static const gen2_base_stats_t *gen2_base_stats_lookup(uint16_t species)
+{
+    if (species >= sizeof(gen2_base_stats) / sizeof(gen2_base_stats[0])) {
+        return NULL;
+    }
+    const gen2_base_stats_t *bs = &gen2_base_stats[species];
+    if (bs->hp == 0 && bs->atk == 0 && bs->def == 0 &&
+        bs->spa == 0 && bs->spd == 0 && bs->spe == 0) {
+        return NULL;
+    }
+    return bs;
+}
+#endif /* PKSAVE_GEN2 */
 
 #ifdef PKSAVE_GEN3
 
@@ -71,10 +141,47 @@ static uint16_t gen3_apply_nature(uint16_t stat, uint8_t nature, uint8_t struct_
     return stat;
 }
 
+#endif /* PKSAVE_GEN3 */
+
 void pksave_recalc_stats(pksave_pokemon_t *pkm, pksave_game_t game)
 {
     if (pkm == NULL) return;
 
+#ifdef PKSAVE_GEN1
+    if (game == PKSAVE_GAME_RB || game == PKSAVE_GAME_YELLOW) {
+        const gen1_base_stats_t *bs = gen1_base_stats_lookup(pkm->species);
+        if (bs == NULL) {
+            memset(pkm->stat, 0, sizeof(pkm->stat));
+            return;
+        }
+        pkm->stat[0] = gen12_hp_stat(bs->hp, pkm->ivs[0], pkm->evs[0], pkm->level);
+        pkm->stat[1] = gen12_other_stat(bs->atk, pkm->ivs[1], pkm->evs[1], pkm->level);
+        pkm->stat[2] = gen12_other_stat(bs->def, pkm->ivs[2], pkm->evs[2], pkm->level);
+        pkm->stat[3] = pkm->stat[4] =
+            gen12_other_stat(bs->spc, pkm->ivs[3], pkm->evs[3], pkm->level);
+        pkm->stat[5] = gen12_other_stat(bs->spe, pkm->ivs[5], pkm->evs[5], pkm->level);
+        return;
+    }
+#endif
+
+#ifdef PKSAVE_GEN2
+    if (game == PKSAVE_GAME_GS || game == PKSAVE_GAME_CRYSTAL) {
+        const gen2_base_stats_t *bs = gen2_base_stats_lookup(pkm->species);
+        if (bs == NULL) {
+            memset(pkm->stat, 0, sizeof(pkm->stat));
+            return;
+        }
+        pkm->stat[0] = gen12_hp_stat(bs->hp, pkm->ivs[0], pkm->evs[0], pkm->level);
+        pkm->stat[1] = gen12_other_stat(bs->atk, pkm->ivs[1], pkm->evs[1], pkm->level);
+        pkm->stat[2] = gen12_other_stat(bs->def, pkm->ivs[2], pkm->evs[2], pkm->level);
+        pkm->stat[3] = gen12_other_stat(bs->spa, pkm->ivs[3], pkm->evs[3], pkm->level);
+        pkm->stat[4] = gen12_other_stat(bs->spd, pkm->ivs[4], pkm->evs[4], pkm->level);
+        pkm->stat[5] = gen12_other_stat(bs->spe, pkm->ivs[5], pkm->evs[5], pkm->level);
+        return;
+    }
+#endif
+
+#ifdef PKSAVE_GEN3
     if (game == PKSAVE_GAME_RS ||
         game == PKSAVE_GAME_EMERALD ||
         game == PKSAVE_GAME_FRLG) {
@@ -94,16 +201,8 @@ void pksave_recalc_stats(pksave_pokemon_t *pkm, pksave_game_t game)
         }
         return;
     }
+#endif
 
+    (void)game;
     memset(pkm->stat, 0, sizeof(pkm->stat));
 }
-
-#else  /* PKSAVE_GEN3 not defined */
-
-void pksave_recalc_stats(pksave_pokemon_t *pkm, pksave_game_t game)
-{
-    (void)game;
-    if (pkm) memset(pkm->stat, 0, sizeof(pkm->stat));
-}
-
-#endif

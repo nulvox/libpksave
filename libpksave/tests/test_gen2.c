@@ -859,6 +859,67 @@ void test_gen2_item_name_lookup(void)
     TEST_ASSERT_EQUAL_STRING("???",         pksave_item_name(PKSAVE_GAME_GS, 0));
 }
 
+void test_gen2_move_base_pp_and_item_lookups(void)
+{
+    /* Move base PP */
+    TEST_ASSERT_EQUAL_UINT8(35, pksave_move_base_pp(PKSAVE_GAME_GS, 1));        /* Pound */
+    TEST_ASSERT_EQUAL_UINT8(35, pksave_move_base_pp(PKSAVE_GAME_CRYSTAL, 33));  /* Tackle */
+    TEST_ASSERT_EQUAL_UINT8(15, pksave_move_base_pp(PKSAVE_GAME_GS, 85));       /* Thunderbolt */
+    TEST_ASSERT_EQUAL_UINT8(1,  pksave_move_base_pp(PKSAVE_GAME_GS, 165));      /* Struggle */
+    TEST_ASSERT_EQUAL_UINT8(1,  pksave_move_base_pp(PKSAVE_GAME_CRYSTAL, 166)); /* Sketch */
+    TEST_ASSERT_EQUAL_UINT8(10, pksave_move_base_pp(PKSAVE_GAME_GS, 251));      /* Beat Up */
+    TEST_ASSERT_EQUAL_UINT8(0,  pksave_move_base_pp(PKSAVE_GAME_GS, 0));
+    TEST_ASSERT_EQUAL_UINT8(0,  pksave_move_base_pp(PKSAVE_GAME_GS, 252));
+
+    /* Item max stack & pocket */
+    TEST_ASSERT_EQUAL_UINT16(99, pksave_item_max_stack(PKSAVE_GAME_GS, 0x01));      /* Master Ball */
+    TEST_ASSERT_EQUAL_UINT16(1,  pksave_item_max_stack(PKSAVE_GAME_GS, 0x07));      /* Bicycle */
+    TEST_ASSERT_EQUAL_UINT16(99, pksave_item_max_stack(PKSAVE_GAME_CRYSTAL, 0x12)); /* Potion */
+    TEST_ASSERT_EQUAL_UINT16(99, pksave_item_max_stack(PKSAVE_GAME_GS, 0xAD));      /* Berry */
+    TEST_ASSERT_EQUAL_UINT16(99, pksave_item_max_stack(PKSAVE_GAME_GS, 0xBF));      /* TM01 */
+    TEST_ASSERT_EQUAL_UINT16(1,  pksave_item_max_stack(PKSAVE_GAME_CRYSTAL, 0xF3)); /* HM01 */
+    TEST_ASSERT_EQUAL_UINT16(0,  pksave_item_max_stack(PKSAVE_GAME_GS, 0));
+    TEST_ASSERT_EQUAL_UINT16(0,  pksave_item_max_stack(PKSAVE_GAME_GS, 0xC3));      /* gap "?????" */
+    TEST_ASSERT_EQUAL_UINT16(0,  pksave_item_max_stack(PKSAVE_GAME_GS, 0xFA));      /* trailing "?????" */
+
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_BALLS, pksave_item_pocket(PKSAVE_GAME_GS, 0x01));
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_KEY,   pksave_item_pocket(PKSAVE_GAME_GS, 0x07));
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_ITEMS, pksave_item_pocket(PKSAVE_GAME_GS, 0x12));
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_ITEMS, pksave_item_pocket(PKSAVE_GAME_GS, 0xAD));
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_TM_HM, pksave_item_pocket(PKSAVE_GAME_GS, 0xBF));
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_TM_HM, pksave_item_pocket(PKSAVE_GAME_GS, 0xF3));
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_NONE,  pksave_item_pocket(PKSAVE_GAME_GS, 0));
+    TEST_ASSERT_EQUAL_INT(PKSAVE_POCKET_NONE,  pksave_item_pocket(PKSAVE_GAME_GS, 0xC3));
+}
+
+void test_gen2_recalc_stats(void)
+{
+    pksave_pokemon_t pkm;
+    memset(&pkm, 0, sizeof(pkm));
+
+    /* Mewtwo (Gen 2 National Dex 150): base HP=106, Atk=110, Def=90, SpA=154, SpD=90, Spe=130.
+     * At Lv 100 with max DVs (15 → ivs=30) and max StatExp (65535 → bonus=63):
+     *   HP  = 415, Atk = 318, Def = 278, SpA = 406, SpD = 278, Spe = 358 */
+    pkm.species = 150;
+    pkm.level   = 100;
+    for (int i = 0; i < 6; i++) {
+        pkm.ivs[i] = 30;
+        pkm.evs[i] = 65535;
+    }
+    pksave_recalc_stats(&pkm, PKSAVE_GAME_GS);
+    TEST_ASSERT_EQUAL_UINT16(415, pkm.stat[0]);
+    TEST_ASSERT_EQUAL_UINT16(318, pkm.stat[1]);
+    TEST_ASSERT_EQUAL_UINT16(278, pkm.stat[2]);
+    TEST_ASSERT_EQUAL_UINT16(406, pkm.stat[3]);
+    TEST_ASSERT_EQUAL_UINT16(278, pkm.stat[4]);
+    TEST_ASSERT_EQUAL_UINT16(358, pkm.stat[5]);
+
+    /* Egg (253) → zeroed */
+    pkm.species = 253;
+    pksave_recalc_stats(&pkm, PKSAVE_GAME_CRYSTAL);
+    TEST_ASSERT_EQUAL_UINT16(0, pkm.stat[0]);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -898,6 +959,8 @@ int main(void)
     RUN_TEST(test_gen2_species_name_lookup);
     RUN_TEST(test_gen2_move_name_lookup);
     RUN_TEST(test_gen2_item_name_lookup);
+    RUN_TEST(test_gen2_move_base_pp_and_item_lookups);
+    RUN_TEST(test_gen2_recalc_stats);
     RUN_TEST(test_gen2_is_shiny_derived);
     RUN_TEST(test_gen2_stat_exp_passthrough);
     return UNITY_END();
