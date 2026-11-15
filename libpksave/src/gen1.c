@@ -160,20 +160,67 @@ static void bcd3_encode(uint32_t v, uint8_t *p)
 
 /* ── checksum ────────────────────────────────────────────────────────────── */
 
-static uint8_t gen1_calc_checksum(const uint8_t *sram)
+#define G1_BOX_SIZE      1122U
+#define G1_BANK_BOXES_SZ (6U * G1_BOX_SIZE) /* 0x1A4C */
+
+static uint8_t gen1_calc_range_checksum(const uint8_t *buf, uint32_t len)
 {
     uint8_t sum = 0;
-    for (uint32_t i = G1_CHKSUM_START; i <= G1_CHKSUM_END; i++)
-        sum += sram[i];
+    for (uint32_t i = 0; i < len; i++)
+        sum += buf[i];
     return (uint8_t)(~sum);
+}
+
+static uint8_t gen1_calc_checksum(const uint8_t *sram)
+{
+    return gen1_calc_range_checksum(sram + G1_CHKSUM_START,
+                                    G1_CHKSUM_END - G1_CHKSUM_START + 1U);
+}
+
+static void gen1_update_box_bank_checksums(uint8_t *sram, uint32_t bank_base)
+{
+    /* sBankNAllBoxesChecksum at bank_base + 0x1A4C;
+     * sBankNIndividualBoxChecksums[0..5] at bank_base + 0x1A4D..0x1A52. */
+    sram[bank_base + G1_BANK_BOXES_SZ] =
+        gen1_calc_range_checksum(sram + bank_base, G1_BANK_BOXES_SZ);
+    for (uint32_t b = 0; b < 6U; b++) {
+        sram[bank_base + G1_BANK_BOXES_SZ + 1U + b] =
+            gen1_calc_range_checksum(sram + bank_base + b * G1_BOX_SIZE,
+                                     G1_BOX_SIZE);
+    }
+}
+
+static int gen1_validate_box_bank_checksums(const uint8_t *sram, uint32_t bank_base)
+{
+    if (gen1_calc_range_checksum(sram + bank_base, G1_BANK_BOXES_SZ) !=
+        sram[bank_base + G1_BANK_BOXES_SZ]) {
+        return PKSAVE_ERR_CORRUPT;
+    }
+    for (uint32_t b = 0; b < 6U; b++) {
+        if (gen1_calc_range_checksum(sram + bank_base + b * G1_BOX_SIZE,
+                                     G1_BOX_SIZE) !=
+            sram[bank_base + G1_BANK_BOXES_SZ + 1U + b]) {
+            return PKSAVE_ERR_CORRUPT;
+        }
+    }
+    return PKSAVE_OK;
 }
 
 int gen1_validate_checksum(const uint8_t *sram, size_t len, pksave_game_t game)
 {
     (void)game;
     if (!sram || len < 0x8000) return PKSAVE_ERR_CORRUPT;
-    return gen1_calc_checksum(sram) == sram[G1_CHKSUM_ADDR]
-           ? PKSAVE_OK : PKSAVE_ERR_CORRUPT;
+    if (gen1_calc_checksum(sram) != sram[G1_CHKSUM_ADDR])
+        return PKSAVE_ERR_CORRUPT;
+    /* When BIT_HAS_CHANGED_BOXES (bit 7 of wCurrentBoxNum at 0x284C) is set,
+     * Banks 2 & 3 carry initialized PC boxes with live checksums. */
+    if ((sram[G1_CUR_BOX] & 0x80U) != 0) {
+        if (gen1_validate_box_bank_checksums(sram, 0x4000U) != PKSAVE_OK)
+            return PKSAVE_ERR_CORRUPT;
+        if (gen1_validate_box_bank_checksums(sram, 0x6000U) != PKSAVE_OK)
+            return PKSAVE_ERR_CORRUPT;
+    }
+    return PKSAVE_OK;
 }
 
 /* ── party mon decode / encode ───────────────────────────────────────────── */
@@ -293,7 +340,7 @@ static void gen1_encode_party_mon(const pksave_pokemon_t *in,
     data[0x03] = in->level;   /* box_level field */
 
     for (int i = 0; i < 4; i++) {
-        data[0x08 + i] = in->move_ids[i];
+        data[0x08 + i] = (uint8_t)in->move_ids[i];
         data[0x1D + i] = in->move_pp[i];
     }
 
@@ -374,7 +421,7 @@ int gen1_set_trainer(pksave_save_t *s, const pksave_trainer_t *in)
     s->sram[G1_TID]     = (uint8_t)(in->tid >> 8);
     s->sram[G1_TID + 1] = (uint8_t)(in->tid & 0xFF);
     bcd3_encode(in->money, s->sram + G1_MONEY);
-    s->sram[G1_BADGES]  = in->badges;
+    s->sram[G1_BADGES]  = (uint8_t)in->badges;
     return PKSAVE_OK;
 }
 
@@ -451,6 +498,9 @@ int gen1_set_box_slot(pksave_save_t *s, uint8_t box, uint8_t slot,
     if (box == (s->sram[G1_CUR_BOX] & 0x7F)) {
         base = s->sram + G1_CUR_BOX_DATA;
     } else {
+        /* Mark BIT_HAS_CHANGED_BOXES (bit 7) so the cartridge knows Banks 2/3
+         * contain initialized boxes and does not wipe them on first box switch. */
+        s->sram[G1_CUR_BOX] |= 0x80U;
         base = s->sram + G1_BOX_OFFSET(box);
     }
 
@@ -512,6 +562,8 @@ int gen1_set_item(pksave_save_t *s, pksave_pocket_t p, uint8_t slot,
 int gen1_flush(pksave_save_t *s)
 {
     s->sram[G1_CHKSUM_ADDR] = gen1_calc_checksum(s->sram);
+    gen1_update_box_bank_checksums(s->sram, 0x4000U);
+    gen1_update_box_bank_checksums(s->sram, 0x6000U);
     return PKSAVE_OK;
 }
 

@@ -90,6 +90,17 @@ void test_rb_checksum_valid_after_flush(void)
     pksave_close(s);
     TEST_ASSERT_EQUAL(PKSAVE_OK,
         pksave_validate_checksum(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB));
+
+    /* Corrupt Bank 2 individual box 1 checksum (0x5A4E) → validation fails;
+     * re-flushing restores Bank 2/3 box checksums. */
+    rb_buf[0x5A4E] ^= 0xFF;
+    TEST_ASSERT_EQUAL(PKSAVE_ERR_CORRUPT,
+        pksave_validate_checksum(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB));
+    s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_validate_checksum(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB));
 }
 
 void test_rb_party_slot_round_trip(void)

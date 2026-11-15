@@ -63,16 +63,6 @@ surface and each generation's codec.
 
 ### Cross-generation API & struct limitations (`pksave.h`)
 
-- **8-bit `move_ids[4]` (`pksave_pokemon_t::move_ids`):** `move_ids` is
-  currently declared as `uint8_t[4]` (`0..255`). While all Gen I (`1..165`)
-  and Gen II (`1..251`) moves fit in 8 bits, Gen III (`1..354`), Gen IV
-  (`1..467`), and Gen V (`1..559`) moves above ID `255` are truncated to 8
-  bits on read and cannot be encoded on write until `move_ids` is widened to
-  `uint16_t[4]`.
-- **8-bit `badges` (`pksave_trainer_t::badges`):** `badges` is a single
-  `uint8_t` bitfield (8 badges). In Gen II (`GS`, `CRYSTAL`) and Gen IV
-  (`HGSS`), only the 8 Johto badges are exposed; the second badge byte
-  storing the 8 Kanto badges is not surfaced.
 - **English ASCII character subset:** Name codecs across all generations only
   round-trip basic English ASCII (`A-Z`, `a-z`, `0-9`, space, and basic
   punctuation). Japanese kana/kanji, accented European letters, and
@@ -89,48 +79,37 @@ surface and each generation's codec.
   `pksave_recalc_stats()` first if they want updated party stats written to
   the save.
 
-### Gen I limitations (`gen1.c`)
+### Gen I–III unexposed game features & remaining edge cases
 
-- **Inactive PC box bank checksums (`Banks 2 & 3`):** `gen1_flush()`
-  recomputes the Bank 1 main save checksum at `0x3523`, but does not
-  recompute the per-box and whole-bank checksums in SRAM Banks 2 & 3
-  (`0x5A4C..0x5A52` and `0x7A4C..0x7A52` in `pret/pokered`). Editing stored
-  boxes (`box != current_box`) without updating the bank checksums will cause
-  real cartridges to treat those inactive boxes as uninitialized when
-  switching boxes at a PC.
-- **Read-only `is_shiny`:** `gen1_decode_party_mon()` derives `is_shiny` from
-  DVs for Gen II trade compatibility, but `gen1_encode_party_mon()` writes
-  DVs strictly from `mon->ivs[]` and ignores `mon->is_shiny`.
+Beyond the general v1 non-goals table in Section 1, the following
+generation-specific save blocks and fields are preserved in-place on flush
+but not surfaced through `pksave.h`:
 
-### Gen II limitations (`gen2.c`)
-
-- **Active PC box (`sBox` in Bank 1) vs stored box banks (`Banks 2 & 3`):**
-  `gen2_get_box()` and `gen2_set_box_slot()` always index into Banks 2 & 3
-  (`0x4000+` / `0x6000+` at `box * 1102`) rather than routing the active box
-  (`wCurBox`) through Bank 1's `sBox` copy, and assume 7 contiguous 1102-byte
-  boxes per 8 KiB bank (synthetic-fixture layout) instead of
-  `pret/pokecrystal`'s cross-bank layout.
-- **Crystal secondary save mirror (`0x1209..0x1D82`):** `gen2_flush()`
-  recomputes both the primary (`0x2D0D`) and secondary (`0x1F0D`) checksums,
-  but `gen2_set_trainer`, `gen2_set_party_slot`, and `gen2_set_item` only
-  mutate the primary region (`0x2009..0x2B82`) without copying the modified
-  bytes into the backup region (`0x1209..0x1D82`).
-- **Read-only `is_shiny`:** Like Gen I, `gen2_encode_party_mon()` encodes DVs
-  from `mon->ivs[]` and does not synthesize shiny DVs when `mon->is_shiny` is
-  toggled.
-
-### Gen III limitations (`gen3.c`)
-
-- **Emerald bag pocket offsets (`g3_pocket_layout`):** `gen3.c` currently uses
-  Ruby/Sapphire's Section 1 pocket offsets (`0x560`, `0x5B0`, `0x600`,
-  `0x640`, `0x740`, capacities 20/20/16/64/46) for both `RS` and `EMERALD`
-  (matching `generate_fixtures.py`). On a real Emerald cartridge
-  (`pret/pokeemerald`), SaveBlock1 bag pockets are shifted (`0x568`, `0x5E0`,
-  `0x658`, `0x698`, `0x798`, capacities 30/30/16/64/46).
-- **PID search ignores gender & Unown form:** When `g3_encode_encrypted_block()`
-  searches for a new PID to satisfy a changed `nature` or `is_shiny`, it does
-  not constrain the low byte (`PID & 0xFF`, which determines gender against
-  the species gender threshold) or Unown letter form.
+- **Gen I (`gen1.c`):** Pokédex owned/seen bitfields, PC item box
+  (`wNumBoxItems`), Daycare Pokémon (`wDayCareMon`), Pikachu friendship &
+  beach minigame data (`YELLOW`), Safari Zone state, Hall of Fame records
+  (Bank 0), and story/event flags.
+- **Gen II (`gen2.c`):** Pokédex / Unown Dex flags, Pokémon friendship / egg
+  cycles (`0x1B`) and caught data (`0x1D..0x1E`), PC item box (`wNumPCItems`),
+  Mom's savings (`wMomsMoney`), Casino coins (`wCoins`), Daycare Pokémon,
+  Mail messages (`sPartyMail` / `sMailboxes`), Kurt's Apricorns, Pokégear
+  phone contacts, Mystery Gift / Mobile Adapter records, Battle Tower state,
+  and Hall of Fame records. (Note: Gold/Silver's fragmented backup save
+  across Banks 0/1/3 is not mirrored on flush; Crystal's contiguous backup
+  save at `0x1209..0x1D82` *is* mirrored and re-checksummed on flush.)
+- **Gen III (`gen3.c`):**
+  - Unexposed SaveBlock1 / SaveBlock2 / PKM fields: Pokédex flags, Pokémon
+    friendship (`Growth+9`), PP Up bonus bitfield (`Growth+8`), Contest stats
+    (`EVs+6..11`), Ribbons & obedience bitfield (`Misc+8..11`), markings,
+    Pokérus caught/met location & Poké Ball (`Misc+1..3`), PC item storage,
+    Pokéblocks, Berry trees, Secret Bases, TV shows / PokéNews / Dewford
+    trends, Mauville Old Man, Contest winners, Daycare, Mail, Battle Frontier
+    / Trainer Hill / Walda phrase, Roamer, Enigma Berry, Mystery Gift /
+    e-Reader Trainer, and Hall of Fame sections.
+  - **PID search ignores gender & Unown form:** When `g3_encode_encrypted_block()`
+    searches for a new PID to satisfy a changed `nature` or `is_shiny`, it
+    does not constrain the low byte (`PID & 0xFF`, which determines gender
+    against the species gender threshold) or Unown letter form.
 
 ### Gen IV & V limitations (`gen4.c`, `gen5.c` — synthetic-fixture baseline)
 
@@ -142,6 +121,10 @@ begins:
   use a proprietary 16-bit glyph index table (not Unicode UTF-16LE), whereas
   `gen4.c` currently reads and writes raw ASCII codepoints in 16-bit words to
   match `generate_fixtures.py`.
+- **HGSS Kanto badges (`gen4.c`):** `gen4_get_trainer` / `gen4_set_trainer`
+  currently read and write a single badge byte (`G4_BADGES_OFF`), so the
+  second byte storing HGSS's 8 Kanto badges is not yet wired into the high
+  byte of `pksave_trainer_t::badges`.
 - **Party tail encryption & Gen V party struct size (`gen4.c`, `gen5.c`):**
   On real Gen IV and V cartridges, the party tail (`0x88..0xEB` in Gen IV,
   `0x88..0xDB` in Gen V — containing level, status, current HP, and calculated

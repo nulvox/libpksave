@@ -219,7 +219,9 @@ static void gen3_party_round_trip(uint8_t *buf, pksave_game_t game,
     party[0].level    = 50;
     party[0].held_item = 200;
     party[0].move_ids[0] = 52;  /* Ember */
+    party[0].move_ids[1] = 354; /* Psycho Boost (> 255 16-bit move ID) */
     party[0].move_pp[0]  = 21;
+    party[0].move_pp[1]  = 5;
     party[0].evs[0]   = 100;
     party[0].evs[1]   = 50;
     party[0].ivs[0]   = 31;
@@ -238,8 +240,10 @@ static void gen3_party_round_trip(uint8_t *buf, pksave_game_t game,
     TEST_ASSERT_EQUAL_UINT16(4, party[0].species);
     TEST_ASSERT_EQUAL_UINT8(50, party[0].level);
     TEST_ASSERT_EQUAL_UINT16(200, party[0].held_item);
-    TEST_ASSERT_EQUAL_UINT8(52, party[0].move_ids[0]);
+    TEST_ASSERT_EQUAL_UINT16(52,  party[0].move_ids[0]);
+    TEST_ASSERT_EQUAL_UINT16(354, party[0].move_ids[1]);
     TEST_ASSERT_EQUAL_UINT8(21, party[0].move_pp[0]);
+    TEST_ASSERT_EQUAL_UINT8(5,  party[0].move_pp[1]);
     TEST_ASSERT_EQUAL_UINT8(100, party[0].evs[0]);
     TEST_ASSERT_EQUAL_UINT8(50, party[0].evs[1]);
     TEST_ASSERT_EQUAL_UINT8(31, party[0].ivs[0]);
@@ -548,9 +552,8 @@ void test_rs_get_balls_pocket(void)
 
 void test_emerald_get_items_pocket_with_xor(void)
 {
-    /* Emerald encrypts quantities with the section 0 security key.
-     * The fixture writes pre-XORed values; the library must un-XOR.
-     * Emerald shares the RS-layout fixture (2 items: Potion ×5, ×2). */
+    /* Emerald encrypts quantities with the section 0 security key, and its
+     * SaveBlock1 bag pockets have 30 Item/Key slots (Balls at 0x650). */
     if (!load_fixture("emerald.sav", emerald_buf, SRAM_SIZE)) return;
     pksave_save_t *s = pksave_open(emerald_buf, SRAM_SIZE, PKSAVE_GAME_EMERALD);
     TEST_ASSERT_NOT_NULL(s);
@@ -561,6 +564,15 @@ void test_emerald_get_items_pocket_with_xor(void)
     TEST_ASSERT_EQUAL_UINT8(2, count);
     TEST_ASSERT_EQUAL_UINT16(13, items[0].item_id);  /* Potion */
     TEST_ASSERT_EQUAL_UINT16(5,  items[0].quantity); /* un-XORed quantity */
+
+    /* Balls pocket at 0x650 in Emerald (vs 0x600 in RS) */
+    pksave_item_t balls[16];
+    uint8_t bcnt = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK,
+        pksave_get_pocket(s, PKSAVE_POCKET_BALLS, balls, &bcnt));
+    TEST_ASSERT_EQUAL_UINT8(1, bcnt);
+    TEST_ASSERT_EQUAL_UINT16(4,  balls[0].item_id);  /* Poke Ball */
+    TEST_ASSERT_EQUAL_UINT16(10, balls[0].quantity);
     pksave_close(s);
 }
 

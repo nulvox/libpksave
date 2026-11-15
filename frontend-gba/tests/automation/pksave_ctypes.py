@@ -71,7 +71,7 @@ class PksaveTrainer(Structure):
         ("tid",    c_uint16),
         ("sid",    c_uint16),
         ("money",  c_uint32),
-        ("badges", c_uint8),
+        ("badges", c_uint16),
     ]
 
 
@@ -130,7 +130,7 @@ class PksavePokemon(Structure):
         ("nature",    c_uint8),
         ("ability",   c_uint8),
         ("is_shiny",  c_uint8),
-        ("move_ids",  c_uint8 * 4),
+        ("move_ids",  c_uint16 * 4),
         ("move_pp",   c_uint8 * 4),
         ("evs",       c_uint16 * 6),
         ("ivs",       c_uint8 * 6),

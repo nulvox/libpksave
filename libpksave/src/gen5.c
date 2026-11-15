@@ -193,7 +193,7 @@ int gen5_set_trainer(pksave_save_t *s, const pksave_trainer_t *in)
     memcpy(blk + G5_TID_OFF,   &in->tid,   2);
     memcpy(blk + G5_SID_OFF,   &in->sid,   2);
     memcpy(blk + G5_MONEY_OFF, &in->money, 4);
-    blk[G5_BADGES_OFF] = in->badges;
+    blk[G5_BADGES_OFF] = (uint8_t)in->badges;
     return PKSAVE_OK;
 }
 

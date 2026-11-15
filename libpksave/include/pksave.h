@@ -52,7 +52,7 @@ typedef struct {
     uint16_t tid;
     uint16_t sid;
     uint32_t money;
-    uint8_t  badges;      /* bitfield; meaning is generation-specific */
+    uint16_t badges;      /* bitfield; 8-bit in Gen I/III/IV/V, 16-bit (Johto+Kanto) in Gen II */
 } pksave_trainer_t;
 
 typedef struct {
@@ -62,7 +62,7 @@ typedef struct {
     uint8_t  nature;      /* 0-24; 0 for Gen I/II (absent) */
     uint8_t  ability;     /* slot 0/1; 0 for Gen I/II (absent) */
     uint8_t  is_shiny;
-    uint8_t  move_ids[4];
+    uint16_t move_ids[4];
     uint8_t  move_pp[4];
     uint16_t evs[6];      /* HP/Atk/Def/SpA/SpD/Spe; Gen I/II use stat exp */
     uint8_t  ivs[6];      /* 0-31; Gen I/II 0-15 DVs mapped to 0-31 */

@@ -65,7 +65,8 @@ static uint8_t gen2_growth_rate_for_species(uint16_t species_id)
 
 /* GS offsets */
 #define GS_MONEY        0x23DBU
-#define GS_BADGES       0x23E4U
+#define GS_BADGES       0x23E4U   /* 2 bytes: Johto@0x23E4, Kanto@0x23E5 */
+#define GS_CUR_BOX      0x2724U
 #define GS_PARTY_CNT    0x288AU
 #define GS_PARTY_SPEC   0x288BU
 #define GS_PARTY_DATA   0x2892U
@@ -75,10 +76,12 @@ static uint8_t gen2_growth_rate_for_species(uint16_t species_id)
 #define GS_CHKSUM_START 0x2009U
 #define GS_CHKSUM_END   0x2D68U
 #define GS_CHKSUM_ADDR  0x2D69U
+#define GS_ACTIVE_BOX   0x2D6CU   /* sBox (1102 bytes) in Bank 1 */
 
 /* Crystal offsets */
 #define CRY_MONEY       0x23DCU
-#define CRY_BADGES      0x23E5U
+#define CRY_BADGES      0x23E5U   /* 2 bytes: Johto@0x23E5, Kanto@0x23E6 */
+#define CRY_CUR_BOX     0x2700U
 #define CRY_PARTY_CNT   0x2865U
 #define CRY_PARTY_SPEC  0x2866U
 #define CRY_PARTY_DATA  0x286DU
@@ -88,6 +91,7 @@ static uint8_t gen2_growth_rate_for_species(uint16_t species_id)
 #define CRY_CHKSUM1_START 0x2009U
 #define CRY_CHKSUM1_END   0x2B82U
 #define CRY_CHKSUM1_ADDR  0x2D0DU
+#define CRY_ACTIVE_BOX    0x2D10U /* sBox (1102 bytes) in Bank 1 */
 #define CRY_CHKSUM2_START 0x1209U
 #define CRY_CHKSUM2_END   0x1D82U
 #define CRY_CHKSUM2_ADDR  0x1F0DU
@@ -304,7 +308,7 @@ static void gen2_encode_party_mon(const pksave_pokemon_t *in,
     data[0x1F] = in->level;
 
     for (int i = 0; i < 4; i++) {
-        data[0x02 + i] = in->move_ids[i];
+        data[0x02 + i] = (uint8_t)in->move_ids[i];
         data[0x17 + i] = in->move_pp[i];
     }
 
@@ -353,6 +357,10 @@ static uint32_t money_off(pksave_game_t g)
     { return is_crystal(g) ? CRY_MONEY   : GS_MONEY; }
 static uint32_t badges_off(pksave_game_t g)
     { return is_crystal(g) ? CRY_BADGES  : GS_BADGES; }
+static uint32_t cur_box_off(pksave_game_t g)
+    { return is_crystal(g) ? CRY_CUR_BOX : GS_CUR_BOX; }
+static uint32_t active_box_off(pksave_game_t g)
+    { return is_crystal(g) ? CRY_ACTIVE_BOX : GS_ACTIVE_BOX; }
 static uint32_t party_cnt_off(pksave_game_t g)
     { return is_crystal(g) ? CRY_PARTY_CNT  : GS_PARTY_CNT; }
 static uint32_t party_spec_off(pksave_game_t g)
@@ -373,7 +381,9 @@ int gen2_get_trainer(pksave_save_t *s, pksave_trainer_t *out)
     out->tid    = (uint16_t)((s->sram[G2_TID] << 8) | s->sram[G2_TID + 1]);
     out->sid    = 0;
     out->money  = bcd3_decode(s->sram + money_off(s->game));
-    out->badges = s->sram[badges_off(s->game)];
+    uint32_t boff = badges_off(s->game);
+    /* Low byte = Johto badges, high byte = Kanto badges */
+    out->badges = (uint16_t)s->sram[boff] | ((uint16_t)s->sram[boff + 1] << 8);
     return PKSAVE_OK;
 }
 
@@ -383,7 +393,9 @@ int gen2_set_trainer(pksave_save_t *s, const pksave_trainer_t *in)
     s->sram[G2_TID]     = (uint8_t)(in->tid >> 8);
     s->sram[G2_TID + 1] = (uint8_t)(in->tid & 0xFF);
     bcd3_encode(in->money, s->sram + money_off(s->game));
-    s->sram[badges_off(s->game)] = in->badges;
+    uint32_t boff = badges_off(s->game);
+    s->sram[boff]     = (uint8_t)(in->badges & 0xFF);
+    s->sram[boff + 1] = (uint8_t)(in->badges >> 8);
     return PKSAVE_OK;
 }
 
@@ -454,10 +466,42 @@ static void gen2_decode_box_mon(const uint8_t *data,
     gen2_decode_party_mon(party, ot_name, nick, out);
 }
 
+static const uint8_t *gen2_box_read_ptr(pksave_save_t *s, uint8_t box)
+{
+    uint32_t bank_off = gen2_box_base(box);
+    uint8_t  cur_box  = s->sram[cur_box_off(s->game)] & 0x0FU;
+    uint32_t act_off  = active_box_off(s->game);
+    if (box == cur_box && s->sram[act_off] > 0 && s->sram[bank_off] == 0) {
+        return s->sram + act_off;
+    }
+    return s->sram + bank_off;
+}
+
+static uint8_t *gen2_box_write_ptr(pksave_save_t *s, uint8_t box)
+{
+    uint32_t bank_off = gen2_box_base(box);
+    uint8_t  cur_box  = s->sram[cur_box_off(s->game)] & 0x0FU;
+    uint32_t act_off  = active_box_off(s->game);
+    if (box == cur_box && s->sram[act_off] > 0 && s->sram[bank_off] == 0) {
+        memcpy(s->sram + bank_off, s->sram + act_off, G2_BOX_SIZE);
+    }
+    return s->sram + bank_off;
+}
+
+static void gen2_sync_active_box(pksave_save_t *s, uint8_t box)
+{
+    uint8_t cur_box = s->sram[cur_box_off(s->game)] & 0x0FU;
+    if (box == cur_box) {
+        memcpy(s->sram + active_box_off(s->game),
+               s->sram + gen2_box_base(box),
+               G2_BOX_SIZE);
+    }
+}
+
 int gen2_get_box(pksave_save_t *s, uint8_t box, pksave_pokemon_t out[30], uint8_t *cnt)
 {
     if (box >= G2_NUM_BOXES_GS) return PKSAVE_ERR_RANGE;
-    const uint8_t *base = s->sram + gen2_box_base(box);
+    const uint8_t *base = gen2_box_read_ptr(s, box);
     uint8_t n = base[0];
     if (n > G2_BOX_PER_BOX) n = G2_BOX_PER_BOX;
     *cnt = n;
@@ -480,7 +524,7 @@ int gen2_set_box_slot(pksave_save_t *s, uint8_t box, uint8_t slot,
 {
     if (box >= G2_NUM_BOXES_GS || slot >= G2_BOX_PER_BOX) return PKSAVE_ERR_RANGE;
 
-    uint8_t *base    = s->sram + gen2_box_base(box);
+    uint8_t *base    = gen2_box_write_ptr(s, box);
     uint8_t *species = base + 1U;
     uint8_t *data    = base + 22U + (size_t)slot * G2_BOX_MON_SIZE;
     uint8_t *ot      = base + 22U + (size_t)G2_BOX_PER_BOX * G2_BOX_MON_SIZE
@@ -505,6 +549,7 @@ int gen2_set_box_slot(pksave_save_t *s, uint8_t box, uint8_t slot,
         base[0] = slot + 1;
         species[slot + 1] = 0xFF;
     }
+    gen2_sync_active_box(s, box);
     return PKSAVE_OK;
 }
 
@@ -538,7 +583,7 @@ int gen2_get_box_pokerus(pksave_save_t *s, uint8_t box, uint8_t slot,
                           pksave_pokerus_t *out)
 {
     if (box >= G2_NUM_BOXES_GS || slot >= G2_BOX_PER_BOX) return PKSAVE_ERR_RANGE;
-    const uint8_t *base = s->sram + gen2_box_base(box);
+    const uint8_t *base = gen2_box_read_ptr(s, box);
     if (slot >= base[0]) return PKSAVE_ERR_RANGE;
     const uint8_t *mon = base + 22U + (size_t)slot * G2_BOX_MON_SIZE;
     pksave_pokerus_decode(mon[G2_PKRS_BYTE_OFF], out);
@@ -549,10 +594,11 @@ int gen2_set_box_pokerus(pksave_save_t *s, uint8_t box, uint8_t slot,
                           uint8_t strain, uint8_t days)
 {
     if (box >= G2_NUM_BOXES_GS || slot >= G2_BOX_PER_BOX) return PKSAVE_ERR_RANGE;
-    uint8_t *base = s->sram + gen2_box_base(box);
+    uint8_t *base = gen2_box_write_ptr(s, box);
     if (slot >= base[0]) return PKSAVE_ERR_RANGE;
     uint8_t *mon = base + 22U + (size_t)slot * G2_BOX_MON_SIZE;
     mon[G2_PKRS_BYTE_OFF] = pksave_pokerus_encode(strain, days);
+    gen2_sync_active_box(s, box);
     return PKSAVE_OK;
 }
 
@@ -563,13 +609,13 @@ int gen2_set_box_pokerus(pksave_save_t *s, uint8_t box, uint8_t slot,
  *   byte or 0xFF terminator). Item IDs start at 0xBF (TM01) through 0xF9
  *   (HM07), skipping unused filler item IDs 0xC3 and 0xDC. */
 
-#define GS_TMHM_OFF     0x2410U
-#define GS_ITEMS_CNT    0x2449U
-#define GS_KEY_CNT      0x2474U
-#define GS_BALLS_CNT    0x248FU
+#define GS_TMHM_OFF     0x23E6U
+#define GS_ITEMS_CNT    0x241FU
+#define GS_KEY_CNT      0x2449U
+#define GS_BALLS_CNT    0x2464U
 
-#define CRY_TMHM_OFF    0x23E6U
-#define CRY_ITEMS_CNT   0x241FU
+#define CRY_TMHM_OFF    0x23E7U
+#define CRY_ITEMS_CNT   0x2420U
 #define CRY_KEY_CNT     0x244AU
 #define CRY_BALLS_CNT   0x2465U
 
@@ -731,7 +777,24 @@ int gen2_validate_checksum(const uint8_t *sram, size_t len, pksave_game_t game)
 
 int gen2_flush(pksave_save_t *s)
 {
+    /* Keep sBox (Bank 1 active box buffer) and sBox1..sBox14[wCurBox] in sync. */
+    uint8_t cur_box = s->sram[cur_box_off(s->game)] & 0x0FU;
+    if (cur_box < G2_NUM_BOXES_GS) {
+        uint32_t bank_off = gen2_box_base(cur_box);
+        uint32_t act_off  = active_box_off(s->game);
+        if (s->sram[bank_off] > 0) {
+            memcpy(s->sram + act_off, s->sram + bank_off, G2_BOX_SIZE);
+        } else if (s->sram[act_off] > 0) {
+            memcpy(s->sram + bank_off, s->sram + act_off, G2_BOX_SIZE);
+        }
+    }
+
     if (s->game == PKSAVE_GAME_CRYSTAL) {
+        /* Mirror primary sGameData (0x2009..0x2B82) into sBackupGameData
+         * (0x1209..0x1D82) so both copies match on cartridge load. */
+        memcpy(s->sram + CRY_CHKSUM2_START,
+               s->sram + CRY_CHKSUM1_START,
+               CRY_CHKSUM1_END - CRY_CHKSUM1_START + 1U);
         gen2_write_le16(s->sram, CRY_CHKSUM1_ADDR,
                         gen2_sum16(s->sram, CRY_CHKSUM1_START, CRY_CHKSUM1_END));
         gen2_write_le16(s->sram, CRY_CHKSUM2_ADDR,
