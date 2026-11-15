@@ -52,10 +52,44 @@ the original game and reports no corruption**. Features in this list are
 preserved (their bytes pass through unmodified) but not exposed for
 editing.
 
-## 2. In scope but not yet implemented
+## 2. In scope but not yet implemented (lazy-loaded per generation)
 
-These are gaps in the current code rather than scope decisions. They
-should be filled before a frontend ships.
+Library capabilities beyond core save detection, checksums, and basic
+trainer/party/box/bag round-trips are lazy-loaded when a generation's
+frontend work begins (following the pattern in
+[`frontend-gba-libpksave-gaps.md`](frontend-gba-libpksave-gaps.md)).
+Generations I–III have these helpers implemented; Generations IV–V retain
+baseline codecs so the vertical slice can be completed alongside
+`frontend-nds`.
+
+### Gen IV & V — Deferred Pokémon fields and lookup helpers
+
+- **Pokémon nickname & OT name (`gen4.c`, `gen5.c`):** `g4_decode_mon` /
+  `g4_encode_mon` and `g5_decode_mon` / `g5_encode_mon` currently leave
+  `nickname` and `ot_name` empty (`""`).
+- **Nature, Ability, and Shininess (`gen4.c`, `gen5.c`):** Not yet populated
+  on decode or synced back to PID / Block A on encode.
+- **Box Pokémon level / XP (`gen4.c`, `gen5.c`):** 136-byte box Pokémon omit
+  the party footer (`0x8C` level), so `g4_decode_box_mon` and
+  `g5_decode_box_mon` currently leave `level = 0` rather than deriving it
+  from Block A experience via growth-rate tables (as `gen3.c` does).
+- **Ability name tables (`names/gen4_abilities.h`, `names/gen5_abilities.h`):**
+  Currently 1-entry `"???"` stubs (`TODO(3)`).
+- **Stat recalculation & metadata lookups (`recalc.c`, `lookups.c`, `pksave.h`):**
+  `pksave_recalc_stats()`, `pksave_species_abilities()`,
+  `pksave_move_base_pp()`, `pksave_item_max_stack()`, `pksave_item_pocket()`,
+  and `PKSAVE_GENx_*_MAX` name-length constants are implemented for
+  Generations I–III and return sentinels (`0` / `PKSAVE_POCKET_NONE`) for
+  Generations IV–V.
+
+### Gen I & II — Experience sync on level edit
+
+Party Pokémon store both `level` and `experience`, while Box Pokémon store
+`box_level` (`0x03` in Gen I) or `level` (`0x1F` in Gen II) alongside the
+3-byte `experience` (`0x0E..0x10` in Gen I, `0x08..0x0A` in Gen II). Editing
+`level` currently updates the stored level byte(s) and preserves existing
+`experience` bytes unchanged rather than recomputing `experience` from a
+per-species growth-rate curve.
 
 ### Gen I & II — Bag pockets
 

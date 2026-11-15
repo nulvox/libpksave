@@ -74,14 +74,19 @@ make -C libpksave fixtures
 
 `.github/workflows/ci.yml` runs on every push to `main` and every PR:
 
-1. **lint-docker** — hadolint over all four Dockerfiles
+1. **zizmor** — audits GitHub Actions workflows for security and pinning issues.
+2. **lint-docker** — hadolint recursively over all five Dockerfiles
    (`.hadolint.yaml` configures the rules).
-2. **lint-c** — cppcheck over `libpksave/src/` with all five
+3. **lint-c** — cppcheck over `libpksave/src/` with all five
    `-DPKSAVE_GENx` flags. `--error-exitcode=1`, so warnings fail CI.
-3. **lint-python** — ruff over the fixture generator.
-4. **test-libpksave** — builds the `pksave-test` image (with GitHub
-   Actions cache) and runs the full Unity suite.
+4. **lint-python** — `ruff check .` across the full repository (`ruff.toml`
+   configures the rules), followed by `make test-tools` (sprite and lookup
+   generator unit tests) and `frontend-gba/tests/automation/test_cycler_host.py`
+   (host C++ widget unit tests).
+5. **test-libpksave** — builds the `pksave-test` image (with GitHub
+   Actions cache) and runs the full Unity suite across all five generations.
 
-The cross-compiled frontend ROMs and mGBA automation suite are not part of the
-current GitHub Actions workflow; CI currently gates the portable library and
-support tooling. See [frontends.md](frontends.md) for platform status.
+The cross-compiled frontend ROMs and headless mGBA emulator suite (`make test-gba`)
+are not part of the default GitHub Actions workflow; CI gates the portable
+library, host-compilable widgets, and support tooling. See
+[frontends.md](frontends.md) for platform status.

@@ -14,30 +14,38 @@ Legend: ✅ supported · ⛔ absent in game · ❌ not implemented
 
 ## API coverage
 
-| Feature                       | Gen I (RB/Y)        | Gen II (GS/C)       | Gen III (RS/E/FRLG) | Gen IV (DP/Pt/HGSS) | Gen V (BW/BW2)      |
-|-------------------------------|---------------------|---------------------|---------------------|---------------------|---------------------|
-| Save detection                | ✅                  | ✅                  | ✅                  | ✅                  | ✅                  |
-| Checksum recompute on flush   | ✅ (one's-comp byte)| ✅ (LE16 ×1 / ×2)   | ✅ (per-section)    | ✅ (CRC-16-CCITT)   | ✅ (CRC-16-CCITT)   |
-| Trainer name / TID / SID      | ✅                  | ✅                  | ✅                  | ✅                  | ✅                  |
-| Trainer money                 | ✅                  | ✅                  | ✅                  | ✅                  | ✅                  |
-| Badges (bitfield)             | ✅                  | ✅                  | ✅                  | ✅                  | ✅                  |
-| Party read / slot write       | ✅                  | ✅                  | ✅                  | ✅                  | ✅                  |
-| Box count                     | 12                  | 14                  | 14                  | 18                  | 24                  |
-| Box read / slot write         | ✅                  | ✅                  | ✅                  | ✅                  | ✅                  |
-| Pokémon nickname              | ✅                  | ✅                  | ✅                  | ✅                  | ✅                  |
-| Pokémon OT name               | ✅                  | ✅                  | ✅                  | ✅                  | ✅                  |
-| Species / level / moves+PP    | ✅                  | ✅                  | ✅                  | ✅                  | ✅                  |
-| EVs / stat experience         | ✅ (stat exp 0-65535)| ✅ (stat exp 0-65535)| ✅ (EV 0-255)       | ✅ (EV 0-255)       | ✅ (EV 0-255)       |
-| IVs / DVs                     | ✅ (DV→IV ×2)       | ✅ (DV→IV ×2)       | ✅                  | ✅                  | ✅                  |
-| Held item                     | ⛔                  | ✅                  | ✅                  | ✅                  | ✅                  |
-| Nature                        | ⛔                  | ⛔                  | ✅                  | ✅                  | ✅                  |
-| Ability slot                  | ⛔                  | ⛔                  | ✅                  | ✅                  | ✅                  |
-| Shininess (`is_shiny`)        | ✅ (derived from DVs)| ✅ (derived from DVs)| ✅                  | ✅                  | ✅                  |
-| Calculated stats (read-only)  | ✅                  | ✅                  | ✅                  | ✅                  | ✅                  |
-| Pokérus (party + box)         | ⛔                  | ✅                  | ✅                  | ✅                  | ✅                  |
-| Name lookup: species / move / item | ✅              | ✅                  | ✅                  | ✅                  | ✅                  |
-| Name lookup: ability          | ⛔                  | ⛔                  | ✅                  | ❌ stub             | ❌ stub             |
-| Name lookup: nature           | ⛔                  | ⛔                  | ✅ (shared table)   | ✅                  | ✅                  |
+| Feature                                  | Gen I (RB/Y)         | Gen II (GS/C)        | Gen III (RS/E/FRLG)  | Gen IV (DP/Pt/HGSS) | Gen V (BW/BW2)      |
+|------------------------------------------|----------------------|----------------------|----------------------|---------------------|---------------------|
+| Save detection                           | ✅                   | ✅                   | ✅                   | ✅                  | ✅                  |
+| Checksum recompute on flush              | ✅ (one's-comp byte) | ✅ (LE16 ×1 / ×2)    | ✅ (per-section)     | ✅ (CRC-16-CCITT)   | ✅ (CRC-16-CCITT)   |
+| Trainer name / TID / SID                 | ✅ (SID ⛔)          | ✅ (SID ⛔)          | ✅                   | ✅                  | ✅                  |
+| Trainer money                            | ✅                   | ✅                   | ✅                   | ✅                  | ✅                  |
+| Badges (bitfield)                        | ✅                   | ✅                   | ✅                   | ✅                  | ✅                  |
+| Party read / slot write                  | ✅                   | ✅                   | ✅                   | ✅                  | ✅                  |
+| Box count                                | 12 (20 slots/box)    | 14 (20 slots/box)    | 14 (30 slots/box)    | 18 (30 slots/box)   | 24 (30 slots/box)   |
+| Box read / slot write                    | ✅                   | ✅                   | ✅                   | ✅                  | ✅                  |
+| Box Pokémon level round-trip             | ✅ (`box_level`)     | ✅ (`0x1F`)          | ✅ (XP↔level sync)   | ❌ (left 0)         | ❌ (left 0)         |
+| Pokémon nickname                         | ✅                   | ✅                   | ✅                   | ❌                  | ❌                  |
+| Pokémon OT name                          | ✅                   | ✅                   | ✅                   | ❌                  | ❌                  |
+| Species / party level / moves+PP         | ✅                   | ✅                   | ✅                   | ✅                  | ✅                  |
+| EVs / stat experience                    | ✅ (stat exp 0-65535)| ✅ (stat exp 0-65535)| ✅ (EV 0-255)        | ✅ (EV 0-255)       | ✅ (EV 0-255)       |
+| IVs / DVs                                | ✅ (DV→IV ×2)        | ✅ (DV→IV ×2)        | ✅                   | ✅                  | ✅                  |
+| Held item                                | ⛔                   | ✅                   | ✅                   | ✅                  | ✅                  |
+| Nature                                   | ⛔                   | ⛔                   | ✅ (PID-synced)      | ❌                  | ❌                  |
+| Ability slot                             | ⛔                   | ⛔                   | ✅                   | ❌                  | ❌                  |
+| Shininess (`is_shiny`)                   | ✅ (derived from DVs)| ✅ (derived from DVs)| ✅ (PID-synced)      | ❌                  | ❌                  |
+| Party stats (`stat[6]` read/write)       | ✅                   | ✅                   | ✅                   | ✅                  | ✅                  |
+| Stat recalculation (`pksave_recalc_stats`)| ✅ (DV + √StatExp)  | ✅ (DV + √StatExp)   | ✅ (IV + EV/4 ±10%)  | ❌                  | ❌                  |
+| Pokérus (party + box)                    | ⛔                   | ✅                   | ✅                   | ✅                  | ✅                  |
+| Name lookup: species / move / item       | ✅ (incl. HM/TM)     | ✅                   | ✅                   | ✅                  | ✅                  |
+| Name lookup: ability                     | ⛔                   | ⛔                   | ✅                   | ❌ stub             | ❌ stub             |
+| Name lookup: nature                      | ⛔                   | ⛔                   | ✅ (shared table)    | ✅ (shared table)   | ✅ (shared table)   |
+| Species abilities (`pksave_species_abilities`)| ⛔              | ⛔                   | ✅                   | ❌                  | ❌                  |
+| Move base PP (`pksave_move_base_pp`)     | ✅                   | ✅                   | ✅                   | ❌                  | ❌                  |
+| Item max stack (`pksave_item_max_stack`) | ✅                   | ✅                   | ✅                   | ❌                  | ❌                  |
+| Item pocket (`pksave_item_pocket`)       | ✅                   | ✅                   | ✅                   | ❌                  | ❌                  |
+| Numeric limits (`pksave_iv_max`, `pksave_ev_*`)| ✅             | ✅                   | ✅                   | ✅                  | ✅                  |
+| Name-length macros (`PKSAVE_GENx_*_MAX`) | ✅                   | ✅                   | ✅                   | ❌                  | ❌                  |
 
 ## Bag pockets
 

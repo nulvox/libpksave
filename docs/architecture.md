@@ -20,14 +20,18 @@ libpksave/
 │   │   ├── checksum.c                  — shared checksum entry points
 │   │   ├── gen1.c … gen5.c             — per-generation parse / serialize / checksum
 │   │   ├── pksave_internal.h           — gen-private declarations + shared helpers
+│   │   ├── recalc.c                    — pksave_recalc_stats() (Gen I–III formulas)
+│   │   ├── lookups.c                   — per-species/move/item metadata lookups
+│   │   ├── limits.c                    — per-game IV/EV numeric caps
 │   │   ├── names.c                     — public name-lookup functions
-│   │   └── names/genN_*.h              — species/move/item/ability tables
-│   ├── Makefile                        — invoked inside docker/test
+│   │   └── names/genN_*.h              — species/move/item/ability/base-stat tables
+│   ├── Makefile                        — invoked inside docker/test (and host `lib`)
 │   └── tests/                          — Unity tests + fixture .sav files
+├── tools/                              — sprite extractor + lookup codegen + unit tests
 ├── frontend-gbc/                       — placeholder (gbdk-2020, TODO)
-├── frontend-gba/                       — implemented Gen III editor (butano)
+├── frontend-gba/                       — implemented Gen III editor (butano) + tests
 ├── frontend-nds/                       — placeholder (BlocksDS, TODO)
-├── docker/{test,gbc,gba,nds}/          — one Dockerfile per toolchain
+├── docker/{test,test-gba,gbc,gba,nds}/ — one Dockerfile per toolchain / test harness
 └── bin/                                — Docker build artifacts land here
 ```
 
@@ -42,10 +46,15 @@ Callers include exactly one header: `pksave.h`. The header exposes:
 - Party:   `pksave_get_party`   / `pksave_set_party_slot`
 - Box:     `pksave_get_box_count` / `pksave_get_box` / `pksave_set_box_slot`
 - Bag:     `pksave_get_pocket`   / `pksave_set_item`
+- Stats:   `pksave_recalc_stats`
 - Pokérus: `pksave_get_party_pokerus` / `pksave_set_party_pokerus`
             `pksave_get_box_pokerus`   / `pksave_set_box_pokerus`
 - Names:   `pksave_species_name`, `pksave_move_name`, `pksave_item_name`,
             `pksave_ability_name`, `pksave_nature_name`
+- Lookups: `pksave_species_abilities`, `pksave_move_base_pp`,
+            `pksave_item_max_stack`, `pksave_item_pocket`
+- Limits:  `pksave_iv_max`, `pksave_ev_max_per_stat`, `pksave_ev_total_max`,
+            and `PKSAVE_GENx_*_MAX` name-length constants
 - Test helper: `pksave_validate_checksum`
 
 There is **no** dynamic allocation. `pksave_open` returns a pointer to one
