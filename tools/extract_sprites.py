@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 gbsdk contributors
+# Copyright (c) 2026 nulvox
 """
 Extract Pokemon front sprites from a user-supplied Gen III GBA ROM.
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 gbsdk contributors
+# Copyright (c) 2026 nulvox
 """
 Wave 2B test — Pokerus modal commits a status cycle (ACTIVE → NEVER)
 through FLASH.

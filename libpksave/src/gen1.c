@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) 2026 gbsdk contributors
+ * Copyright (c) 2026 nulvox
  *
  * Gen I (Red/Blue/Yellow) save format implementation.
  * All offsets derived from pret/pokered ram/sram.asm and engine/save_menu.asm.

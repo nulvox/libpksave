@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) 2026 gbsdk contributors
+ * Copyright (c) 2026 nulvox
  *
  * Gen 3 species name table indexed by Gen 3 internal species ID.
  * Sourced from pret/pokeemerald:

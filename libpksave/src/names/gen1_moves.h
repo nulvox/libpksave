@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) 2026 gbsdk contributors
+ * Copyright (c) 2026 nulvox
  *
  * Gen 1 move name table indexed by move ID (1-165).
  * Sourced from pret/pokered: data/moves/names.asm.

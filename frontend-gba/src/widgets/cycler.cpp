@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 gbsdk contributors
+// Copyright (c) 2026 nulvox
 
 #include "cycler.hpp"
 

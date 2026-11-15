@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 gbsdk contributors
+// Copyright (c) 2026 nulvox
 //
 // GBA cartridge save-type detection works by scanning the ROM for one of
 // a handful of magic ASCII strings:

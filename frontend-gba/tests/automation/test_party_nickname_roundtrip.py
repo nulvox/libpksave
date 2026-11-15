@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 gbsdk contributors
+# Copyright (c) 2026 nulvox
 """
 Wave 2A test 3 — party slot 0 nickname round-trip through text_input drill.
 

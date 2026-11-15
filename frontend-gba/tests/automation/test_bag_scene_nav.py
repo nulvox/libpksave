@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 gbsdk contributors
+# Copyright (c) 2026 nulvox
 """
 CP#4 nav test — drive bag_scene navigation and assert no FLASH writes.
 

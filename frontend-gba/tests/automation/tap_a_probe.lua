@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: MIT
--- Copyright (c) 2026 gbsdk contributors
+-- Copyright (c) 2026 nulvox
 --
 -- tap_a_probe: prove that a single A-button tap driven from Lua is
 -- observable inside the GBA core via the KEYINPUT register (0x04000130).

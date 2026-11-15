@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) 2026 gbsdk contributors
+ * Copyright (c) 2026 nulvox
  *
  * Gen III (Ruby/Sapphire, Emerald, FireRed/LeafGreen) save format.
  * Offsets from pret/pokeemerald and pret/pokeruby.

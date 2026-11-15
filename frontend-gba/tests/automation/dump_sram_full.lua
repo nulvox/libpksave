@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: MIT
--- Copyright (c) 2026 gbsdk contributors
+-- Copyright (c) 2026 nulvox
 --
 -- Dump the entire SRAM/FLASH region the running ROM declared, to /dump/sram.bin.
 -- The host mounts /dump as a writable bind so Python can read the result back

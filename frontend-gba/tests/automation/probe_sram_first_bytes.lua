@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: MIT
--- Copyright (c) 2026 gbsdk contributors
+-- Copyright (c) 2026 nulvox
 --
 -- Read the first 16 bytes of GBA SRAM (mapped at 0x0E000000) and log them
 -- as a stable hex line. Paired with test_sidecar_save.py, which loads a

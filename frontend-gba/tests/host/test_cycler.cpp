@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 gbsdk contributors
+// Copyright (c) 2026 nulvox
 //
 // Host-side unit tests for widgets/cycler.  Compiled with PKSAVE_GBA_HOSTTEST
 // so the widget pulls in our keypad stub instead of butano's bn_keypad.

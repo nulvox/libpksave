@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 gbsdk contributors
+# Copyright (c) 2026 nulvox
 """
 Python helpers for the binary-PPM framebuffer dumps emitted by
 `fb_dump_ppm` (defined in docker/test-gba/mgba-lua.c) and called from

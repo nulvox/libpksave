@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 gbsdk contributors
+# Copyright (c) 2026 nulvox
 """
 Host-side unit tests for widgets/cycler — compiled and run on the host
 with the system g++.  No docker, no emulator; the cycler's input layer

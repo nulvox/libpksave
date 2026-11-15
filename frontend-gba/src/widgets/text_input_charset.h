@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) 2026 gbsdk contributors
+ * Copyright (c) 2026 nulvox
  *
  * Gen 3 text-input keyboard character set.
  *

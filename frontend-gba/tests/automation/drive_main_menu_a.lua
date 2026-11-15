@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: MIT
--- Copyright (c) 2026 gbsdk contributors
+-- Copyright (c) 2026 nulvox
 --
 -- Boot the editor ROM, let the main menu stabilize, tap A once to select
 -- the Trainer entry (first of the menu list per

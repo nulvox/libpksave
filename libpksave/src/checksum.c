@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) 2026 gbsdk contributors
+ * Copyright (c) 2026 nulvox
  *
  * Per-generation checksum validation helper (test helper only).
  * Actual flush/checksum writing is inside each genN.c.

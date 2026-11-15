@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: MIT
--- Copyright (c) 2026 gbsdk contributors
+-- Copyright (c) 2026 nulvox
 --
 -- CP#4 round-trip: edit Items pocket slot 0 quantity through bag_scene
 -- + slot_edit_scene + Save & Exit, then dump FLASH.

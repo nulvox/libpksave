@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: MIT
--- Copyright (c) 2026 gbsdk contributors
+-- Copyright (c) 2026 nulvox
 --
 -- Dirty-indicator drive: snapshot main_menu's header at three phases of
 -- the dirty/clean cycle, dumping a PPM each time.

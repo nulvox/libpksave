@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 gbsdk contributors
+# Copyright (c) 2026 nulvox
 #
 # GBC toolchain: gbdk-2020.
 # Builds frontend-gbc → /src/bin/pksave-gbc.gbc

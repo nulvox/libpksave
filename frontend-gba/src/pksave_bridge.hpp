@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 gbsdk contributors
+// Copyright (c) 2026 nulvox
 //
 // RAII wrapper around `pksave_save_t *` plus the 128KB save buffer
 // that lives in EWRAM.  The buffer is a single static array; only one

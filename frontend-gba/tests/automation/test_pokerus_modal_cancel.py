@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 gbsdk contributors
+# Copyright (c) 2026 nulvox
 """
 Wave 2B test — Pokerus modal opens from IDENTITY/ROW_POKERUS and B cancels
 without writing.

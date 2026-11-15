@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: MIT
--- Copyright (c) 2026 gbsdk contributors
+-- Copyright (c) 2026 nulvox
 --
 -- Shared Lua primitives for the mGBA-Lua test harness.
 -- `require` it from a test script: `local h = dofile("/src/frontend-gba/tests/automation/helpers.lua")`

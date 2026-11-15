@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) 2026 gbsdk contributors
+ * Copyright (c) 2026 nulvox
  *
  * Tests for Gen 3 per-species, per-move, and per-item lookups
  * (pksave_species_abilities, pksave_move_base_pp,

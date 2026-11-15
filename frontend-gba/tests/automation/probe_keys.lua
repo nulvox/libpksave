@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: MIT
--- Copyright (c) 2026 gbsdk contributors
+-- Copyright (c) 2026 nulvox
 --
 -- Probe: enumerate mGBA's Lua input API surface. We don't know which of
 -- emu:setKeys / emu:addKeys / emu:clearKeys / emu.input / C_KEY_* are

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 gbsdk contributors
+// Copyright (c) 2026 nulvox
 //
 // Bag slot editor — drilled from bag_scene with (pocket, slot) recorded
 // on the bridge.

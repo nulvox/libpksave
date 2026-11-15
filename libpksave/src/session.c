@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) 2026 gbsdk contributors
+ * Copyright (c) 2026 nulvox
  *
  * Session API: pksave_open / pksave_close / pksave_flush and all public
  * Trainer/Party/Box/Bag accessors.  Each function dispatches to the

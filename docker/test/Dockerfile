@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 gbsdk contributors
+# Copyright (c) 2026 nulvox
 #
 # Test container: gcc + Unity.
 # Compiles and runs libpksave Unity tests with all five PKSAVE_GENx flags.

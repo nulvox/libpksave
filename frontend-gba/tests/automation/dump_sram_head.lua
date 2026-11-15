@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: MIT
--- Copyright (c) 2026 gbsdk contributors
+-- Copyright (c) 2026 nulvox
 --
 -- Dump the first DUMP_LEN bytes of GBA SRAM (0x0E000000+) to /dump/sram.bin.
 -- The host mounts /dump as a writable bind so Python can read the result

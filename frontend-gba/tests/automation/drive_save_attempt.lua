@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: MIT
--- Copyright (c) 2026 gbsdk contributors
+-- Copyright (c) 2026 nulvox
 --
 -- Drive the exact Save & Exit input sequence from gate J
 -- (drive_name_edit_save.lua) onto an editor whose sidecar save is a

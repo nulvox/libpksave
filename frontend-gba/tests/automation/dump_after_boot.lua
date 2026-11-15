@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: MIT
--- Copyright (c) 2026 gbsdk contributors
+-- Copyright (c) 2026 nulvox
 --
 -- Dump the full GBA SRAM/FLASH region after the editor's boot code has
 -- had a chance to issue its FLASH-unlock command. Doing this in the

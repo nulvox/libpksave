@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 gbsdk contributors
+// Copyright (c) 2026 nulvox
 //
 // Generic name-cycler widget used by the Pokemon editor for species /
 // move / item / ability / nature pickers.  The widget tracks a current

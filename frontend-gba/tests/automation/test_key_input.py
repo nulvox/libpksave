@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 gbsdk contributors
+# Copyright (c) 2026 nulvox
 """
 Test: a single A-button tap driven from Lua is observable inside the GBA
 core via the KEYINPUT register (0x04000130).

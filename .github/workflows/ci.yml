@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 gbsdk contributors
+# Copyright (c) 2026 nulvox
 name: CI
 
 on:
@@ -92,6 +92,10 @@ jobs:
         run: pip install ruff
       - name: ruff check
         run: ruff check libpksave/tests/fixtures/ tools/
+      - name: Run Python tool tests
+        run: make test-tools
+      - name: Run GBA host widget tests
+        run: python3 frontend-gba/tests/automation/test_cycler_host.py
 
   # ── libpksave Unity tests ──────────────────────────────────────────────────
   test-libpksave:

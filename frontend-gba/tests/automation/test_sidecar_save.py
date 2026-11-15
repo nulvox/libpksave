@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 gbsdk contributors
+# Copyright (c) 2026 nulvox
 """
 Test: mgba-lua's `--save <path>` flag loads a sidecar .sav fixture into the
 core's save backend before reset, and the loaded bytes are visible from Lua.

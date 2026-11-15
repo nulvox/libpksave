@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) 2026 gbsdk contributors
+ * Copyright (c) 2026 nulvox
  *
  * Round-trip every character the frontend-gba text_input keyboard
  * exposes through pksave_set_trainer / pksave_get_trainer.  This guards

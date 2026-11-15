@@ -1,6 +1,6 @@
 <!--
 SPDX-License-Identifier: MIT
-Copyright (c) 2026 gbsdk contributors
+Copyright (c) 2026 nulvox
 -->
 
 # libpksave
@@ -139,5 +139,4 @@ See [`docs/build.md`](docs/build.md) for container/toolchain details and
 
 ## License
 
-Source files carry MIT SPDX identifiers. No standalone `LICENSE` file is
-currently included.
+MIT. See [`LICENSE`](LICENSE) for the full text.

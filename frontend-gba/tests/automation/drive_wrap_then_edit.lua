@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: MIT
--- Copyright (c) 2026 gbsdk contributors
+-- Copyright (c) 2026 nulvox
 --
 -- Drive script proving main_menu cursor WRAPS from index 4 (Save & Exit)
 -- back to index 0 (Trainer) when DOWN is pressed past the end.

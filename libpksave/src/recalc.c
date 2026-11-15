@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) 2026 gbsdk contributors
+ * Copyright (c) 2026 nulvox
  *
  * pksave_recalc_stats — recompute the stat[6] array from
  * species + level + nature + IVs + EVs using the official Gen III formula.

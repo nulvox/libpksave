@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: MIT
--- Copyright (c) 2026 gbsdk contributors
+-- Copyright (c) 2026 nulvox
 --
 -- CP#5 + L11 — STATS-tab level edit round-trip on a box-resident mon.
 --
