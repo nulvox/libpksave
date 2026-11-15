@@ -7,8 +7,9 @@
 // user presses A on ROW_POKERUS.  Lets the user edit the slot's Pokerus
 // strain / days and commit (A) or cancel (B).  On commit the scene
 // returns to POKEMON_EDIT; on cancel it returns to POKEMON_EDIT without
-// writing to the save.  Reads pokerus state via pksave_get_party_pokerus
-// on construct; writes via pksave_set_party_pokerus on commit.
+// writing to the save.  Reads pokerus state via
+// pksave_get_{party,box}_pokerus on construct; writes via
+// pksave_set_{party,box}_pokerus on commit.
 //
 // Input grammar (deliberately simpler than pokemon_edit_scene's
 // NAV/ACTIVE gate):
@@ -18,7 +19,8 @@
 //                     the modal has no tab-y context to disambiguate
 //                     against).
 //   - A             : commit pending strain/days via
-//                     pksave_set_party_pokerus and return to POKEMON_EDIT.
+//                     pksave_set_{party,box}_pokerus and return to
+//                     POKEMON_EDIT.
 //   - B             : cancel; return to POKEMON_EDIT without writing.
 //
 // Rows:
@@ -37,9 +39,10 @@
 //                              ACTIVE/CURED transition for safety —
 //                              seed strain=1.
 //
-// Slot reuse: pokemon_edit_scene re-sets bridge_.pending_party_slot()
-// before returning POKERUS_MODAL so this scene can read the same slot
-// from the bridge.  See pokemon_edit_scene.cpp.
+// Slot reuse: pokemon_edit_scene re-stamps pending_box (box source) or
+// pending_party_slot (party source) on the bridge before returning
+// POKERUS_MODAL so this scene and the subsequent POKEMON_EDIT return
+// both target the same slot.  See pokemon_edit_scene.cpp.
 
 #ifndef PKSAVE_GBA_POKERUS_MODAL_SCENE_HPP
 #define PKSAVE_GBA_POKERUS_MODAL_SCENE_HPP
@@ -84,6 +87,8 @@ private:
     bn::sprite_text_generator text_gen_;
     bn::vector<bn::sprite_ptr, 32> sprites_;
 
+    bool                      is_box_;
+    int                       box_;
     int                       slot_;
     pksave_pokerus_status_t   status_;
     uint8_t                   strain_;

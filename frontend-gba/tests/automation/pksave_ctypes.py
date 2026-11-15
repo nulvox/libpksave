@@ -232,6 +232,11 @@ def _bind(lib: CDLL) -> None:
     lib.pksave_get_party_pokerus.argtypes = [c_void_p, c_uint8, POINTER(PksavePokerus)]
     lib.pksave_get_party_pokerus.restype = c_int
 
+    # int pksave_get_box_pokerus(pksave_save_t *save, uint8_t box, uint8_t slot,
+    #                            pksave_pokerus_t *out);
+    lib.pksave_get_box_pokerus.argtypes = [c_void_p, c_uint8, c_uint8, POINTER(PksavePokerus)]
+    lib.pksave_get_box_pokerus.restype = c_int
+
     # int pksave_get_pocket(pksave_save_t *save, pksave_pocket_t pocket,
     #                       pksave_item_t *out, uint8_t *count);
     lib.pksave_get_pocket.argtypes = [c_void_p, c_int, POINTER(PksaveItem), POINTER(c_uint8)]
@@ -340,6 +345,17 @@ def get_party_pokerus(save: Save, slot: int) -> PksavePokerus:
     return pkrs
 
 
+def get_box_pokerus(save: Save, box: int, slot: int) -> PksavePokerus:
+    """Return the Pokerus state of a box slot."""
+    if not save:
+        raise ValueError("save is closed or invalid")
+    pkrs = PksavePokerus()
+    rc = save._lib.pksave_get_box_pokerus(save._handle, box, slot, ctypes.byref(pkrs))
+    if rc != PKSAVE_OK:
+        raise RuntimeError(f"pksave_get_box_pokerus(box={box}, slot={slot}) rc={rc}")
+    return pkrs
+
+
 def get_party(save: Save) -> tuple[list[PksavePokemon], int]:
     """Return (party_array, count).  party_array always has 6 entries; only
     the first `count` are meaningful (filled slots).  Each entry is a
@@ -413,6 +429,7 @@ __all__ = [
     "get_trainer",
     "get_party",
     "get_party_pokerus",
+    "get_box_pokerus",
     "get_box_count",
     "get_box",
     "close",

@@ -26,22 +26,30 @@ constexpr int DAYS_MAX   = 15;
 pokerus_modal_scene::pokerus_modal_scene(pksave_bridge& bridge)
     : bridge_(bridge)
     , text_gen_(common::variable_8x16_sprite_font)
-    , slot_(bridge.pending_party_slot())
+    , is_box_(bridge.pending_box_index() >= 0)
+    , box_(is_box_ ? bridge.pending_box_index() : 0)
+    , slot_(is_box_ ? bridge.pending_box_slot() : bridge.pending_party_slot())
     , status_(PKSAVE_PKRS_NEVER)
     , strain_(0)
     , days_(0)
     , cursor_(ROW_STATUS)
 {
-    if (slot_ < 0 || slot_ >= 6)
+    if (is_box_)
     {
-        slot_ = 0;
+        if (box_  < 0)                box_  = 0;
+        if (slot_ < 0 || slot_ >= 30) slot_ = 0;
+    }
+    else
+    {
+        if (slot_ < 0 || slot_ >= 6)  slot_ = 0;
     }
     load_from_save();
     redraw();
 
     // Scene-entry breadcrumb for the mGBA-Lua harness.
     BN_LOG("pokerus: OK");
-    BN_LOG("pokerus: slot=", slot_,
+    BN_LOG("pokerus: box=", is_box_ ? box_ : -1,
+           " slot=", slot_,
            " status=", static_cast<int>(status_),
            " strain=", static_cast<int>(strain_),
            " days=", static_cast<int>(days_));
@@ -54,9 +62,14 @@ void pokerus_modal_scene::load_from_save()
         return;
     }
     pksave_pokerus_t pkrs = {};
-    int rc = ::pksave_get_party_pokerus(bridge_.handle(),
-                                        static_cast<uint8_t>(slot_),
-                                        &pkrs);
+    int rc = is_box_
+        ? ::pksave_get_box_pokerus(bridge_.handle(),
+                                   static_cast<uint8_t>(box_),
+                                   static_cast<uint8_t>(slot_),
+                                   &pkrs)
+        : ::pksave_get_party_pokerus(bridge_.handle(),
+                                     static_cast<uint8_t>(slot_),
+                                     &pkrs);
     if (rc != PKSAVE_OK)
     {
         return;
@@ -73,7 +86,7 @@ void pokerus_modal_scene::commit_to_save()
         return;
     }
     // Normalise (strain, days) to the canonical encoding of the
-    // current status before writing.  pksave_set_party_pokerus
+    // current status before writing.  pksave_set_{party,box}_pokerus
     // accepts (strain, days) as raw nibbles; the status_ machine is
     // a frontend convenience.
     uint8_t strain = strain_;
@@ -96,10 +109,16 @@ void pokerus_modal_scene::commit_to_save()
             break;
         default: break;
     }
-    int rc = ::pksave_set_party_pokerus(bridge_.handle(),
-                                        static_cast<uint8_t>(slot_),
-                                        strain, days);
-    BN_LOG("pokerus: commit slot=", slot_,
+    int rc = is_box_
+        ? ::pksave_set_box_pokerus(bridge_.handle(),
+                                   static_cast<uint8_t>(box_),
+                                   static_cast<uint8_t>(slot_),
+                                   strain, days)
+        : ::pksave_set_party_pokerus(bridge_.handle(),
+                                     static_cast<uint8_t>(slot_),
+                                     strain, days);
+    BN_LOG("pokerus: commit box=", is_box_ ? box_ : -1,
+           " slot=", slot_,
            " strain=", static_cast<int>(strain),
            " days=",   static_cast<int>(days),
            " rc=",     rc);

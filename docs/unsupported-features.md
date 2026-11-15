@@ -106,10 +106,10 @@ but not surfaced through `pksave.h`:
     trends, Mauville Old Man, Contest winners, Daycare, Mail, Battle Frontier
     / Trainer Hill / Walda phrase, Roamer, Enigma Berry, Mystery Gift /
     e-Reader Trainer, and Hall of Fame sections.
-  - **PID search ignores gender & Unown form:** When `g3_encode_encrypted_block()`
+  - **PID search ignores Unown form:** When `g3_encode_encrypted_block()`
     searches for a new PID to satisfy a changed `nature` or `is_shiny`, it
-    does not constrain the low byte (`PID & 0xFF`, which determines gender
-    against the species gender threshold) or Unown letter form.
+    preserves the gender low byte (`PID & 0xFF`) so the Pokémon's gender
+    never flips, but does not constrain the Unown letter form.
 
 ### Gen IV & V limitations (`gen4.c`, `gen5.c` — synthetic-fixture baseline)
 

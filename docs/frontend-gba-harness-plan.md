@@ -28,9 +28,9 @@ The POC + five hardening rounds shipped **14 tests** plus a
 numeric_field bug fix surfaced by the TID round-trip — that's the
 inventory in the table below, frozen as the historical record of what
 made the harness usable. Subsequent checkpoints (CP#3/4/5 scenes,
-CP#6 sprite plumbing, the framebuffer dump for the dirty-indicator
-assertion) added another 16 tests; the **current canonical
-`make test-gba` inventory of 30 tests** lives in
+CP#6 sprite plumbing, the framebuffer dumps for the dirty-indicator
+and save-blocks-input assertions) added another 19 tests; the **current canonical
+`make test-gba` inventory of 33 tests** lives in
 `docs/frontend-gba-plan.md` §"Test inventory" and stays in sync with
 the `GBA_TESTS` list in the root `Makefile`.
 
