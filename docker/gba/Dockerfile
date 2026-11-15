@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 gbsdk contributors
+# Copyright (c) 2026 nulvox
 #
 # GBA toolchain: devkitARM + butano.
 # Builds frontend-gba → /src/bin/pksave-gba.gba

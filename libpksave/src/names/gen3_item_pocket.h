@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) 2026 gbsdk contributors
+ * Copyright (c) 2026 nulvox
  *
  * Gen 3 item -> pocket table indexed by item ID (0..376).
  * Values are pksave_pocket_t cast to uint8_t:

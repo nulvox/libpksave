@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 gbsdk contributors
+// Copyright (c) 2026 nulvox
 //
 // Vertical scrollable list of fixed-height rows.  The widget is purely
 // presentational: it owns sprites for the visible rows and a 1-line

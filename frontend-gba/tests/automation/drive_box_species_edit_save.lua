@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: MIT
--- Copyright (c) 2026 gbsdk contributors
+-- Copyright (c) 2026 nulvox
 --
 -- CP#5 tracer-bullet — box-slot species round-trip through the active-edit
 -- gate, mirrored on drive_party_species_edit_save.lua.

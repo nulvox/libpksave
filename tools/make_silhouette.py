@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 gbsdk contributors
+# Copyright (c) 2026 nulvox
 """
 Generate the generic 64x64 silhouette BMP used as the placeholder when no
 extracted sprite is available for a species. Original art, MIT-licensed —

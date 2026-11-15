@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) 2026 gbsdk contributors
+ * Copyright (c) 2026 nulvox
  *
  * Name lookup tables are included here from names/genN_*.h.
  * Each header is guarded by its PKSAVE_GENx flag so unused tables are

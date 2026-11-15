@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 gbsdk contributors
+# Copyright (c) 2026 nulvox
 #
 # NDS toolchain: BlocksDS.
 # Builds frontend-nds → /src/bin/pksave-nds.nds

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 gbsdk contributors
+# Copyright (c) 2026 nulvox
 """
 Test 2: prove the real frontend-gba editor ROM loads under mgba-lua via a
 host-mounted volume.

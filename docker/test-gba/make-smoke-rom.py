@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 gbsdk contributors
+# Copyright (c) 2026 nulvox
 #
 # Bake a minimal valid Game Boy Advance cartridge for the mGBA smoke test.
 #
@@ -29,6 +29,7 @@
 #   0x0C0..     : entrypoint code (branch-to-self)
 
 import sys
+
 
 def build_rom() -> bytes:
     rom = bytearray(0xC0 + 4)

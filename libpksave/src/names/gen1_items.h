@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) 2026 gbsdk contributors
+ * Copyright (c) 2026 nulvox
  *
  * Gen 1 item name table indexed by item ID (1-0x53).
  * Sourced from pret/pokered: data/items/names.asm.

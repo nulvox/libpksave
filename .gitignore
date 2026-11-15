@@ -51,10 +51,11 @@ libpksave/tests/test_*
 # harness state, not project state.
 .claude/
 
-# Python bytecode (test harness uses python3; no virtualenv, so pyc lands
-# wherever the scripts run).
+# Python bytecode and lint cache (test harness uses python3; no virtualenv,
+# so pyc lands wherever the scripts run).
 __pycache__/
 *.pyc
+.ruff_cache/
 
 # Editor / IDE
 .vscode/

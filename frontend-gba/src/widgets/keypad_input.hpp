@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 gbsdk contributors
+// Copyright (c) 2026 nulvox
 //
 // Thin keypad-input abstraction so widgets can be unit-tested on the
 // host without dragging in butano. The cycler widget calls into this

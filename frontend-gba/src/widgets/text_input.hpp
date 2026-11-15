@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 gbsdk contributors
+// Copyright (c) 2026 nulvox
 //
 // Gen-3-style text-input keyboard.  Modeled as a butano scene so the
 // scene loop in main.cpp drives it without nested-update gymnastics:

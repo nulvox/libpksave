@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) 2026 gbsdk contributors
+ * Copyright (c) 2026 nulvox
  *
  * Gen 2 item name table indexed by item ID (1-249, 0xBF-0xF9 TMs/HMs).
  * Sourced from pret/pokecrystal:

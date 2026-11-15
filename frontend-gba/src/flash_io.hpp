@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 gbsdk contributors
+// Copyright (c) 2026 nulvox
 //
 // Raw FLASH 128KB I/O for the editor cart.  Butano's bn::sram only
 // addresses the bottom 32KB and assumes SRAM; Gen III Pokemon cartridges

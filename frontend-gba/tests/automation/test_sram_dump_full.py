@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 gbsdk contributors
+# Copyright (c) 2026 nulvox
 """
 Test 4: Lua dumps the *entire* SRAM/FLASH region the running ROM declared,
 not just the first 16 bytes. The dump size is detected dynamically by the

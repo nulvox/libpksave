@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) 2026 gbsdk contributors
+ * Copyright (c) 2026 nulvox
  *
  * Gen IV (Diamond/Pearl, Platinum, HeartGold/SoulSilver) save format.
  * Offsets from pret/pokeheartgold.

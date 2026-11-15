@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 gbsdk contributors
+# Copyright (c) 2026 nulvox
 """
 Standalone smoke test for the libpksave ctypes wrapper.
 
@@ -15,16 +15,14 @@ Run from anywhere:
 Exits 0 on success, 1 on the first failed assertion.
 """
 
+import builtins
 import os
 import sys
 import traceback
 
-# Allow running as a plain script (no package context).
-_HERE = os.path.dirname(os.path.abspath(__file__))
-if _HERE not in sys.path:
-    sys.path.insert(0, _HERE)
+import pksave_ctypes as pk
 
-import pksave_ctypes as pk   # noqa: E402
+_HERE = os.path.dirname(os.path.abspath(__file__))
 
 # Repo root: frontend-gba/tests/automation/ → ../../..
 _REPO_ROOT = os.path.abspath(os.path.join(_HERE, "..", "..", ".."))
@@ -88,14 +86,13 @@ def run_case(lib, filename: str, expected_game: pk.Game,
 
 
 # Avoid shadowing built-in open() inside this script.
-import builtins
 builtins_open = builtins.open
 
 
 def main() -> int:
     try:
         lib = pk.load_library()
-    except Exception:
+    except Exception:  # noqa: BLE001
         traceback.print_exc()
         return 1
 
@@ -108,7 +105,7 @@ def main() -> int:
             run_case(lib, fname, game, sram_size)
         except SystemExit:
             raise
-        except Exception:
+        except Exception:  # noqa: BLE001
             print(f"FAIL: unexpected exception decoding {fname}", file=sys.stderr)
             traceback.print_exc()
             return 1

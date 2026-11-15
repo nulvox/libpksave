@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 gbsdk contributors
+// Copyright (c) 2026 nulvox
 //
 // Look up a Pokemon species' extracted front sprite, if one is present
 // in the build. Companion to `species_sprite_lookup.cpp`, which is

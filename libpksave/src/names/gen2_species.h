@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) 2026 gbsdk contributors
+ * Copyright (c) 2026 nulvox
  *
  * Gen 2 species name table indexed by species ID (1-251 + 253 Egg).
  * Sourced from pret/pokecrystal:

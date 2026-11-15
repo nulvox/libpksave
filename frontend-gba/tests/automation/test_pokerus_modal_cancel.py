@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 gbsdk contributors
+# Copyright (c) 2026 nulvox
 """
 Wave 2B test — Pokerus modal opens from IDENTITY/ROW_POKERUS and B cancels
 without writing.
@@ -138,7 +138,7 @@ def main():
 
         save = pk.open(sram, detected, lib=lib)
         try:
-            party, count = pk.get_party(save)
+            party, _count = pk.get_party(save)
             pkrs = pk.get_party_pokerus(save, 0)
         finally:
             pk.close(save)

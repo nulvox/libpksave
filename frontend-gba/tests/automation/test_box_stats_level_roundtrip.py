@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 gbsdk contributors
+# Copyright (c) 2026 nulvox
 """
 CP#5 + L11 — round-trip a box-resident STATS-tab level edit.
 
@@ -114,7 +114,7 @@ def main():
         try:
             name             = pk.get_trainer_name(save)
             box1, _          = pk.get_box(save, EDITED_BOX)
-            party, party_cnt = pk.get_party(save)
+            party, _party_cnt = pk.get_party(save)
         finally:
             pk.close(save)
 

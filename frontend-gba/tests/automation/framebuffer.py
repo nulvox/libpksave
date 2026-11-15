@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 gbsdk contributors
+# Copyright (c) 2026 nulvox
 """
 Python helpers for the binary-PPM framebuffer dumps emitted by
 `fb_dump_ppm` (defined in docker/test-gba/mgba-lua.c) and called from
@@ -22,9 +22,7 @@ header is `P6\\n<w> <h>\\n<maxval>\\n` followed by the binary body.
 
 import hashlib
 import re
-import struct
 from dataclasses import dataclass
-from typing import Iterable, Tuple
 
 GBA_WIDTH = 240
 GBA_HEIGHT = 160

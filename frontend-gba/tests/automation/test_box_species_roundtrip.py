@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 gbsdk contributors
+# Copyright (c) 2026 nulvox
 """
 CP#5 tracer-bullet — round-trip a box-slot species edit through the editor UI.
 
@@ -137,8 +137,8 @@ def main():
         try:
             name              = pk.get_trainer_name(save)
             party, party_cnt  = pk.get_party(save)
-            box0, box0_cnt    = pk.get_box(save, 0)
-            box1, box1_cnt    = pk.get_box(save, EDITED_BOX)
+            box0, _box0_cnt   = pk.get_box(save, 0)
+            box1, _box1_cnt   = pk.get_box(save, EDITED_BOX)
         finally:
             pk.close(save)
 

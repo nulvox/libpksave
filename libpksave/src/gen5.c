@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) 2026 gbsdk contributors
+ * Copyright (c) 2026 nulvox
  *
  * Gen V (Black/White, Black 2/White 2) save format.
  * Same block/CRC structure as Gen IV; different block sizes and trainer offsets.

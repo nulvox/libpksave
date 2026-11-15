@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 gbsdk contributors
+// Copyright (c) 2026 nulvox
 //
 // Halt scene for unrecoverable boot errors (UNKNOWN save format,
 // pksave_open returned NULL / CORRUPT).  Ignores all input and never

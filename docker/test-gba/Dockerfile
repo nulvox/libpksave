@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 gbsdk contributors
+# Copyright (c) 2026 nulvox
 #
 # Headless mGBA + Lua scripting harness for frontend-gba TDD.
 # CMD is intentionally a no-op; the main thread wires `make test-gba`.

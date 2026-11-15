@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) 2026 gbsdk contributors
+ * Copyright (c) 2026 nulvox
  *
  * Per-species and per-move lookup helpers for Gen 3.  Both APIs are
  * thin reads from parallel tables in names/gen3_*.h, switched on

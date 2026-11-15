@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright (c) 2026 gbsdk contributors
+ * Copyright (c) 2026 nulvox
  *
  * Gen 3 abilities name table indexed by the in-cartridge ability ID.
  * Sourced from pret/pokeemerald:
