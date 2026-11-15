@@ -276,6 +276,74 @@ void test_rb_set_stored_box_slot_round_trip(void)
     pksave_close(s);
 }
 
+void test_rb_set_party_slot_preserves_unsurfaced_fields(void)
+{
+    if (!load_fixture("rb.sav", rb_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_pokemon_t party[6];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_party(s, party, &count));
+    party[0].level = 50;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_party_slot(s, 0, &party[0]));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    /* Verify types@0x05-0x06, catch_rate@0x07, OT ID@0x0C-0x0D, exp@0x0E-0x10
+     * at party slot 0 (0x2F34) were not wiped by set_party_slot. */
+    const uint8_t *mon0 = rb_buf + 0x2F34;
+    TEST_ASSERT_EQUAL_UINT8(0x16, mon0[0x05]);  /* Grass */
+    TEST_ASSERT_EQUAL_UINT8(0x03, mon0[0x06]);  /* Poison */
+    TEST_ASSERT_EQUAL_UINT8(45,   mon0[0x07]);  /* catch_rate */
+    TEST_ASSERT_EQUAL_UINT8(0x12, mon0[0x0C]);  /* OT ID hi */
+    TEST_ASSERT_EQUAL_UINT8(0x34, mon0[0x0D]);  /* OT ID lo */
+    TEST_ASSERT_EQUAL_UINT8(35,   mon0[0x10]);  /* exp lo */
+}
+
+void test_rb_set_box_slot_preserves_unsurfaced_fields_and_multi_slot_nick(void)
+{
+    if (!load_fixture("rb.sav", rb_buf, SRAM_SIZE)) return;
+    pksave_save_t *s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    TEST_ASSERT_NOT_NULL(s);
+
+    pksave_pokemon_t box[30];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    TEST_ASSERT_EQUAL_UINT8(1, count);
+
+    /* Edit existing slot 0 and also write a second mon into slot 1 */
+    box[0].level = 30;
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_box_slot(s, 1, 0, &box[0]));
+
+    pksave_pokemon_t slot1 = box[0];
+    slot1.species = 0x54;   /* Pikachu */
+    slot1.level   = 15;
+    strcpy(slot1.nickname, "SPARKY");
+    strcpy(slot1.ot_name,  "ASH");
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_set_box_slot(s, 1, 1, &slot1));
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_flush(s));
+    pksave_close(s);
+
+    /* Box 1 base is 0x4000 + 1122; slot 0 data is at +22. */
+    const uint8_t *box1_mon0 = rb_buf + 0x4000 + 1122 + 22;
+    TEST_ASSERT_EQUAL_UINT8(0x16, box1_mon0[0x05]);
+    TEST_ASSERT_EQUAL_UINT8(0x03, box1_mon0[0x06]);
+    TEST_ASSERT_EQUAL_UINT8(45,   box1_mon0[0x07]);
+    TEST_ASSERT_EQUAL_UINT8(0x12, box1_mon0[0x0C]);
+    TEST_ASSERT_EQUAL_UINT8(0x34, box1_mon0[0x0D]);
+    TEST_ASSERT_EQUAL_UINT8(35,   box1_mon0[0x10]);
+
+    /* Re-open and verify both slot 0 and slot 1 nicknames round-tripped */
+    s = pksave_open(rb_buf, SRAM_SIZE, PKSAVE_GAME_RB);
+    TEST_ASSERT_EQUAL(PKSAVE_OK, pksave_get_box(s, 1, box, &count));
+    TEST_ASSERT_EQUAL_UINT8(2, count);
+    TEST_ASSERT_EQUAL_STRING("BULBASAUR", box[0].nickname);
+    TEST_ASSERT_EQUAL_STRING("SPARKY",    box[1].nickname);
+    TEST_ASSERT_EQUAL_STRING("ASH",       box[1].ot_name);
+    pksave_close(s);
+}
+
 void test_rb_set_box_slot_out_of_range(void)
 {
     if (!load_fixture("rb.sav", rb_buf, SRAM_SIZE)) return;
@@ -529,6 +597,8 @@ int main(void)
     RUN_TEST(test_rb_get_box_out_of_range);
     RUN_TEST(test_rb_get_stored_box_with_mon);
     RUN_TEST(test_rb_set_stored_box_slot_round_trip);
+    RUN_TEST(test_rb_set_party_slot_preserves_unsurfaced_fields);
+    RUN_TEST(test_rb_set_box_slot_preserves_unsurfaced_fields_and_multi_slot_nick);
     RUN_TEST(test_rb_set_box_slot_out_of_range);
     RUN_TEST(test_rb_get_items_pocket);
     RUN_TEST(test_rb_other_pockets_empty);

@@ -235,9 +235,16 @@ static void gen1_decode_party_mon(const uint8_t *data,
 static void gen1_encode_party_mon(const pksave_pokemon_t *in,
                                    uint8_t *data,
                                    uint8_t *ot_name,
-                                   uint8_t *nick)
+                                   uint8_t *nick,
+                                   uint16_t trainer_tid)
 {
-    memset(data, 0, G1_PARTY_MON_SIZE);
+    /* Overlay exposed fields in-place so unsurfaced bytes (status@0x04,
+     * types@0x05-0x06, catch_rate@0x07, OT ID@0x0C-0x0D, exp@0x0E-0x10)
+     * survive round-trip edits.  Fresh/empty slots inherit trainer TID. */
+    if (data[0x00] == 0 && data[0x0C] == 0 && data[0x0D] == 0) {
+        data[0x0C] = (uint8_t)(trainer_tid >> 8);
+        data[0x0D] = (uint8_t)(trainer_tid & 0xFF);
+    }
     data[0x00] = (uint8_t)in->species;
     data[0x21] = in->level;
     data[0x03] = in->level;   /* box_level field */
@@ -339,10 +346,11 @@ int gen1_set_party_slot(pksave_save_t *s, uint8_t slot, const pksave_pokemon_t *
 {
     uint8_t cnt = s->sram[G1_PARTY_CNT];
     if (slot >= 6) return PKSAVE_ERR_RANGE;
+    uint16_t trainer_tid = (uint16_t)((s->sram[G1_TID] << 8) | s->sram[G1_TID + 1]);
     uint8_t *data    = s->sram + G1_PARTY_DATA + (size_t)slot * G1_PARTY_MON_SIZE;
     uint8_t *ot_name = s->sram + G1_PARTY_OT   + (size_t)slot * G1_NAME_LEN;
     uint8_t *nick    = s->sram + G1_PARTY_NAMES + (size_t)slot * G1_NAME_LEN;
-    gen1_encode_party_mon(mon, data, ot_name, nick);
+    gen1_encode_party_mon(mon, data, ot_name, nick, trainer_tid);
     /* Update species list */
     s->sram[G1_PARTY_SPEC + slot] = (uint8_t)mon->species;
     if (slot >= cnt) {
@@ -396,14 +404,18 @@ int gen1_set_box_slot(pksave_save_t *s, uint8_t box, uint8_t slot,
         base = s->sram + G1_BOX_OFFSET(box);
     }
 
+    uint16_t trainer_tid = (uint16_t)((s->sram[G1_TID] << 8) | s->sram[G1_TID + 1]);
     uint8_t *data  = base + 22 + (size_t)slot * G1_BOX_MON_SIZE;
     uint8_t *ot    = base + 22 + 20 * G1_BOX_MON_SIZE + (size_t)slot * G1_NAME_LEN;
-    uint8_t *nick  = ot + 20 * G1_NAME_LEN;
+    uint8_t *nick  = base + 22 + 20 * G1_BOX_MON_SIZE + 20 * G1_NAME_LEN
+                               + (size_t)slot * G1_NAME_LEN;
 
-    /* Encode as party mon then copy the first 33 bytes */
+    /* Seed tmp from existing 33-byte box mon so unsurfaced fields survive */
     uint8_t tmp[G1_PARTY_MON_SIZE];
     uint8_t ot_tmp[G1_NAME_LEN], nick_tmp[G1_NAME_LEN];
-    gen1_encode_party_mon(mon, tmp, ot_tmp, nick_tmp);
+    memset(tmp, 0, sizeof(tmp));
+    memcpy(tmp, data, G1_BOX_MON_SIZE);
+    gen1_encode_party_mon(mon, tmp, ot_tmp, nick_tmp, trainer_tid);
     memcpy(data, tmp, G1_BOX_MON_SIZE);
     memcpy(ot, ot_tmp, G1_NAME_LEN);
     memcpy(nick, nick_tmp, G1_NAME_LEN);
