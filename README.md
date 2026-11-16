@@ -11,9 +11,9 @@ save-format details behind one public header so host tools and emulator-ready
 editors can work with trainer, party, box, bag, and Pokérus data without
 hard-coding offsets or checksum rules.
 
-The library is implemented and fixture-tested for twelve game variants. A GBA
-editor demonstrates the API against Generation III saves; GBC and NDS
-frontends remain planned.
+The library is implemented and fixture-tested for twelve game variants. GBC and
+GBA editors demonstrate the API against Generations I–III saves; the NDS
+frontend remains planned.
 
 ## Overview and design goals
 
@@ -72,14 +72,15 @@ Back up real save files before editing them.
 
 Library capabilities are built out as each generation's editor work lands:
 Generations I–III have full codec, stat-recalculation, and lookup-table
-support (with `frontend-gba` implemented for Generation III), while
-Generations IV–V currently ship baseline save codecs with extended helpers
-deferred until NDS work begins.
+support (with `frontend-gbc` implemented for Generations I–II and
+`frontend-gba` implemented for Generation III), while Generations IV–V
+currently ship baseline save codecs with extended helpers deferred until NDS
+work begins.
 
 | Generation | Games / variants | Save size | Library support | Checksum support | Frontend & unexposed game features |
 |---|---|---:|---|---|---|
-| I | Red/Blue (`RB`), Yellow (`YELLOW`) | 32 KiB | Full: trainer, party, boxes (with XP↔level & species type sync), single bag pocket, stat recalc, move PP & item lookups | Bank 1 main byte (`0x3523`) + Banks 2–3 box & bank checksums (`0x5A4C..0x5A52`, `0x7A4C..0x7A52`) | `frontend-gbc` planned; Pokédex flags, PC item storage, Daycare, Hall of Fame, Pikachu friendship (Yellow), and event flags are preserved raw (not surfaced) |
-| II | Gold/Silver (`GS`), Crystal (`CRYSTAL`) | 32 KiB | Full: trainer (incl. all 16 Johto+Kanto badges), party, boxes (active `sBox` + Banks 2–3 with XP↔level sync), Items/Balls/Key/TM-HM pockets, Pokérus, stat recalc, move PP & item lookups | LE16 sums (`0x2D69` GS; `0x2D0D` + mirrored `0x1F0D` backup in Crystal) | `frontend-gbc` planned; Pokédex / Unown Dex, Pokémon friendship & caught data, PC item storage, Daycare, Mail, Phone contacts, Mystery Gift, Battle Tower, and Hall of Fame are preserved raw |
+| I | Red/Blue (`RB`), Yellow (`YELLOW`) | 32 KiB | Full: trainer, party, boxes (with XP↔level & species type sync), single bag pocket, stat recalc, move PP & item lookups | Bank 1 main byte (`0x3523`) + Banks 2–3 box & bank checksums (`0x5A4C..0x5A52`, `0x7A4C..0x7A52`) | `frontend-gbc` implemented & mGBA-tested; Pokédex flags, PC item storage, Daycare, Hall of Fame, Pikachu friendship (Yellow), and event flags are preserved raw (not surfaced) |
+| II | Gold/Silver (`GS`), Crystal (`CRYSTAL`) | 32 KiB | Full: trainer (incl. all 16 Johto+Kanto badges), party, boxes (active `sBox` + Banks 2–3 with XP↔level sync), Items/Balls/Key/TM-HM pockets, Pokérus, stat recalc, move PP & item lookups | LE16 sums (`0x2D69` GS; `0x2D0D` + mirrored `0x1F0D` backup in Crystal) | `frontend-gbc` implemented & mGBA-tested; Pokédex / Unown Dex, Pokémon friendship & caught data, PC item storage, Daycare, Mail, Phone contacts, Mystery Gift, Battle Tower, and Hall of Fame are preserved raw |
 | III | Ruby/Sapphire (`RS`), Emerald, FireRed/LeafGreen (`FRLG`) | 128 KiB | Full: trainer, party, boxes (with XP↔level sync), all 5 bag pockets (RS, Emerald, and FRLG layouts), Pokérus, PID-synced nature/shiny/ability, stat recalc, and all lookup tables | Per-section checksums across rotating save slots | `frontend-gba` implemented & mGBA-tested; Pokédex flags, Pokémon friendship, Contest stats, Ribbons, Secret Bases, Pokéblocks, Berry trees, Daycare, Mail, Battle Frontier / Trainer Hill, Mystery Gift, and Hall of Fame are preserved raw |
 | IV | Diamond/Pearl (`DP`), Platinum, HeartGold/SoulSilver (`HGSS`) | 512 KiB | Synthetic-fixture baseline: trainer, core party/box/bag/Pokérus fields, species/move/item names | General-block CRC-16-CCITT | `frontend-nds` planned; Gen IV glyph table, encrypted party tail, storage-block CRC, Kanto badges (HGSS), nickname/OT/nature/ability/shiny/box-level, lookup/recalc tables, and sub-blocks (Pokétch, Underground, Pokéathlon, Battle Frontier) deferred |
 | V | Black/White (`BW`), Black 2/White 2 (`BW2`) | 512 KiB | Synthetic-fixture baseline: trainer, core party/box/bag/Pokérus fields, species/move/item names | Single-block CRC-16-CCITT (synthetic) | `frontend-nds` planned; per-subblock CRC table, 220-byte party layout, encrypted party tail, nickname/OT/nature/ability/shiny/box-level, lookup/recalc tables, and sub-blocks (Entralink, C-Gear, Battle Subway, Musical) deferred |
@@ -102,11 +103,18 @@ make test
 # Run pure-Python tests for sprite tooling
 make test-tools
 
-# Build the implemented Generation III editor ROM
+# Build the implemented Generation I-II GBC editor ROM
+make gbc
+# output: bin/pksave-gbc.gbc
+
+# Run the headless mGBA/Lua GBC frontend automation suite
+make test-gbc
+
+# Build the implemented Generation III GBA editor ROM
 make gba
 # output: bin/pksave-gba.gba
 
-# Run the headless mGBA/Lua frontend automation suite
+# Run the headless mGBA/Lua GBA frontend automation suite
 make test-gba
 ```
 
@@ -117,10 +125,10 @@ Generation III ROM without committing game assets:
 make gba SPRITES_ROM=/path/to/your/game.gba
 ```
 
-`make gbc` and `make nds` reserve the builds for the planned GBC and NDS
-editors; those frontend directories are currently placeholders. `make all`
-invokes every platform target, so use the individual commands above for the
-currently implemented and tested workflow.
+`make nds` reserves the build for the planned NDS editor; that frontend
+directory is currently a placeholder. `make all` invokes every platform target,
+so use the individual commands above for the currently implemented and tested
+workflow.
 
 For a direct host build of the shared library (GCC required):
 
@@ -139,6 +147,7 @@ See [`docs/build.md`](docs/build.md) for container/toolchain details and
   codecs, checksums, limits, and lookup tables
 - [`libpksave/tests/`](libpksave/tests/) — Unity tests and generated synthetic
   save fixtures
+- [`frontend-gbc/`](frontend-gbc/) — gbdk-2020 Generation I–II editor ROM
 - [`frontend-gba/`](frontend-gba/) — Butano-based Generation III editor ROM
 - [`docker/`](docker/) — reproducible host-test and cross-compilation images
 - [`docs/`](docs/) — architecture, coverage, build, and frontend documentation

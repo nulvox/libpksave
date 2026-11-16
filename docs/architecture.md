@@ -28,7 +28,7 @@ libpksave/
 │   ├── Makefile                        — invoked inside docker/test (and host `lib`)
 │   └── tests/                          — Unity tests + fixture .sav files
 ├── tools/                              — sprite extractor + lookup codegen + unit tests
-├── frontend-gbc/                       — placeholder (gbdk-2020, TODO)
+├── frontend-gbc/                       — implemented Gen I–II editor (gbdk-2020) + tests
 ├── frontend-gba/                       — implemented Gen III editor (butano) + tests
 ├── frontend-nds/                       — placeholder (BlocksDS, TODO)
 ├── docker/{test,test-gba,gbc,gba,nds}/ — one Dockerfile per toolchain / test harness

@@ -14,9 +14,10 @@ matching container for each target and volume-mounts the repo at `/src`.
 | `make …`   | What it does                                                               | Container         |
 |------------|----------------------------------------------------------------------------|-------------------|
 | `test`     | Runs every Unity test for every generation                                 | `pksave-test`     |
+| `test-gbc` | Runs the headless mGBA/Lua automation suite for the Gen I–II editor        | `pksave-test-gba` |
 | `test-gba` | Runs the headless mGBA/Lua automation suite for the Gen III editor         | `pksave-test-gba` |
 | `test-tools` | Runs the pure-Python sprite extraction and lookup-generator tests        | none              |
-| `gbc`      | Reserved for `bin/pksave-gbc.gbc`; the frontend is still a placeholder     | `pksave-gbc`      |
+| `gbc`      | Builds the implemented Gen I–II editor as `bin/pksave-gbc.gbc`             | `pksave-gbc`      |
 | `gba`      | Builds the implemented Gen III editor as `bin/pksave-gba.gba`              | `pksave-gba`      |
 | `nds`      | Reserved for `bin/pksave-nds.nds`; the frontend is still a placeholder     | `pksave-nds`      |
 | `all`      | `test` + `test-tools` + `gbc` + `gba` + `nds`                              | all platforms     |
@@ -85,8 +86,12 @@ make -C libpksave fixtures
    (host C++ widget unit tests).
 5. **test-libpksave** — builds the `pksave-test` image (with GitHub
    Actions cache) and runs the full Unity suite across all five generations.
+6. **build-gbc** — builds the `pksave-gbc` image and compiles
+   `bin/pksave-gbc.gbc` via `gbdk-2020`.
+7. **build-gba** — builds the `pksave-gba` image and compiles
+   `bin/pksave-gba.gba` via Butano / devkitARM.
 
-The cross-compiled frontend ROMs and headless mGBA emulator suite (`make test-gba`)
-are not part of the default GitHub Actions workflow; CI gates the portable
-library, host-compilable widgets, and support tooling. See
+`.github/workflows/release.yml` runs on `v*` tags, auditing workflows with
+`zizmor`, running tests, building both `pksave-gbc.gbc` and `pksave-gba.gba`
+with SHA-256 checksums, and publishing them to the GitHub Release. See
 [frontends.md](frontends.md) for platform status.

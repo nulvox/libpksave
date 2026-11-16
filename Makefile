@@ -6,6 +6,7 @@
 #
 # Targets:
 #   make test     — run libpksave Unity tests (docker/test)
+#   make test-gbc — run frontend-gbc mGBA-Lua harness tests (docker/test-gba)
 #   make test-gba — run frontend-gba mGBA-Lua harness tests (docker/test-gba)
 #   make gbc      — build pksave-gbc.gbc     (docker/gbc)
 #   make gba      — build pksave-gba.gba     (docker/gba)
@@ -17,6 +18,34 @@ DOCKER    := docker
 PYTHON    := python3
 REPO_ROOT := $(CURDIR)
 BIN_DIR   := $(REPO_ROOT)/bin
+
+GBC_TESTS := \
+    frontend-gbc/tests/automation/test_gbc_rom_loads.py \
+    frontend-gbc/tests/automation/test_boot_rejects_bad_save.py \
+    frontend-gbc/tests/automation/test_fixture_roundtrip.py \
+    frontend-gbc/tests/automation/test_main_menu_wrap.py \
+    frontend-gbc/tests/automation/test_trainer_scene_nav.py \
+    frontend-gbc/tests/automation/test_trainer_name_roundtrip.py \
+    frontend-gbc/tests/automation/test_tid_roundtrip.py \
+    frontend-gbc/tests/automation/test_party_scene_nav.py \
+    frontend-gbc/tests/automation/test_party_species_roundtrip.py \
+    frontend-gbc/tests/automation/test_party_nickname_roundtrip.py \
+    frontend-gbc/tests/automation/test_pokemon_edit_tab_nav.py \
+    frontend-gbc/tests/automation/test_stats_level_roundtrip.py \
+    frontend-gbc/tests/automation/test_stats_ev_roundtrip.py \
+    frontend-gbc/tests/automation/test_moves_move_roundtrip.py \
+    frontend-gbc/tests/automation/test_moves_pp_roundtrip.py \
+    frontend-gbc/tests/automation/test_pokerus_modal_cancel.py \
+    frontend-gbc/tests/automation/test_pokerus_modal_commit.py \
+    frontend-gbc/tests/automation/test_bag_scene_nav.py \
+    frontend-gbc/tests/automation/test_bag_slot_edit_roundtrip.py \
+    frontend-gbc/tests/automation/test_box_scene_nav.py \
+    frontend-gbc/tests/automation/test_box_species_roundtrip.py \
+    frontend-gbc/tests/automation/test_box_stats_level_roundtrip.py \
+    frontend-gbc/tests/automation/test_box_pokerus_modal_cancel.py \
+    frontend-gbc/tests/automation/test_box_pokerus_modal_commit.py \
+    frontend-gbc/tests/automation/test_dirty_indicator.py \
+    frontend-gbc/tests/automation/test_save_blocks_input.py
 
 GBA_TESTS := \
     frontend-gba/tests/automation/test_decode_fixture.py \
@@ -54,7 +83,7 @@ GBA_TESTS := \
     frontend-gba/tests/automation/test_dirty_indicator.py \
     frontend-gba/tests/automation/test_save_blocks_input.py
 
-.PHONY: test test-gba test-tools gbc gba nds all clean \
+.PHONY: test test-gbc test-gba test-tools gbc gba nds all clean \
         _build_test _build_test_gba _build_gbc _build_gba _build_nds \
         _maybe_extract_sprites _gen_sprite_lookup
 
@@ -66,6 +95,17 @@ test: _build_test
 
 _build_test:
 	$(DOCKER) build -t pksave-test docker/test
+
+# ── test-gbc ─────────────────────────────────────────────────────────────────
+# Runs the mGBA-Lua automation tests for the frontend-gbc editor.
+test-gbc: _build_test_gba libpksave/libpksave.so
+	@failed=0; \
+	for t in $(GBC_TESTS); do \
+		printf -- '--- %s ---\n' "$$t"; \
+		$(PYTHON) "$$t" || failed=1; \
+	done; \
+	[ $$failed -ne 0 ] && { echo "=== test-gbc FAILED ==="; exit 1; }; \
+	echo "=== test-gbc PASSED ==="
 
 # ── test-gba ─────────────────────────────────────────────────────────────────
 # Runs the mGBA-Lua automation tests for the frontend-gba editor.

@@ -6,8 +6,8 @@
 #define PKSAVE_INTERNAL_H
 
 #include <stdint.h>
-#include <stddef.h>
 #include <string.h>
+#include <stddef.h>
 #include "pksave.h"
 
 /* Maximum size of any supported save file */
@@ -20,67 +20,39 @@ struct pksave_save {
     /* Generation-specific state added here when implementing each gen */
 };
 
+/* Banked SRAM helpers for GBC (SM83 / SDCC).
+ * On GBC, cartridge SRAM is a 4×8 KiB banked window at 0xA000..0xBFFF
+ * controlled by the MBC RAM-bank register at 0x4000.  On flat-memory
+ * platforms these expand to direct pointer arithmetic / memcpy. */
+#ifdef __SDCC
+uint8_t       *pksave_sram_at(uint8_t *sram, uint32_t off);
+const uint8_t *pksave_sram_cat(const uint8_t *sram, uint32_t off);
+void           pksave_sram_copy(uint8_t *sram, uint32_t dst_off,
+                                uint32_t src_off, uint16_t len);
+#else
+#define pksave_sram_at(sram, off)  ((sram) + (off))
+#define pksave_sram_cat(sram, off) ((sram) + (off))
+#define pksave_sram_copy(sram, dst_off, src_off, len) \
+    memcpy((sram) + (dst_off), (sram) + (src_off), (len))
+#endif
+
 /* Pokerus byte ↔ struct helpers shared by all gens.
  *   byte high nibble = strain (0-15), low nibble = days remaining (0-15).
  *   strain 0:                NEVER (no infection)
  *   strain >0 && days >0:    ACTIVE (infectious)
  *   strain >0 && days ==0:   CURED  (permanent EV boost, not infectious) */
-static inline void pksave_pokerus_decode(uint8_t byte, pksave_pokerus_t *out)
-{
-    out->strain = (uint8_t)(byte >> 4);
-    out->days   = (uint8_t)(byte & 0x0F);
-    if (out->strain == 0)     out->status = PKSAVE_PKRS_NEVER;
-    else if (out->days > 0)   out->status = PKSAVE_PKRS_ACTIVE;
-    else                      out->status = PKSAVE_PKRS_CURED;
-}
-
-static inline uint8_t pksave_pokerus_encode(uint8_t strain, uint8_t days)
-{
-    return (uint8_t)(((strain & 0x0F) << 4) | (days & 0x0F));
-}
+void    pksave_pokerus_decode(uint8_t byte, pksave_pokerus_t *out);
+uint8_t pksave_pokerus_encode(uint8_t strain, uint8_t days);
 
 /* Experience curve helpers shared by Gen I–III.
  * Growth rate enum:
  *   0 = MEDIUM_FAST   1 = ERRATIC     2 = FLUCTUATING
  *   3 = MEDIUM_SLOW   4 = FAST        5 = SLOW
  * (Gen I/II use only 0, 3, 4, 5; Gen III+ add 1 and 2.) */
-static inline uint32_t pksave_xp_for_level(uint8_t rate, uint8_t lvl)
-{
-    if (lvl <= 1) return 0;
-    uint32_t n  = (uint32_t)lvl;
-    uint32_t n2 = n * n;
-    uint32_t n3 = n2 * n;
-    switch (rate) {
-    case 0: /* MEDIUM_FAST */
-        return n3;
-    case 1: /* ERRATIC */
-        if (n <= 50) return ((100u - n) * n3) /  50u;
-        if (n <= 68) return ((150u - n) * n3) / 100u;
-        if (n <= 98) return (((1911u - 10u * n) / 3u) * n3) / 500u;
-        return ((160u - n) * n3) / 100u;
-    case 2: /* FLUCTUATING */
-        if (n <= 15) return ((((n + 1u) / 3u) + 24u) * n3) /  50u;
-        if (n <= 36) return ((n + 14u)                * n3) /  50u;
-        return (((n / 2u) + 32u)                      * n3) /  50u;
-    case 3: /* MEDIUM_SLOW */
-        return (6u * n3) / 5u + 100u * n - 15u * n2 - 140u;
-    case 4: /* FAST */
-        return (4u * n3) / 5u;
-    case 5: /* SLOW */
-        return (5u * n3) / 4u;
-    default:
-        return n3;
-    }
-}
-
-static inline uint8_t pksave_level_from_xp(uint8_t rate, uint32_t xp)
-{
-    uint8_t lvl = 100;
-    while (lvl > 1 && pksave_xp_for_level(rate, lvl) > xp) {
-        --lvl;
-    }
-    return lvl;
-}
+#if defined(PKSAVE_GEN1) || defined(PKSAVE_GEN2) || defined(PKSAVE_GEN3)
+uint32_t pksave_xp_for_level(uint8_t rate, uint8_t lvl);
+uint8_t  pksave_level_from_xp(uint8_t rate, uint32_t xp);
+#endif
 
 /* Per-generation parse/serialize/checksum helpers declared here,
  * defined in each genN.c; guarded by PKSAVE_GENx at the call site. */

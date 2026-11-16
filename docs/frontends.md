@@ -6,16 +6,36 @@ Copyright (c) 2026 nulvox
 # Frontends
 
 `libpksave` is designed to be shared by small editor ROMs for each handheld
-family. The Generation III GBA editor is implemented; the GBC and NDS
-frontends remain placeholders.
+family. The Generation I–II GBC editor and Generation III GBA editor are
+implemented; the NDS frontend remains a placeholder.
 
 ## Status
 
 | Frontend | Directory | Toolchain | State | Compile flags |
 |---|---|---|---|---|
-| GBC editor ROM | `frontend-gbc/` | gbdk-2020 4.3.0 | Planned placeholder | `-DPKSAVE_GEN1 -DPKSAVE_GEN2` |
+| GBC editor ROM | `frontend-gbc/` | gbdk-2020 4.3.0 | Implemented, with mGBA automation tests | `-DPKSAVE_GEN1 -DPKSAVE_GEN2` |
 | GBA editor ROM | `frontend-gba/` | Butano 18.5.0 / devkitARM | Implemented, with host and mGBA automation tests | `-DPKSAVE_GEN3` |
 | NDS editor ROM | `frontend-nds/` | BlocksDS | Planned placeholder | `-DPKSAVE_GEN4 -DPKSAVE_GEN5` |
+
+## GBC editor
+
+The GBC editor supports Red, Blue, Yellow, Gold, Silver, and Crystal save
+data. It targets a 160×144 (20×18 tile) Game Boy Color display with six CGB
+background palettes, ROM banking across 7 banks (128 KiB MBC5 cartridge with
+32 KiB banked SRAM), and scene-based navigation covering boot-time detection,
+trainer fields (including 8 Kanto badges in Gen I and 16 Johto+Kanto badges in
+Gen II), party and box Pokémon, bag pockets, Pokérus (Gen II), and save/flush
+handling.
+
+Build and test it from the repository root:
+
+```sh
+make gbc       # writes bin/pksave-gbc.gbc
+make test-gbc  # runs the headless mGBA/Lua automation suite
+```
+
+See [`frontend-gbc/tests/checklist.md`](../frontend-gbc/tests/checklist.md) for
+manual verification scenarios.
 
 ## GBA editor
 
@@ -54,12 +74,6 @@ The original product requirements, technical specification, and agent build
 brief are retained for project history under [`docs/internal/`](internal/).
 
 ## Planned platforms
-
-### GBC — `frontend-gbc/`
-
-The intended UI targets a 160×144 tile-based display and links only the Gen I
-and II codecs. This directory currently contains no editor implementation, so
-`make gbc` is reserved for future work.
 
 ### NDS — `frontend-nds/`
 

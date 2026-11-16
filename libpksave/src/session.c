@@ -13,6 +13,88 @@
 /* One static slot — no malloc; caller owns the buffer. */
 static struct pksave_save g_save;
 
+#ifdef __SDCC
+uint8_t *pksave_sram_at(uint8_t *sram, uint32_t off)
+{
+    *(volatile uint8_t *)0x4000U = (uint8_t)(off >> 13);
+    return sram + (uint16_t)(off & 0x1FFFU);
+}
+
+const uint8_t *pksave_sram_cat(const uint8_t *sram, uint32_t off)
+{
+    *(volatile uint8_t *)0x4000U = (uint8_t)(off >> 13);
+    return sram + (uint16_t)(off & 0x1FFFU);
+}
+
+void pksave_sram_copy(uint8_t *sram, uint32_t dst_off,
+                      uint32_t src_off, uint16_t len)
+{
+    uint8_t buf[32];
+    uint16_t pos = 0;
+    while (pos < len) {
+        uint16_t chunk = (uint16_t)(len - pos);
+        if (chunk > (uint16_t)sizeof(buf)) chunk = (uint16_t)sizeof(buf);
+        memcpy(buf, pksave_sram_cat(sram, src_off + pos), chunk);
+        memcpy(pksave_sram_at(sram, dst_off + pos), buf, chunk);
+        pos = (uint16_t)(pos + chunk);
+    }
+}
+#endif
+
+void pksave_pokerus_decode(uint8_t byte, pksave_pokerus_t *out)
+{
+    out->strain = (uint8_t)(byte >> 4);
+    out->days   = (uint8_t)(byte & 0x0F);
+    if (out->strain == 0)     out->status = PKSAVE_PKRS_NEVER;
+    else if (out->days > 0)   out->status = PKSAVE_PKRS_ACTIVE;
+    else                      out->status = PKSAVE_PKRS_CURED;
+}
+
+uint8_t pksave_pokerus_encode(uint8_t strain, uint8_t days)
+{
+    return (uint8_t)(((strain & 0x0F) << 4) | (days & 0x0F));
+}
+
+#if defined(PKSAVE_GEN1) || defined(PKSAVE_GEN2) || defined(PKSAVE_GEN3)
+uint32_t pksave_xp_for_level(uint8_t rate, uint8_t lvl)
+{
+    if (lvl <= 1) return 0;
+    uint32_t n  = (uint32_t)lvl;
+    uint32_t n2 = n * n;
+    uint32_t n3 = n2 * n;
+    switch (rate) {
+    case 0: /* MEDIUM_FAST */
+        return n3;
+    case 1: /* ERRATIC */
+        if (n <= 50UL) return ((100UL - n) * n3) /  50UL;
+        if (n <= 68UL) return ((150UL - n) * n3) / 100UL;
+        if (n <= 98UL) return (((1911UL - 10UL * n) / 3UL) * n3) / 500UL;
+        return ((160UL - n) * n3) / 100UL;
+    case 2: /* FLUCTUATING */
+        if (n <= 15UL) return ((((n + 1UL) / 3UL) + 24UL) * n3) /  50UL;
+        if (n <= 36UL) return ((n + 14UL)                 * n3) /  50UL;
+        return (((n / 2UL) + 32UL)                        * n3) /  50UL;
+    case 3: /* MEDIUM_SLOW */
+        return (6UL * n3) / 5UL + 100UL * n - 15UL * n2 - 140UL;
+    case 4: /* FAST */
+        return (4UL * n3) / 5UL;
+    case 5: /* SLOW */
+        return (5UL * n3) / 4UL;
+    default:
+        return n3;
+    }
+}
+
+uint8_t pksave_level_from_xp(uint8_t rate, uint32_t xp)
+{
+    uint8_t lvl = 100;
+    while (lvl > 1 && pksave_xp_for_level(rate, lvl) > xp) {
+        --lvl;
+    }
+    return lvl;
+}
+#endif
+
 pksave_save_t *pksave_open(uint8_t *sram, size_t len, pksave_game_t game)
 {
     if (!sram) return NULL;

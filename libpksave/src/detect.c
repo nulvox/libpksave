@@ -27,18 +27,22 @@
 
 static int gen1_checksum_valid(const uint8_t *sram)
 {
+    const uint8_t *p = pksave_sram_cat(sram, GEN1_CHKSUM_START);
+    uint16_t count = (uint16_t)(GEN1_CHKSUM_END - GEN1_CHKSUM_START + 1U);
     uint8_t sum = 0;
-    for (uint32_t i = GEN1_CHKSUM_START; i <= GEN1_CHKSUM_END; i++)
-        sum += sram[i];
+    for (uint16_t i = 0; i < count; i++)
+        sum += p[i];
     /* checksum = (~sum) & 0xFF */
-    return ((uint8_t)(~sum)) == sram[GEN1_CHKSUM_ADDR];
+    return ((uint8_t)(~sum)) == *pksave_sram_cat(sram, GEN1_CHKSUM_ADDR);
 }
 
 static pksave_game_t detect_gen1(const uint8_t *sram, size_t len)
 {
     if (len < SIZE_GEN12) return PKSAVE_GAME_UNKNOWN;
+    if (*pksave_sram_cat(sram, GEN1_CHKSUM_START) == 0) return PKSAVE_GAME_UNKNOWN;
     if (!gen1_checksum_valid(sram)) return PKSAVE_GAME_UNKNOWN;
-    return (sram[GEN1_YELLOW_MARKER] != 0) ? PKSAVE_GAME_YELLOW : PKSAVE_GAME_RB;
+    return (*pksave_sram_cat(sram, GEN1_YELLOW_MARKER) != 0)
+         ? PKSAVE_GAME_YELLOW : PKSAVE_GAME_RB;
 }
 #endif /* PKSAVE_GEN1 */
 
@@ -50,14 +54,17 @@ static pksave_game_t detect_gen1(const uint8_t *sram, size_t len)
 
 static uint16_t sum16(const uint8_t *buf, uint32_t start, uint32_t end)
 {
-    uint32_t s = 0;
-    for (uint32_t i = start; i <= end; i++) s += buf[i];
-    return (uint16_t)(s & 0xFFFF);
+    const uint8_t *p = pksave_sram_cat(buf, start);
+    uint16_t count = (uint16_t)(end - start + 1U);
+    uint16_t s = 0;
+    for (uint16_t i = 0; i < count; i++) s += p[i];
+    return s;
 }
 
 static uint16_t read_le16(const uint8_t *buf, uint32_t off)
 {
-    return (uint16_t)(buf[off] | ((uint16_t)buf[off+1] << 8));
+    const uint8_t *p = pksave_sram_cat(buf, off);
+    return (uint16_t)(p[0] | ((uint16_t)p[1] << 8));
 }
 
 static int crystal_checksum_valid(const uint8_t *sram)
@@ -238,17 +245,17 @@ pksave_game_t pksave_detect(const uint8_t *sram, size_t len)
         (void)0;
     }
 
-    if (len == SIZE_GEN3) {
 #ifdef PKSAVE_GEN3
+    if (len == SIZE_GEN3) {
         return detect_gen3(sram, len);
-#endif
     }
+#endif
 
-    if (len == SIZE_GEN45) {
 #if defined(PKSAVE_GEN4) || defined(PKSAVE_GEN5)
+    if (len == SIZE_GEN45) {
         return detect_gen45(sram, len);
-#endif
     }
+#endif
 
     return PKSAVE_GAME_UNKNOWN;
 }

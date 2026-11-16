@@ -116,7 +116,64 @@ jobs:
           context: docker/test
           tags: pksave-test
           load: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=test
+          cache-to: type=gha,scope=test,mode=max
       - name: Run Unity tests
         run: docker run --rm -v "$GITHUB_WORKSPACE:/src" pksave-test
+
+  # ── Build GBC frontend ROM ─────────────────────────────────────────────────
+  build-gbc:
+    name: Build frontend-gbc ROM (gbdk-2020)
+    needs: zizmor
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build GBC toolchain image (cached)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: docker/gbc
+          tags: pksave-gbc
+          load: true
+          cache-from: type=gha,scope=gbc
+          cache-to: type=gha,scope=gbc,mode=max
+      - name: Build pksave-gbc.gbc
+        run: |
+          docker run --rm -v "$GITHUB_WORKSPACE:/src" pksave-gbc
+          test -s bin/pksave-gbc.gbc
+
+  # ── Build GBA frontend ROM ─────────────────────────────────────────────────
+  build-gba:
+    name: Build frontend-gba ROM (Butano)
+    needs: zizmor
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build GBA toolchain image (cached)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: docker/gba
+          tags: pksave-gba
+          load: true
+          cache-from: type=gha,scope=gba
+          cache-to: type=gha,scope=gba,mode=max
+      - name: Generate sprite lookup stub
+        run: |
+          python3 tools/gen_sprite_lookup.py \
+            --sprites-dir frontend-gba/graphics/sprites/ \
+            --out frontend-gba/src/species_sprite_lookup.cpp
+      - name: Build pksave-gba.gba
+        run: |
+          docker run --rm -v "$GITHUB_WORKSPACE:/src" pksave-gba
+          test -s bin/pksave-gba.gba
