@@ -182,6 +182,7 @@ const char *pksave_item_name(pksave_game_t game, uint16_t id)
 const char *pksave_ability_name(pksave_game_t game, uint8_t id)
 {
     /* Gen I/II have no abilities; return "???" */
+    (void)id;
     switch (game) {
 #ifdef PKSAVE_GEN3
         case PKSAVE_GAME_RS:

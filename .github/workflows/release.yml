@@ -1,0 +1,175 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 nulvox
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  zizmor:
+    name: Audit GitHub Actions workflows
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd # v0.8.1
+        with:
+          advanced-security: false
+
+  # ── Test libpksave & tooling before release ────────────────────────────────
+  test:
+    name: Test libpksave & tooling
+    needs: zizmor
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run Python tool tests
+        run: make test-tools
+      - name: Run GBA host widget tests
+        run: python3 frontend-gba/tests/automation/test_cycler_host.py
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build test image (cached)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: docker/test
+          tags: pksave-test
+          load: true
+          cache-from: type=gha,scope=test
+          cache-to: type=gha,scope=test,mode=max
+      - name: Run Unity tests
+        run: docker run --rm -v "$GITHUB_WORKSPACE:/src" pksave-test
+
+  # ── Build GBC release artifact ─────────────────────────────────────────────
+  build-gbc:
+    name: Build pksave-gbc.gbc
+    needs: zizmor
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build GBC toolchain image (cached)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: docker/gbc
+          tags: pksave-gbc
+          load: true
+          cache-from: type=gha,scope=gbc
+          cache-to: type=gha,scope=gbc,mode=max
+      - name: Build and checksum pksave-gbc.gbc
+        run: |
+          docker run --rm -v "$GITHUB_WORKSPACE:/src" pksave-gbc
+          test -s bin/pksave-gbc.gbc
+          mkdir -p dist
+          cp bin/pksave-gbc.gbc dist/pksave-gbc.gbc
+          (cd dist && sha256sum pksave-gbc.gbc > pksave-gbc.gbc.sha256)
+      - name: Upload GBC release artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-gbc
+          path: |
+            dist/pksave-gbc.gbc
+            dist/pksave-gbc.gbc.sha256
+          if-no-files-found: error
+
+  # ── Build GBA release artifact ─────────────────────────────────────────────
+  build-gba:
+    name: Build pksave-gba.gba
+    needs: zizmor
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build GBA toolchain image (cached)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: docker/gba
+          tags: pksave-gba
+          load: true
+          cache-from: type=gha,scope=gba
+          cache-to: type=gha,scope=gba,mode=max
+      - name: Generate sprite lookup stub
+        run: |
+          python3 tools/gen_sprite_lookup.py \
+            --sprites-dir frontend-gba/graphics/sprites/ \
+            --out frontend-gba/src/species_sprite_lookup.cpp
+      - name: Build and checksum pksave-gba.gba
+        run: |
+          docker run --rm -v "$GITHUB_WORKSPACE:/src" pksave-gba
+          test -s bin/pksave-gba.gba
+          mkdir -p dist
+          cp bin/pksave-gba.gba dist/pksave-gba.gba
+          (cd dist && sha256sum pksave-gba.gba > pksave-gba.gba.sha256)
+      - name: Upload GBA release artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-gba
+          path: |
+            dist/pksave-gba.gba
+            dist/pksave-gba.gba.sha256
+          if-no-files-found: error
+
+  # ── Publish GitHub Release ─────────────────────────────────────────────────
+  publish:
+    name: Publish GitHub Release
+    needs: [test, build-gbc, build-gba]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          test -s dist/pksave-gbc.gbc
+          test -s dist/pksave-gba.gba
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; refusing to overwrite it" >&2
+            exit 1
+          fi
+          gh release create "$TAG" dist/* \
+            --verify-tag \
+            --title "libpksave $TAG" \
+            --generate-notes

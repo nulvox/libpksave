@@ -19,6 +19,11 @@ frontend-gba/build/
 frontend-gbc/*.gbc
 frontend-gbc/*.elf
 frontend-gbc/*.map
+frontend-gbc/*.ihx
+frontend-gbc/*.cdb
+frontend-gbc/*.noi
+frontend-gbc/*.sym
+frontend-gbc/build/
 frontend-nds/*.nds
 frontend-nds/*.elf
 frontend-nds/*.map

@@ -163,45 +163,47 @@ static void bcd3_encode(uint32_t v, uint8_t *p)
 #define G1_BOX_SIZE      1122U
 #define G1_BANK_BOXES_SZ (6U * G1_BOX_SIZE) /* 0x1A4C */
 
-static uint8_t gen1_calc_range_checksum(const uint8_t *buf, uint32_t len)
+static uint8_t gen1_sum_bytes(const uint8_t *buf, uint16_t len)
 {
     uint8_t sum = 0;
-    for (uint32_t i = 0; i < len; i++)
+    for (uint16_t i = 0; i < len; i++)
         sum += buf[i];
-    return (uint8_t)(~sum);
+    return sum;
 }
 
 static uint8_t gen1_calc_checksum(const uint8_t *sram)
 {
-    return gen1_calc_range_checksum(sram + G1_CHKSUM_START,
-                                    G1_CHKSUM_END - G1_CHKSUM_START + 1U);
+    return (uint8_t)(~gen1_sum_bytes(pksave_sram_cat(sram, G1_CHKSUM_START),
+                                     (uint16_t)(G1_CHKSUM_END - G1_CHKSUM_START + 1U)));
 }
 
 static void gen1_update_box_bank_checksums(uint8_t *sram, uint32_t bank_base)
 {
     /* sBankNAllBoxesChecksum at bank_base + 0x1A4C;
      * sBankNIndividualBoxChecksums[0..5] at bank_base + 0x1A4D..0x1A52. */
-    sram[bank_base + G1_BANK_BOXES_SZ] =
-        gen1_calc_range_checksum(sram + bank_base, G1_BANK_BOXES_SZ);
-    for (uint32_t b = 0; b < 6U; b++) {
-        sram[bank_base + G1_BANK_BOXES_SZ + 1U + b] =
-            gen1_calc_range_checksum(sram + bank_base + b * G1_BOX_SIZE,
-                                     G1_BOX_SIZE);
+    uint8_t *bank = pksave_sram_at(sram, bank_base);
+    uint8_t all_sum = 0;
+    for (uint8_t b = 0; b < 6U; b++) {
+        uint8_t bsum = gen1_sum_bytes(bank + (uint16_t)b * G1_BOX_SIZE, G1_BOX_SIZE);
+        bank[G1_BANK_BOXES_SZ + 1U + b] = (uint8_t)(~bsum);
+        all_sum = (uint8_t)(all_sum + bsum);
     }
+    bank[G1_BANK_BOXES_SZ] = (uint8_t)(~all_sum);
 }
 
 static int gen1_validate_box_bank_checksums(const uint8_t *sram, uint32_t bank_base)
 {
-    if (gen1_calc_range_checksum(sram + bank_base, G1_BANK_BOXES_SZ) !=
-        sram[bank_base + G1_BANK_BOXES_SZ]) {
-        return PKSAVE_ERR_CORRUPT;
-    }
-    for (uint32_t b = 0; b < 6U; b++) {
-        if (gen1_calc_range_checksum(sram + bank_base + b * G1_BOX_SIZE,
-                                     G1_BOX_SIZE) !=
-            sram[bank_base + G1_BANK_BOXES_SZ + 1U + b]) {
+    const uint8_t *bank = pksave_sram_cat(sram, bank_base);
+    uint8_t all_sum = 0;
+    for (uint8_t b = 0; b < 6U; b++) {
+        uint8_t bsum = gen1_sum_bytes(bank + (uint16_t)b * G1_BOX_SIZE, G1_BOX_SIZE);
+        if ((uint8_t)(~bsum) != bank[G1_BANK_BOXES_SZ + 1U + b]) {
             return PKSAVE_ERR_CORRUPT;
         }
+        all_sum = (uint8_t)(all_sum + bsum);
+    }
+    if ((uint8_t)(~all_sum) != bank[G1_BANK_BOXES_SZ]) {
+        return PKSAVE_ERR_CORRUPT;
     }
     return PKSAVE_OK;
 }
@@ -210,11 +212,11 @@ int gen1_validate_checksum(const uint8_t *sram, size_t len, pksave_game_t game)
 {
     (void)game;
     if (!sram || len < 0x8000) return PKSAVE_ERR_CORRUPT;
-    if (gen1_calc_checksum(sram) != sram[G1_CHKSUM_ADDR])
+    if (gen1_calc_checksum(sram) != *pksave_sram_cat(sram, G1_CHKSUM_ADDR))
         return PKSAVE_ERR_CORRUPT;
     /* When BIT_HAS_CHANGED_BOXES (bit 7 of wCurrentBoxNum at 0x284C) is set,
      * Banks 2 & 3 carry initialized PC boxes with live checksums. */
-    if ((sram[G1_CUR_BOX] & 0x80U) != 0) {
+    if ((*pksave_sram_cat(sram, G1_CUR_BOX) & 0x80U) != 0) {
         if (gen1_validate_box_bank_checksums(sram, 0x4000U) != PKSAVE_OK)
             return PKSAVE_ERR_CORRUPT;
         if (gen1_validate_box_bank_checksums(sram, 0x6000U) != PKSAVE_OK)
@@ -357,14 +359,12 @@ static void gen1_encode_party_mon(const pksave_pokemon_t *in,
     }
 
     /* DVs: unscale from 0-31 back to 0-15 by halving */
-    uint8_t dv_atk = (uint8_t)(in->ivs[1] / 2);
-    uint8_t dv_def = (uint8_t)(in->ivs[2] / 2);
-    uint8_t dv_spd = (uint8_t)(in->ivs[5] / 2);
-    uint8_t dv_spc = (uint8_t)(in->ivs[3] / 2);
-    uint16_t dvs   = (uint16_t)((dv_atk << 12) | (dv_def << 8)
-                               | (dv_spd << 4)  | dv_spc);
-    data[0x1B] = (uint8_t)(dvs >> 8);
-    data[0x1C] = (uint8_t)(dvs & 0xFF);
+    uint8_t dv_atk = (uint8_t)((in->ivs[1] / 2) & 0x0FU);
+    uint8_t dv_def = (uint8_t)((in->ivs[2] / 2) & 0x0FU);
+    uint8_t dv_spd = (uint8_t)((in->ivs[5] / 2) & 0x0FU);
+    uint8_t dv_spc = (uint8_t)((in->ivs[3] / 2) & 0x0FU);
+    data[0x1B] = (uint8_t)((dv_atk << 4) | dv_def);
+    data[0x1C] = (uint8_t)((dv_spd << 4) | dv_spc);
 
     /* Stats */
     data[0x22] = (uint8_t)(in->stat[0] >> 8); data[0x23] = (uint8_t)in->stat[0];
@@ -407,33 +407,39 @@ static void gen1_decode_box_mon(const uint8_t *data,
 
 int gen1_get_trainer(pksave_save_t *s, pksave_trainer_t *out)
 {
-    gen1_decode_name(s->sram + G1_PLAYER_NAME, out->name, sizeof(out->name));
-    out->tid    = (uint16_t)((s->sram[G1_TID] << 8) | s->sram[G1_TID + 1]);
+    gen1_decode_name(pksave_sram_cat(s->sram, G1_PLAYER_NAME),
+                     out->name, sizeof(out->name));
+    const uint8_t *tid_p = pksave_sram_cat(s->sram, G1_TID);
+    out->tid    = (uint16_t)((tid_p[0] << 8) | tid_p[1]);
     out->sid    = 0;
-    out->money  = bcd3_decode(s->sram + G1_MONEY);
-    out->badges = s->sram[G1_BADGES];
+    out->money  = bcd3_decode(pksave_sram_cat(s->sram, G1_MONEY));
+    out->badges = *pksave_sram_cat(s->sram, G1_BADGES);
     return PKSAVE_OK;
 }
 
 int gen1_set_trainer(pksave_save_t *s, const pksave_trainer_t *in)
 {
-    gen1_encode_name(in->name, s->sram + G1_PLAYER_NAME);
-    s->sram[G1_TID]     = (uint8_t)(in->tid >> 8);
-    s->sram[G1_TID + 1] = (uint8_t)(in->tid & 0xFF);
-    bcd3_encode(in->money, s->sram + G1_MONEY);
-    s->sram[G1_BADGES]  = (uint8_t)in->badges;
+    gen1_encode_name(in->name, pksave_sram_at(s->sram, G1_PLAYER_NAME));
+    uint8_t *tid_p = pksave_sram_at(s->sram, G1_TID);
+    tid_p[0] = (uint8_t)(in->tid >> 8);
+    tid_p[1] = (uint8_t)(in->tid & 0xFF);
+    bcd3_encode(in->money, pksave_sram_at(s->sram, G1_MONEY));
+    *pksave_sram_at(s->sram, G1_BADGES) = (uint8_t)in->badges;
     return PKSAVE_OK;
 }
 
 int gen1_get_party(pksave_save_t *s, pksave_pokemon_t out[6], uint8_t *count)
 {
-    uint8_t cnt = s->sram[G1_PARTY_CNT];
+    uint8_t cnt = *pksave_sram_cat(s->sram, G1_PARTY_CNT);
     if (cnt > 6) cnt = 6;
     *count = cnt;
+    const uint8_t *base_data  = pksave_sram_cat(s->sram, G1_PARTY_DATA);
+    const uint8_t *base_ot    = pksave_sram_cat(s->sram, G1_PARTY_OT);
+    const uint8_t *base_names = pksave_sram_cat(s->sram, G1_PARTY_NAMES);
     for (int i = 0; i < cnt; i++) {
-        const uint8_t *data    = s->sram + G1_PARTY_DATA + (size_t)i * G1_PARTY_MON_SIZE;
-        const uint8_t *ot_name = s->sram + G1_PARTY_OT   + (size_t)i * G1_NAME_LEN;
-        const uint8_t *nick    = s->sram + G1_PARTY_NAMES + (size_t)i * G1_NAME_LEN;
+        const uint8_t *data    = base_data  + (size_t)i * G1_PARTY_MON_SIZE;
+        const uint8_t *ot_name = base_ot    + (size_t)i * G1_NAME_LEN;
+        const uint8_t *nick    = base_names + (size_t)i * G1_NAME_LEN;
         gen1_decode_party_mon(data, ot_name, nick, &out[i]);
     }
     return PKSAVE_OK;
@@ -441,18 +447,21 @@ int gen1_get_party(pksave_save_t *s, pksave_pokemon_t out[6], uint8_t *count)
 
 int gen1_set_party_slot(pksave_save_t *s, uint8_t slot, const pksave_pokemon_t *mon)
 {
-    uint8_t cnt = s->sram[G1_PARTY_CNT];
     if (slot >= 6) return PKSAVE_ERR_RANGE;
-    uint16_t trainer_tid = (uint16_t)((s->sram[G1_TID] << 8) | s->sram[G1_TID + 1]);
-    uint8_t *data    = s->sram + G1_PARTY_DATA + (size_t)slot * G1_PARTY_MON_SIZE;
-    uint8_t *ot_name = s->sram + G1_PARTY_OT   + (size_t)slot * G1_NAME_LEN;
-    uint8_t *nick    = s->sram + G1_PARTY_NAMES + (size_t)slot * G1_NAME_LEN;
+    uint8_t *cnt_p = pksave_sram_at(s->sram, G1_PARTY_CNT);
+    uint8_t cnt = *cnt_p;
+    const uint8_t *tid_p = pksave_sram_cat(s->sram, G1_TID);
+    uint16_t trainer_tid = (uint16_t)((tid_p[0] << 8) | tid_p[1]);
+    uint8_t *data    = pksave_sram_at(s->sram, G1_PARTY_DATA)  + (size_t)slot * G1_PARTY_MON_SIZE;
+    uint8_t *ot_name = pksave_sram_at(s->sram, G1_PARTY_OT)    + (size_t)slot * G1_NAME_LEN;
+    uint8_t *nick    = pksave_sram_at(s->sram, G1_PARTY_NAMES) + (size_t)slot * G1_NAME_LEN;
     gen1_encode_party_mon(mon, data, ot_name, nick, trainer_tid);
     /* Update species list */
-    s->sram[G1_PARTY_SPEC + slot] = (uint8_t)mon->species;
+    uint8_t *spec_p = pksave_sram_at(s->sram, G1_PARTY_SPEC);
+    spec_p[slot] = (uint8_t)mon->species;
     if (slot >= cnt) {
-        s->sram[G1_PARTY_CNT] = slot + 1;
-        s->sram[G1_PARTY_SPEC + slot + 1] = 0xFF;
+        *cnt_p = slot + 1;
+        spec_p[slot + 1] = 0xFF;
     }
     return PKSAVE_OK;
 }
@@ -461,12 +470,13 @@ int gen1_get_box(pksave_save_t *s, uint8_t box, pksave_pokemon_t out[30], uint8_
 {
     if (box >= 12) return PKSAVE_ERR_RANGE;
 
+    uint8_t cur_box = *pksave_sram_cat(s->sram, G1_CUR_BOX) & 0x7FU;
     const uint8_t *base;
-    if (box == (s->sram[G1_CUR_BOX] & 0x7F)) {
+    if (box == cur_box) {
         /* Current box stored in bank 1 */
-        base = s->sram + G1_CUR_BOX_DATA;
+        base = pksave_sram_cat(s->sram, G1_CUR_BOX_DATA);
     } else {
-        base = s->sram + G1_BOX_OFFSET(box);
+        base = pksave_sram_cat(s->sram, G1_BOX_OFFSET(box));
     }
 
     uint8_t n = base[0];
@@ -494,17 +504,20 @@ int gen1_set_box_slot(pksave_save_t *s, uint8_t box, uint8_t slot,
 {
     if (box >= 12 || slot >= 20) return PKSAVE_ERR_RANGE;
 
+    const uint8_t *tid_p = pksave_sram_cat(s->sram, G1_TID);
+    uint16_t trainer_tid = (uint16_t)((tid_p[0] << 8) | tid_p[1]);
+    uint8_t *cur_box_p = pksave_sram_at(s->sram, G1_CUR_BOX);
+    uint8_t cur_box = *cur_box_p & 0x7FU;
     uint8_t *base;
-    if (box == (s->sram[G1_CUR_BOX] & 0x7F)) {
-        base = s->sram + G1_CUR_BOX_DATA;
+    if (box == cur_box) {
+        base = pksave_sram_at(s->sram, G1_CUR_BOX_DATA);
     } else {
         /* Mark BIT_HAS_CHANGED_BOXES (bit 7) so the cartridge knows Banks 2/3
          * contain initialized boxes and does not wipe them on first box switch. */
-        s->sram[G1_CUR_BOX] |= 0x80U;
-        base = s->sram + G1_BOX_OFFSET(box);
+        *cur_box_p |= 0x80U;
+        base = pksave_sram_at(s->sram, G1_BOX_OFFSET(box));
     }
 
-    uint16_t trainer_tid = (uint16_t)((s->sram[G1_TID] << 8) | s->sram[G1_TID + 1]);
     uint8_t *data  = base + 22 + (size_t)slot * G1_BOX_MON_SIZE;
     uint8_t *ot    = base + 22 + 20 * G1_BOX_MON_SIZE + (size_t)slot * G1_NAME_LEN;
     uint8_t *nick  = base + 22 + 20 * G1_BOX_MON_SIZE + 20 * G1_NAME_LEN
@@ -535,10 +548,10 @@ int gen1_get_pocket(pksave_save_t *s, pksave_pocket_t p, pksave_item_t *out, uin
         *cnt = 0;
         return PKSAVE_OK;
     }
-    uint8_t n = s->sram[G1_BAG_CNT];
+    uint8_t n = *pksave_sram_cat(s->sram, G1_BAG_CNT);
     if (n > G1_BAG_MAX) n = G1_BAG_MAX;
     *cnt = n;
-    const uint8_t *bag = s->sram + G1_BAG_DATA;
+    const uint8_t *bag = pksave_sram_cat(s->sram, G1_BAG_DATA);
     for (int i = 0; i < n; i++) {
         out[i].item_id  = bag[i * 2];
         out[i].quantity = bag[i * 2 + 1];
@@ -551,17 +564,19 @@ int gen1_set_item(pksave_save_t *s, pksave_pocket_t p, uint8_t slot,
 {
     if (p != PKSAVE_POCKET_ITEMS) return PKSAVE_ERR_GAME;
     if (slot >= G1_BAG_MAX) return PKSAVE_ERR_RANGE;
-    uint8_t *bag = s->sram + G1_BAG_DATA;
+    uint8_t *bag = pksave_sram_at(s->sram, G1_BAG_DATA);
     bag[slot * 2]     = (uint8_t)item->item_id;
     bag[slot * 2 + 1] = (uint8_t)item->quantity;
-    if (slot >= s->sram[G1_BAG_CNT])
-        s->sram[G1_BAG_CNT] = slot + 1;
+    uint8_t *cnt_p = pksave_sram_at(s->sram, G1_BAG_CNT);
+    if (slot >= *cnt_p)
+        *cnt_p = slot + 1;
     return PKSAVE_OK;
 }
 
 int gen1_flush(pksave_save_t *s)
 {
-    s->sram[G1_CHKSUM_ADDR] = gen1_calc_checksum(s->sram);
+    uint8_t chk = gen1_calc_checksum(s->sram);
+    *pksave_sram_at(s->sram, G1_CHKSUM_ADDR) = chk;
     gen1_update_box_bank_checksums(s->sram, 0x4000U);
     gen1_update_box_bank_checksums(s->sram, 0x6000U);
     return PKSAVE_OK;
